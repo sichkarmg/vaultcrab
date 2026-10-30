@@ -1,0 +1,199 @@
+# vaultcrab config: ~/.config/vaultcrab/config.yaml (Linux), %AppData%\vaultcrab\config.yaml (Windows),
+# ~/Library/Application Support/vaultcrab/config.yaml (macOS). No secrets here.
+
+bw:
+  path: bw                 # Bitwarden CLI executable
+  # url: http://127.0.0.1:8087   # use an already running `bw serve` instead of starting one
+  # data_dir: ~/.config/vaultcrab/bw  # BITWARDENCLI_APPDATA_DIR for the started bw
+  env:                     # extra environment for bw (never secrets)
+    # - NODE_EXTRA_CA_CERTS=/etc/ssl/my-vaultwarden-ca.pem
+  sync_interval: 10m
+
+ui:
+  tabs_position: top       # top | bottom
+  mouse: true
+  show_tree: true          # folder tree in the host list
+  show_notes: true         # notes of the selected item at the bottom of its card (read from the vault)
+  list_width: 0            # 0 = auto
+  tab_width: 24            # longest tab title (6..120 columns); longer titles are cut with …
+  accent: cyan             # cyan | blue | green | magenta | yellow | red (keys, focused borders, folders)
+  selection_color: reverse # selection and active items (list cursor, active tab, filter, status bar,
+                           # buttons): reverse | cyan | blue | green |
+                           # magenta | yellow | red | gray
+  restore_tabs: true       # on exit remember the open tabs and panes (hosts and layout, in workspace.json
+                           # next to this file); on start reopen them not connected - Enter connects
+  restore_filters: true    # keep the type filter, org, collection, grouping, search and folded groups
+                           # of the host list between runs (view.json next to this file)
+  prefix: ctrl+b           # prefix for window commands (then a key below)
+  keys:
+    next_tab: n
+    prev_tab: p
+    close_tab: "&"
+    host_list: l
+    history: "["            # scroll the output (scrollback): PgUp/PgDn, arrows, v select, Esc
+    split_right: "|"
+    split_down: "-"
+    close_pane: x
+    zoom: z
+    focus_left: left
+    focus_right: right
+    focus_up: up
+    focus_down: down
+    resize_left: H
+    resize_right: L
+    resize_up: K
+    resize_down: J
+    break_pane: "!"
+    reconnect: r
+    quit: q
+    help: "?"
+    local_shell: t         # new tab with a local shell (also "t" in the host list)
+
+icons:
+  mode: auto               # auto | unicode | ascii (auto: ASCII in legacy Windows console / non-UTF-8)
+  set:                     # override any icon; every icon has an ASCII variant
+    connected: {unicode: "●", ascii: "*"}
+    disconnected: {unicode: "✗", ascii: "x"}
+    ssh: {unicode: "❯", ascii: ">"}   # also: › $ # ▶ » λ ⌨ >_ (Settings → Appearance)
+
+terminal:
+  scrollback: 10000        # lines per session, memory only
+  term: xterm-256color
+  forward_mouse: true      # pass mouse to remote apps that request it (mc, htop)
+  close_on_exit: true      # close the pane when the remote shell exits with status 0 (drops still show ✗)
+  copy_osc52: true         # copy selected text to the clipboard of the terminal vaultcrab runs in (OSC 52;
+                           # works over SSH; tmux needs `set -g set-clipboard on`)
+  copy_system: true        # ...and to the system clipboard of this machine (xclip/xsel/wl-copy, pbcopy, Win32)
+  confirm_paste: true      # show pasted text of several lines and ask before it goes into the session
+
+local:                     # local terminal (t in the host list, prefix + t anywhere)
+  shell:                   # empty = $SHELL (Linux/macOS); pwsh, powershell or %ComSpec% (Windows)
+    # linux: [bash, -l]
+    # windows: [cmd.exe]
+    # darwin: [zsh, -l]
+  dir: ""                  # working directory, empty = home
+
+ssh:
+  # known_hosts: ~/.config/vaultcrab/known_hosts   # own file, trust on first use
+  strict_host_keys: false  # true: refuse unknown hosts
+  timeout: 15s             # TCP connect
+  handshake_timeout: 60s   # key exchange + login (slow devices, e.g. MikroTik RouterOS 6, need more than 15s)
+  keepalive: 15s           # sent as a channel request (works with MikroTik RouterOS too)
+  legacy_algorithms: true  # also offer weak algorithms (dh-group1-sha1, CBC, ssh-dss) as a last resort,
+                           # for old devices like MikroTik RouterOS 6; false = modern algorithms only
+
+vault:
+  orgs: []                 # show only these organizations (names or IDs); empty = all
+  collections: []          # show only these collections (paths or IDs); empty = all
+  hide_personal: false     # hide items not belonging to an organization
+
+# Filter tabs. Rule syntax: terms separated by spaces are AND, "|" is OR, "!" negates.
+#   field:NAME[=GLOB] scheme:ssh|vnc|smb|ftp|sftp|rdp tag:GLOB folder:A/B[/**] folder:none
+#   org:NAME|none collection:PATH[/**] name:GLOB host:GLOB user:GLOB fav <word>
+# Default: "All" plus one tab per connection type (as below). A filter with an icon also shows
+# the icon next to matching hosts (badge), unless badge: false.
+filters:
+  - {name: All, rule: ""}
+  - {name: SSH, icon: "❯", ascii: ">", rule: "scheme:ssh", badge: false}
+  - {name: VNC, icon: "▣", ascii: "#", rule: "scheme:vnc", badge: false}
+  - {name: SMB, icon: "⛁", ascii: "$", rule: "scheme:smb", badge: false}
+  - {name: FTP, icon: "⇅", ascii: F, rule: "scheme:ftp", badge: false}
+  - {name: SFTP, icon: "⇵", ascii: S, rule: "scheme:sftp", badge: false}
+  - {name: RDP, icon: "▤", ascii: R, rule: "scheme:rdp", badge: false}
+  # more examples:
+  # - {name: Linux, icon: "▲", ascii: L, rule: "tag:linux"}
+  # - {name: Windows, icon: "⊞", ascii: W, rule: "tag:windows"}
+  # - {name: Prod, icon: "⚠", ascii: "!", rule: "field:env=prod | tag:prod"}
+  # - {name: MikroTik, icon: "◈", ascii: M, rule: "tag:mikrotik"}
+  # - {name: Fav, icon: "★", ascii: "*", rule: fav, badge: false}
+
+# Widget column on the right of the host list: the output of your commands, refreshed every
+# interval (only while the column is visible). Colors (SGR) are kept, other escape sequences dropped.
+# w in the host list shows/hides it. Default: a clock and system information (bash; cmd/PowerShell
+# on Windows). items replace the defaults.
+widgets:
+  show: true
+  width: 36                # columns
+  min_width: 130           # hidden on narrower screens
+  items:
+    # Each widget runs its command every interval (at least 1s, default 5s), only while the
+    # host list is shown and the terminal window is focused; unchanged output is not redrawn.
+    - title: Clock
+      builtin: clock       # built in, no command: updated when the minute changes
+    - title: System
+      interval: 30s
+      height: 8            # at most 8 lines
+      run:
+        linux: [bash, -c, "echo \"host   $(hostname)\"; uptime -p; cut -d' ' -f1-3 /proc/loadavg; free -h | sed -n 2p; df -h / | tail -1"]
+        windows: [powershell.exe, -NoProfile, -Command, "Get-CimInstance Win32_OperatingSystem | Format-List CSName, LastBootUpTime"]
+    # - title: VPN
+    #   interval: 30s
+    #   run: {linux: [bash, /home/me/bin/vpn-status.sh]}
+
+# Launch scripts for items: x in the host list shows the menu (built-in action + scripts),
+# Enter runs the script marked default: true, or the one named in the item's custom field
+# "script" (e.g. script = winbox), instead of the built-in action.
+#   rule: which items (filter syntax above, empty = all); run: command per OS (only OSes listed get it)
+#   mode: terminal (default) - in a new tab on a local pseudo-terminal; the tab stays open after the
+#         command ends, Enter runs it again;  external - a separate (GUI) program
+#   password_stdin: external only - the item password is written to the program's stdin
+#   placeholders: {host} {port} {user} {path} {url} {name} {id} {field:NAME}; never the password
+# Default (when scripts: is absent): ping.
+scripts:
+  - name: ping
+    run:
+      linux: [ping, -c, "4", "{host}"]
+      darwin: [ping, -c, "4", "{host}"]
+      windows: [ping, "{host}"]
+  # - name: OpenSSH              # the system ssh client (agent, ~/.ssh/config, jump hosts)
+  #   rule: "scheme:ssh"
+  #   run: {linux: [ssh, -p, "{port}", "{user}@{host}"], darwin: [ssh, -p, "{port}", "{user}@{host}"],
+  #         windows: [ssh.exe, -p, "{port}", "{user}@{host}"]}
+  # - name: Winbox               # MikroTik Winbox for items tagged mikrotik
+  #   rule: "tag:mikrotik"
+  #   mode: external
+  #   run: {windows: ['C:\Tools\winbox64.exe', "{host}", "{user}"], linux: [wine, /opt/winbox64.exe, "{host}", "{user}"]}
+  # - name: htop
+  #   rule: "scheme:ssh tag:linux"
+  #   run: {linux: [ssh, -t, "{user}@{host}", htop]}
+  #   default: true              # Enter runs htop for Linux hosts
+
+# External programs for VNC, SMB, FTP, SFTP, RDP. Empty = auto-detect a known client:
+#   Linux:   VNC: vncviewer, xtigervncviewer, remmina, vinagre, xdg-open
+#            SMB: nemo, caja, nautilus, thunar, dolphin, pcmanfm, xdg-open
+#            RDP: xfreerdp3, xfreerdp, remmina, xdg-open
+#            FTP/SFTP: filezilla, then the file managers above, xdg-open
+#   Windows: VNC: TightVNC, RealVNC, UltraVNC, TigerVNC (Program Files); SMB: explorer.exe \\host\share
+#            RDP: mstsc.exe; FTP/SFTP: WinSCP, FileZilla (FTP also explorer.exe)
+#   macOS:   open vnc://… | open smb://… | open rdp://… (Windows App) | FileZilla or open ftp://, sftp://
+# Placeholders: {host} {port} {user} {path} {url} {name} {id} {field:NAME}; {password} puts the item
+# password into the command line (percent-encoded inside a URL), e.g. smb: {darwin: [open,
+# "smb://{user}:{password}@{host}/{path}"]} - other local users see it in the process list!
+# password_stdin: true writes it to the program's stdin (only for clients that read it there,
+# e.g. FreeRDP: [xfreerdp, /from-stdin, ...]). Otherwise the client asks itself.
+# VNC signs in without asking: password (VNC only) is
+#   proxy (default) - vaultcrab signs in to the server with the item password (directly or through the SSH
+#                     item named in the item's field "jump") and lets the client in through a one-connection
+#                     proxy on 127.0.0.1 ({host}/{port} are the proxy's); the client never gets the password
+#   stdin           - written to the client's stdin, e.g. [xtightvncviewer, -autopass, "{host}::{port}"]
+#   file            - a vncpasswd file {passfile}, removed after 10 s: [vncviewer, -passwd, "{passfile}", "{host}::{port}"]
+#   url             - {url} = vnc://user:pass@host:port, e.g. macOS [open, "{url}"]   (in the command line!)
+#   argv            - {password} in the command line                                   (in the command line!)
+# Also edited in the program: Settings (,) -> External programs, with the known clients
+# of each OS, argument presets, checks and a test start; saved here and applied at once.
+external:
+  vnc:
+    # linux: [xtigervncviewer, "{host}::{port}"]
+    # windows: ['C:\Program Files\TightVNC\tvnviewer.exe', "{host}::{port}"]
+    # darwin: [open, "vnc://{host}:{port}"]
+    password: proxy
+  smb:
+    # linux: [xdg-open, "smb://{user}@{host}/{path}"]
+    # windows: [explorer.exe, '\\{host}\{path}']
+    # darwin: [open, "smb://{host}/{path}"]
+  rdp:
+    # linux: [xfreerdp, "/v:{host}:{port}", "/u:{user}", /from-stdin]
+    # windows: [mstsc.exe, "/v:{host}:{port}"]
+    # password_stdin: true
+  sftp:
+    # windows: ['C:\Program Files (x86)\WinSCP\WinSCP.exe', "{url}"]

@@ -1,0 +1,4 @@
+{"success":true,"data":{"object":"list","data":[
+ {"object":"folder","id":"f1","name":"buisness"},{"object":"folder","id":"f2","name":"buisness/grup1"},
+ {"object":"folder","id":"f3","name":"buisness/grup2"},{"object":"folder","id":"f4","name":"A//B/ C "},
+ {"object":"folder","id":null,"name":"No Folder"}]}}

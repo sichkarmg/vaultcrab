@@ -1,0 +1,23 @@
+{"success":true,"data":{"object":"list","data":[
+ {"object":"item","id":"i1","organizationId":null,"folderId":"f3","type":1,"name":"user test","favorite":false,
+  "fields":[{"name":"ssh","value":"true","type":2},{"name":"api-token","value":"TOPSECRET-HIDDEN","type":1}],
+  "login":{"uris":[],"username":"test@192.0.2.133","password":"TOPSECRET-PW","totp":null},
+  "notes":"TOPSECRET-NOTES","collectionIds":[],
+  "creationDate":"2026-01-02T03:04:05.000Z","revisionDate":"2026-10-20T10:00:00.123Z"},
+ {"object":"item","id":"i2","organizationId":"o1","folderId":null,"type":1,"name":"org host","favorite":true,
+  "fields":[{"name":"SSH","value":"true","type":0},{"name":"tags","value":"db, prod;linux","type":0},{"name":"port","value":"2222","type":0}],
+  "login":{"uris":[],"username":"root@[fe80::1]:22","password":"x"},"collectionIds":["c1","c2"]},
+ {"object":"item","id":"i3","organizationId":null,"folderId":null,"type":1,"name":"uri host",
+  "fields":null,"login":{"uris":[{"match":null,"uri":"https://example.com"},{"match":null,"uri":"ssh://10.0.0.5:2200"}],"username":"admin","password":"x"},"collectionIds":[]},
+ {"object":"item","id":"i4","organizationId":null,"folderId":null,"type":1,"name":"vnc",
+  "login":{"uris":[{"uri":"vnc://10.0.0.6"}],"username":"","password":"x"}},
+ {"object":"item","id":"i5","organizationId":null,"folderId":null,"type":1,"name":"smb",
+  "login":{"uris":[{"uri":"smb://fileserver/share/sub"}],"username":"DOM\\user","password":"x"}},
+ {"object":"item","id":"i6","organizationId":null,"folderId":null,"type":1,"name":"website",
+  "login":{"uris":[{"uri":"https://192.0.2.132"}],"username":"user@example.com","password":"x"}},
+ {"object":"item","id":"i7","organizationId":null,"folderId":null,"type":2,"name":"secure note","notes":"n"},
+ {"object":"item","id":"i8","organizationId":null,"folderId":null,"type":1,"name":"ssh flag no host",
+  "fields":[{"name":"ssh","value":"true","type":2}],"login":{"username":"justuser","password":"x"}},
+ {"object":"item","id":"i9","organizationId":null,"folderId":null,"type":1,"name":"ssh false",
+  "fields":[{"name":"ssh","value":"false","type":2}],"login":{"username":"u@h","password":"x"}}
+]}}

@@ -1,0 +1,27 @@
+# build output and release artifacts (published as GitHub Release assets, never committed)
+/dist/
+/vaultcrab
+*.exe
+
+# secrets and local settings
+*.pass
+.env
+/bw-session
+*.local.yaml
+/testdata/keys/
+
+# internal notes and agent settings
+/PLAN.md
+/PROGRESS.md
+/BLOCKERS.md
+/REPORT.md
+/CLAUDE.md
+/.claude/
+/scratch/
+
+# editors and OS
+.DS_Store
+._*
+.idea/
+.vscode/
+*.swp

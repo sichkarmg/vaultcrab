@@ -1,0 +1,3 @@
+{"success":true,"data":{"object":"list","data":[
+ {"object":"collection","id":"c1","organizationId":"o1","name":"ops"},
+ {"object":"collection","id":"c2","organizationId":"o1","name":"dev/backend"}]}}

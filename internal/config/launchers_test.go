@@ -170,6 +170,8 @@ func TestSaveLaunchersAtomic(t *testing.T) {
 		next := cfg.Launchers()
 		next.Scripts[0].Run.Set("linux", []string{"ping", "-c", fmt.Sprint(i + 1), "{host}"})
 		if err := SaveLaunchers(path, cur, next); err != nil {
+			close(stop) // no t.Log from the readers after the test ends
+			wg.Wait()
 			t.Fatal(err)
 		}
 		cur = next

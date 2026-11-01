@@ -8,6 +8,7 @@ import (
 	"context"
 	"os"
 	"path/filepath"
+	"runtime"
 	"slices"
 	"strings"
 	"testing"
@@ -37,7 +38,7 @@ func TestConfigHotReload(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	write("external:\n  smb: {linux: [" + client + ", first, '{host}']}\nscripts:\n  - {name: hello, run: {linux: [echo, one]}}\n")
+	write("external:\n  smb: {" + runtime.GOOS + ": [" + client + ", first, '{host}']}\nscripts:\n  - {name: hello, run: {" + runtime.GOOS + ": [echo, one]}}\n")
 	cfg, err := config.Load(path)
 	if err != nil {
 		t.Fatal(err)
@@ -77,7 +78,7 @@ func TestConfigHotReload(t *testing.T) {
 	seq := s.ConfigStatus().Seq
 
 	// edited by hand: picked up by the watcher
-	write("external:\n  smb: {linux: [" + client + ", second, '{host}', again]}\nscripts:\n  - {name: hello, run: {linux: [echo, two]}}\nssh: {timeout: 3s}\n")
+	write("external:\n  smb: {" + runtime.GOOS + ": [" + client + ", second, '{host}', again]}\nscripts:\n  - {name: hello, run: {" + runtime.GOOS + ": [echo, two]}}\nssh: {timeout: 3s}\n")
 	st := waitConfig(t, s, seq)
 	if st.Err != nil || !slices.Equal(st.Restart, []string{"ssh"}) {
 		t.Fatalf("status %+v", st)
@@ -90,7 +91,7 @@ func TestConfigHotReload(t *testing.T) {
 	}
 
 	// broken: reported, the previous config stays in use
-	write("external:\n  smb: {linux: [" + client + ", third]}\n  nope: {}\n")
+	write("external:\n  smb: {" + runtime.GOOS + ": [" + client + ", third]}\n  nope: {}\n")
 	st = waitConfig(t, s, st.Seq)
 	if st.Err == nil || !strings.Contains(st.Err.Error(), `unknown scheme "nope"`) {
 		t.Fatalf("status %+v", st)
@@ -103,7 +104,7 @@ func TestConfigHotReload(t *testing.T) {
 	s.SetConfigWatch(false)
 	time.Sleep(50 * time.Millisecond) // a check under way ends
 	seq = s.ConfigStatus().Seq
-	write("external:\n  smb: {linux: [" + client + ", fourth, '{host}']}\n")
+	write("external:\n  smb: {" + runtime.GOOS + ": [" + client + ", fourth, '{host}']}\n")
 	time.Sleep(150 * time.Millisecond)
 	if s.ConfigStatus().Seq != seq {
 		t.Fatal("checked while the window has no focus")
@@ -141,14 +142,16 @@ func TestSaveLaunchersApplies(t *testing.T) {
 	var applied config.Config
 	s := New(Options{Config: &cfg, ConfigPoll: -1, ApplyConfig: func(c config.Config) { applied = c }})
 	old, l := cfg.Launchers(), cfg.Launchers()
-	l.External["vnc"] = config.Launch{PerOS: config.PerOS{Linux: []string{"xtigervncviewer", "{host}::{port}"}}}
+	var vnc config.PerOS
+	vnc.Set(runtime.GOOS, []string{"xtigervncviewer", "{host}::{port}"})
+	l.External["vnc"] = config.Launch{PerOS: vnc}
 	if err := s.SaveLaunchers(old, l); err != nil {
 		t.Fatal(err)
 	}
 	if got := LaunchSpecs(applied)[model.VNC].Command; strings.Join(got, " ") != "xtigervncviewer {host}::{port}" {
 		t.Fatalf("applied %q", got)
 	}
-	if got := s.Config().External["vnc"].Linux; len(got) != 2 {
+	if got := s.Config().External["vnc"].Get(runtime.GOOS); len(got) != 2 {
 		t.Fatalf("config in use %q", got)
 	}
 }
@@ -172,8 +175,8 @@ func TestScriptPasswordArg(t *testing.T) {
 	s.Start(ctx)
 	waitState(t, s, Online)
 	cfg := config.Config{Scripts: []config.ScriptSpec{
-		{Name: "ext", Mode: "external", Run: config.PerOS{Linux: []string{"x", "smb://{user}:{password}@{host}/", "{password}"}}},
-		{Name: "term", Run: config.PerOS{Linux: []string{"echo", "{password}"}}},
+		{Name: "ext", Mode: "external", Run: thisOS("x", "smb://{user}:{password}@{host}/", "{password}")},
+		{Name: "term", Run: thisOS("echo", "{password}")},
 	}}
 	sc := cfg.CompiledScripts()
 	if _, err := s.RunScript(ctx, h, sc[0], 80, 24); err != nil {
@@ -189,4 +192,11 @@ func TestScriptPasswordArg(t *testing.T) {
 	if c := sess.Host.Fields["command"]; c != "echo ******" {
 		t.Errorf("shown %q", c)
 	}
+}
+
+// thisOS is a command line for the OS the tests run on.
+func thisOS(cmd ...string) config.PerOS {
+	var p config.PerOS
+	p.Set(runtime.GOOS, cmd)
+	return p
 }

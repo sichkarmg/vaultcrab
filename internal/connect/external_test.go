@@ -11,6 +11,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"reflect"
+	"runtime"
 	"strings"
 	"testing"
 	"time"
@@ -176,6 +177,9 @@ func TestDefaultFallbacksNewSchemes(t *testing.T) {
 		if sc.External() && len(DefaultFallbacks()[sc]) == 0 {
 			t.Errorf("no fallbacks for %s", sc)
 		}
+	}
+	if runtime.GOOS != "linux" {
+		return // the command lines below are the Linux defaults
 	}
 	dir := t.TempDir()
 	out := filepath.Join(dir, "out")

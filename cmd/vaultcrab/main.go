@@ -32,7 +32,10 @@ import (
 	"github.com/sichkarmg/vaultcrab/internal/widget"
 )
 
-var version = "dev"
+// version is the release version (SemVer, no "v"). A release PR updates it
+// together with CHANGELOG.md; builds from git override it with -ldflags
+// (`git describe` for make, the tag for the release workflow).
+var version = "0.1.0"
 
 func main() {
 	if spawn.Main() { // helper mode (see internal/spawn)

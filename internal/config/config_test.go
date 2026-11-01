@@ -227,7 +227,8 @@ func TestDefaultWidgetsRun(t *testing.T) {
 		if w.Builtin != "" {
 			continue // no command
 		}
-		lines, err := widget.Run(context.Background(), w.Command, 10*time.Second)
+		// generous: the first PowerShell start on a CI runner can take >10 s
+		lines, err := widget.Run(context.Background(), w.Command, 30*time.Second)
 		if err != nil || len(lines) < 2 {
 			t.Errorf("%s: %v %q", w.Title, err, lines)
 		}

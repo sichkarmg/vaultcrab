@@ -26,16 +26,32 @@
 Linux, Windows and macOS, all with `CGO_ENABLED=0` (the Linux binary is static):
 
 ```sh
-make build-all    # dist/vaultcrab-<os>-<arch>
-make release      # + dist/SHA256SUMS
-go test ./...
+make fmt-check vet test   # gofmt, go vet (also with -tags integration), go test ./...
+make build-all            # dist/vaultcrab-<os>-<arch>
+make release-check        # before a release tag, see RELEASING.md
 ```
+
+CI (`.github/workflows/ci.yml`) runs gofmt, vet, tests and `make build` on Linux, macOS and
+Windows, plus gitleaks (`.gitleaks.toml`) and govulncheck; its summary status is `ci`.
 
 ## Integration tests
 
-`internal/vault/integration_test.go` runs against a real `bw serve` of a **test** account when
-`VAULTCRAB_IT_BW=1` is set. `scripts/seed-vault.sh` fills a test Vaultwarden account with
-`vaultcrab-test-*` items (`--wipe` removes only those).
+Integration tests have the build tag `integration` and are not part of `go test ./...`.
+`internal/vault/integration_test.go` runs against a real `bw serve` of a **test** account: bw on
+`PATH` (or `VAULTCRAB_IT_BW_PATH`), logged in, `BW_SESSION` set:
+
+```sh
+go test -tags integration -run '^TestIntegration' ./internal/vault
+```
+
+`scripts/seed-vault.sh` fills a test Vaultwarden account with `vaultcrab-test-*` items (`--wipe`
+removes only those).
+
+`scripts/e2e.sh` (`make e2e`) builds vaultcrab and the integration test binaries for Linux and
+Windows, copies them to the test VMs over ssh, runs `vaultcrab --version`, a short TUI smoke start
+and the integration tests there, and prints a summary. The VMs and the test account are configured
+with environment variables (see the header of the script and `scripts/lib/vm.sh`).
+`scripts/release-verify.sh` checks a draft release the same way (see [RELEASING.md](../RELEASING.md)).
 
 ## Extension points
 

@@ -282,10 +282,10 @@ func writeAtomic(path string, b []byte) error {
 // rename replaces newpath; on Windows, a file that another program (an
 // editor, another vaultcrab reading it) has open refuses that for a moment.
 func rename(oldpath, newpath string) error {
-	err := os.Rename(oldpath, newpath)
+	err := replaceFile(oldpath, newpath)
 	for wait := time.Duration(0); err != nil && runtime.GOOS == "windows" && errors.Is(err, fs.ErrPermission) && wait < 2*time.Second; wait += 10 * time.Millisecond {
 		time.Sleep(10 * time.Millisecond)
-		err = os.Rename(oldpath, newpath)
+		err = replaceFile(oldpath, newpath)
 	}
 	return err
 }

@@ -1,0 +1,42 @@
+name: Bug report
+description: Something does not work as expected
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Please do not include real passwords, keys, host names, IP addresses or vault contents.
+        Security vulnerabilities: see SECURITY.md (report privately, not here).
+  - type: input
+    id: version
+    attributes:
+      label: Version
+      description: Output of `vaultcrab --version`
+      placeholder: vaultcrab 0.1.0
+    validations:
+      required: true
+  - type: dropdown
+    id: os
+    attributes:
+      label: Operating system
+      options: [Linux, Windows, macOS, Other]
+    validations:
+      required: true
+  - type: input
+    id: terminal
+    attributes:
+      label: Terminal and vault
+      description: Terminal emulator, `bw --version`, Bitwarden or Vaultwarden
+      placeholder: Windows Terminal 1.22, bw 2026.10.0, Vaultwarden
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened
+      description: Steps to reproduce, what you expected and what you saw
+    validations:
+      required: true
+  - type: textarea
+    id: extra
+    attributes:
+      label: Logs, screenshots, config
+      description: Relevant parts only, with personal data removed

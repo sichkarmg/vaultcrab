@@ -101,16 +101,23 @@
 
 Нужны два файла: `vaultcrab` и Bitwarden CLI (`bw`). **`bw` устанавливается отдельно** и с Vaultcrab
 не поставляется. Бинарники Vaultcrab — в разделе
-[Releases](https://github.com/sichkarmg/vaultcrab/releases) (там же `SHA256SUMS`) или собираются из
+[Releases](https://github.com/sichkarmg/vaultcrab/releases) (там же `checksums.txt`) или собираются из
 исходников (см. «Сборка из исходников»).
 
-| ОС | файл |
+| ОС | архив |
 |---|---|
-| Linux x86-64 (статический) | `vaultcrab-linux-amd64` |
-| Windows 10/11 x64 | `vaultcrab-windows-amd64.exe` |
-| macOS Intel / Apple Silicon | `vaultcrab-darwin-amd64` / `vaultcrab-darwin-arm64` |
+| Linux x86-64 / ARM64 (статический) | `vaultcrab_<версия>_linux_amd64.tar.gz` / `…_linux_arm64.tar.gz` |
+| Windows 10/11 x64 | `vaultcrab_<версия>_windows_amd64.zip` |
+| macOS Intel / Apple Silicon | `vaultcrab_<версия>_darwin_amd64.tar.gz` / `…_darwin_arm64.tar.gz` |
 
-Проверка целостности: `sha256sum -c SHA256SUMS --ignore-missing` (Windows: `Get-FileHash <файл>`).
+В архиве — бинарь `vaultcrab` (`vaultcrab.exe` в Windows), `README.md`, `LICENSE` и
+`THIRD_PARTY_NOTICES.md`. Проверка целостности и распаковка:
+
+```sh
+sha256sum -c checksums.txt --ignore-missing   # macOS: shasum -a 256 -c …; Windows: Get-FileHash <файл>
+tar -xzf vaultcrab_<версия>_linux_amd64.tar.gz   # Windows: Expand-Archive <файл>.zip
+```
+
 Версия установленной программы: `vaultcrab -version`.
 
 **Сборки для macOS и Windows не подписаны.** macOS (Gatekeeper) и Windows (SmartScreen) могут
@@ -121,7 +128,7 @@
 ```sh
 # 1. vaultcrab (статический бинарь, зависимостей нет)
 mkdir -p ~/.local/bin
-install -m 755 vaultcrab-linux-amd64 ~/.local/bin/vaultcrab
+install -m 755 vaultcrab ~/.local/bin/vaultcrab
 
 # 2. Bitwarden CLI: официальный zip (нужен unzip) — или `sudo snap install bw`, или `npm i -g @bitwarden/cli`
 curl -L -o /tmp/bw.zip 'https://bitwarden.com/download/?app=cli&platform=linux'
@@ -155,7 +162,7 @@ PowerShell:
 # 1. vaultcrab
 $dir = "$env:LOCALAPPDATA\vaultcrab\bin"
 New-Item -ItemType Directory -Force $dir | Out-Null
-Copy-Item .\vaultcrab-windows-amd64.exe "$dir\vaultcrab.exe"
+Copy-Item .\vaultcrab.exe "$dir\vaultcrab.exe"
 # добавить в PATH пользователя (новые окна терминала увидят его)
 [Environment]::SetEnvironmentVariable('Path', [Environment]::GetEnvironmentVariable('Path','User') + ";$dir", 'User')
 
@@ -179,9 +186,9 @@ FTP/SFTP — в WinSCP или FileZilla (`winget install WinSCP.WinSCP`). Лок
 ### macOS
 
 ```sh
-# 1. vaultcrab (выберите arm64 для Apple Silicon, amd64 для Intel)
+# 1. vaultcrab (архив darwin_arm64 для Apple Silicon, darwin_amd64 для Intel)
 mkdir -p ~/.local/bin
-install -m 755 vaultcrab-darwin-arm64 ~/.local/bin/vaultcrab
+install -m 755 vaultcrab ~/.local/bin/vaultcrab
 xattr -d com.apple.quarantine ~/.local/bin/vaultcrab 2>/dev/null   # бинарь не подписан
 echo 'export PATH="$HOME/.local/bin:$PATH"' >> ~/.zshrc && . ~/.zshrc
 
@@ -520,12 +527,17 @@ external:
 Нужен Go 1.26+ (проверено на 1.27.3). Сборка без cgo:
 
 ```sh
-make build       # dist/vaultcrab для текущей ОС
-make build-all   # dist/vaultcrab-{linux-amd64,windows-amd64.exe,darwin-amd64,darwin-arm64}
-make release     # build-all + dist/SHA256SUMS (версия = git describe, дерево должно быть чистым)
-make test        # go test ./...
+make build          # dist/vaultcrab для текущей ОС
+make build-all      # dist/vaultcrab-{linux-amd64,linux-arm64,windows-amd64.exe,darwin-amd64,darwin-arm64}
+make test vet       # go test ./... и go vet ./...
+make fmt-check      # gofmt
+make release-check  # проверки перед тегом релиза (см. RELEASING.md)
 file dist/vaultcrab-linux-amd64   # → statically linked
 ```
+
+Релизы собирает GitHub Actions с помощью GoReleaser ([RELEASING.md](RELEASING.md)), изменения —
+в [CHANGELOG.md](CHANGELOG.md). Интеграционные тесты с настоящим `bw serve` собираются с build-тегом
+`integration` ([docs/DEVELOPMENT.md](docs/DEVELOPMENT.md)).
 
 В `third_party/` — форки трёх зависимостей с небольшими патчами (подключены через `replace` в `go.mod`,
 описаны в `third_party/*/PATCHES.md`): ускорение прокрутки и компактный scrollback эмулятора

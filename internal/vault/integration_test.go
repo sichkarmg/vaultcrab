@@ -1,5 +1,7 @@
 // SPDX-License-Identifier: MIT
 
+//go:build integration
+
 package vault
 
 import (
@@ -13,16 +15,21 @@ import (
 	"github.com/sichkarmg/vaultcrab/internal/model"
 )
 
-// TestIntegrationBwServe runs against a real `bw serve` with the test vault
-// seeded by scripts/seed-vault.sh. Enable with VAULTCRAB_IT_BW=1 (requires bw on
-// PATH, logged in, and BW_SESSION in the environment).
+// Integration tests run against a real `bw serve` with a TEST vault seeded by
+// scripts/seed-vault.sh. They are built only with `-tags integration` and need
+// bw on PATH (or VAULTCRAB_IT_BW_PATH), logged in, and BW_SESSION in the
+// environment. bw settings such as BITWARDENCLI_APPDATA_DIR are inherited.
+// scripts/e2e.sh runs them on the test VMs.
+
+func itServeOptions() ServeOptions {
+	return ServeOptions{BW: os.Getenv("VAULTCRAB_IT_BW_PATH")}
+}
+
+// TestIntegrationBwServe checks the snapshot of the seeded test vault.
 func TestIntegrationBwServe(t *testing.T) {
-	if os.Getenv("VAULTCRAB_IT_BW") == "" {
-		t.Skip("set VAULTCRAB_IT_BW=1 to run against bw serve")
-	}
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Minute)
 	defer cancel()
-	srv, err := StartServer(ctx, ServeOptions{})
+	srv, err := StartServer(ctx, itServeOptions())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -77,12 +84,9 @@ func TestIntegrationBwServe(t *testing.T) {
 // TestIntegrationEdit creates, edits and deletes a vaultcrab-test-it-* item in
 // the test vault (same requirements as TestIntegrationBwServe).
 func TestIntegrationEdit(t *testing.T) {
-	if os.Getenv("VAULTCRAB_IT_BW") == "" {
-		t.Skip("set VAULTCRAB_IT_BW=1 to run against bw serve")
-	}
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Minute)
 	defer cancel()
-	srv, err := StartServer(ctx, ServeOptions{})
+	srv, err := StartServer(ctx, itServeOptions())
 	if err != nil {
 		t.Fatal(err)
 	}

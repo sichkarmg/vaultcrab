@@ -9,6 +9,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 	"time"
@@ -36,6 +37,9 @@ func (f *idleVNC) Close() error                { return nil }
 // arguments edited with the keyboard, checks before saving, the save into
 // the config file (applied at once) and a test start of a draft.
 func TestProgramsPage(t *testing.T) {
+	if runtime.GOOS != "linux" {
+		t.Skip("checks the Linux client list")
+	}
 	dir := t.TempDir()
 	bin := filepath.Join(dir, "bin")
 	os.Mkdir(bin, 0o755)

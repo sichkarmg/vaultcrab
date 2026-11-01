@@ -1,0 +1,10 @@
+# gitleaks configuration: the default rules plus narrow allowlists for known
+# false positives. Never allowlist a real secret: remove it and rotate it.
+[extend]
+useDefault = true
+
+[[allowlists]]
+description = "Bubble Tea key names (ctrl+shift+end, ...) look like generic API keys"
+condition = "AND"
+paths = ['''^third_party/bubbletea/key\.go$''']
+regexes = ['''^(ctrl|alt|shift)(\+(ctrl|alt|shift|up|down|left|right|home|end|pgup|pgdown))+$''']

@@ -10,12 +10,11 @@
 *.local.yaml
 /testdata/keys/
 
-# internal notes and agent settings
+# internal notes and local agent settings (CLAUDE.md itself is committed)
 /PLAN.md
 /PROGRESS.md
 /BLOCKERS.md
 /REPORT.md
-/CLAUDE.md
 /.claude/
 /scratch/
 

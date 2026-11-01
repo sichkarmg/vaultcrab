@@ -1,0 +1,51 @@
+# Release build, run by .github/workflows/release.yml on a v* tag.
+# Creates a DRAFT pre-release; see RELEASING.md for publishing it.
+version: 2
+project_name: vaultcrab
+
+builds:
+  - id: vaultcrab
+    main: ./cmd/vaultcrab
+    binary: vaultcrab
+    env:
+      - CGO_ENABLED=0 # static Linux binaries, no cgo anywhere
+    flags:
+      - -trimpath
+    ldflags:
+      - -s -w -X main.version={{ .Version }}
+    mod_timestamp: "{{ .CommitTimestamp }}"
+    # Keep in sync with PLATFORMS in the Makefile.
+    targets:
+      - linux_amd64_v1
+      - linux_arm64_v8.0
+      - windows_amd64_v1
+      - darwin_amd64_v1
+      - darwin_arm64_v8.0
+
+archives:
+  - id: vaultcrab
+    formats: [tar.gz]
+    format_overrides:
+      - goos: windows
+        formats: [zip]
+    name_template: "{{ .ProjectName }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
+    files:
+      - README.md
+      - LICENSE
+      - THIRD_PARTY_NOTICES.md
+
+checksum:
+  name_template: checksums.txt
+  algorithm: sha256
+
+changelog:
+  use: github-native
+
+release:
+  draft: true
+  prerelease: "true"
+  make_latest: "false"
+  replace_existing_draft: true
+  header: |
+    Changes: see [CHANGELOG.md](https://github.com/sichkarmg/vaultcrab/blob/{{ .Tag }}/CHANGELOG.md).
+    Verify downloads with `checksums.txt` (SHA-256). **The macOS and Windows binaries are not signed.**

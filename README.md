@@ -65,11 +65,14 @@ the vault only at the moment of connecting and never written to disk.
 
 ## Supported systems
 
-| OS | Binary |
+| OS | Release archive |
 |---|---|
-| Linux x86-64 (static, no dependencies) | `vaultcrab-linux-amd64` |
-| Windows 10/11 x64 | `vaultcrab-windows-amd64.exe` |
-| macOS Intel / Apple Silicon | `vaultcrab-darwin-amd64` / `vaultcrab-darwin-arm64` |
+| Linux x86-64 / ARM64 (static, no dependencies) | `vaultcrab_<version>_linux_amd64.tar.gz` / `…_linux_arm64.tar.gz` |
+| Windows 10/11 x64 | `vaultcrab_<version>_windows_amd64.zip` |
+| macOS Intel / Apple Silicon | `vaultcrab_<version>_darwin_amd64.tar.gz` / `…_darwin_arm64.tar.gz` |
+
+Each archive contains the `vaultcrab` binary (`vaultcrab.exe` on Windows), `README.md`, `LICENSE`
+and `THIRD_PARTY_NOTICES.md`.
 
 **The macOS and Windows builds are not signed.** Gatekeeper and SmartScreen may warn on first
 start (see the macOS instructions below for removing the quarantine flag).
@@ -77,18 +80,19 @@ start (see the macOS instructions below for removing the quarantine flag).
 ## Installation
 
 You need two programs: `vaultcrab` and the **Bitwarden CLI (`bw`)**. `bw` is installed separately
-and is **not** shipped with Vaultcrab. Download Vaultcrab from
-[Releases](https://github.com/sichkarmg/vaultcrab/releases) and check it against `SHA256SUMS`:
+and is **not** shipped with Vaultcrab. Download the archive for your system and `checksums.txt`
+from [Releases](https://github.com/sichkarmg/vaultcrab/releases), check and unpack it:
 
 ```sh
-sha256sum -c SHA256SUMS --ignore-missing      # Windows: Get-FileHash <file>
+sha256sum -c checksums.txt --ignore-missing   # macOS: shasum -a 256 -c …; Windows: Get-FileHash <file>
+tar -xzf vaultcrab_<version>_linux_amd64.tar.gz   # Windows: Expand-Archive <file>.zip
 ```
 
 ### Linux
 
 ```sh
 mkdir -p ~/.local/bin
-install -m 755 vaultcrab-linux-amd64 ~/.local/bin/vaultcrab
+install -m 755 vaultcrab ~/.local/bin/vaultcrab
 # Bitwarden CLI: the official zip, or `sudo snap install bw`, or `npm i -g @bitwarden/cli`
 curl -L -o /tmp/bw.zip 'https://bitwarden.com/download/?app=cli&platform=linux'
 unzip -o /tmp/bw.zip -d ~/.local/bin && chmod +x ~/.local/bin/bw
@@ -103,7 +107,7 @@ vaultcrab
 ```powershell
 $dir = "$env:LOCALAPPDATA\vaultcrab\bin"
 New-Item -ItemType Directory -Force $dir | Out-Null
-Copy-Item .\vaultcrab-windows-amd64.exe "$dir\vaultcrab.exe"
+Copy-Item .\vaultcrab.exe "$dir\vaultcrab.exe"
 [Environment]::SetEnvironmentVariable('Path', [Environment]::GetEnvironmentVariable('Path','User') + ";$dir", 'User')
 winget install Bitwarden.CLI
 
@@ -120,7 +124,7 @@ icons automatically.
 
 ```sh
 mkdir -p ~/.local/bin
-install -m 755 vaultcrab-darwin-arm64 ~/.local/bin/vaultcrab      # amd64 for Intel Macs
+install -m 755 vaultcrab ~/.local/bin/vaultcrab   # from the darwin_arm64 (Apple Silicon) or darwin_amd64 archive
 xattr -d com.apple.quarantine ~/.local/bin/vaultcrab 2>/dev/null   # the binary is not signed
 brew install bitwarden-cli
 
@@ -137,11 +141,16 @@ set `bw.env: [NODE_EXTRA_CA_CERTS=/path/to/ca.pem]` in the config (passed to `bw
 Go 1.26 or newer, no cgo:
 
 ```sh
-make build        # dist/vaultcrab for this OS
-make build-all    # dist/vaultcrab-{linux-amd64,windows-amd64.exe,darwin-amd64,darwin-arm64}
-make release      # build-all + dist/SHA256SUMS (needs a clean tree; version = git describe)
-make test vet     # go test ./... and go vet ./...
+make build          # dist/vaultcrab for this OS
+make build-all      # dist/vaultcrab-{linux-amd64,linux-arm64,windows-amd64.exe,darwin-amd64,darwin-arm64}
+make test vet       # go test ./... and go vet ./...
+make fmt-check      # gofmt
+make release-check  # checks before a release tag (see RELEASING.md)
 ```
+
+Releases are built by GitHub Actions with GoReleaser ([RELEASING.md](RELEASING.md)); changes are
+listed in [CHANGELOG.md](CHANGELOG.md). Integration tests against a real `bw serve` use the build tag
+`integration` ([docs/DEVELOPMENT.md](docs/DEVELOPMENT.md)).
 
 `third_party/` contains small patched forks of three dependencies (Bubble Tea, Ultraviolet,
 x/vt), wired in with `replace` in `go.mod`; the patches are listed in `third_party/*/PATCHES.md`.
@@ -210,7 +219,7 @@ VNC password modes (`external.vnc.password`):
 - Copied text goes to the clipboard (that is the point of copying); the system clipboard is cleared
   30 s after copying a password.
 
-Please report vulnerabilities privately (see [CONTRIBUTING.md](CONTRIBUTING.md)).
+Please report vulnerabilities privately (see [SECURITY.md](SECURITY.md)).
 
 ## Limitations
 

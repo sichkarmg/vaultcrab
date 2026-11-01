@@ -15,15 +15,15 @@ import (
 )
 
 // Widget commands must not join the terminal's foreground process group,
-// or terminals show their names in the window title.
+// or terminals show their names in the window title. (pgid, not sid: macOS
+// ps prints 0 for sid.)
 func TestRunsInOwnSession(t *testing.T) {
-	lines, err := Run(context.Background(), []string{"sh", "-c", "ps -o sid= -p $$"}, 5*time.Second)
+	lines, err := Run(context.Background(), []string{"sh", "-c", "ps -o pgid= -p $$"}, 5*time.Second)
 	if err != nil || len(lines) == 0 {
 		t.Skipf("ps: %v %q", err, lines)
 	}
-	sid, _ := strconv.Atoi(strings.TrimSpace(lines[0]))
-	own, _ := unix.Getsid(0)
-	if sid == own || sid == 0 {
-		t.Errorf("widget in our session %d", sid)
+	pgid, _ := strconv.Atoi(strings.TrimSpace(lines[0]))
+	if own := unix.Getpgrp(); pgid == own || pgid == 0 {
+		t.Errorf("widget in our process group %d", pgid)
 	}
 }

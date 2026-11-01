@@ -39,7 +39,7 @@ got=$(go run ./cmd/vaultcrab -version 2>/dev/null || true)
 [ "$got" = "vaultcrab $want" ] || fail "go run -version prints '$got'"
 ok "-version prints '$got'"
 if command -v goreleaser >/dev/null; then
-	goreleaser check >/dev/null && ok "goreleaser check"
+	goreleaser check >/dev/null 2>&1 && ok "goreleaser check" || fail "goreleaser check"
 else
 	echo "skip goreleaser check (goreleaser not installed; the release workflow runs it)"
 fi

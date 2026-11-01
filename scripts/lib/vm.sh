@@ -1,15 +1,15 @@
 # Helpers for the test VMs, sourced by scripts/e2e.sh and scripts/release-verify.sh.
 #
-# Variables (all optional):
-#   VAULTCRAB_VM_LINUX     ssh destination of the Linux VM   (default: mint20)
-#   VAULTCRAB_VM_WIN       ssh destination of the Windows VM (default: win)
-#   VAULTCRAB_VM_SSH_OPTS  extra ssh/scp options, e.g. "-i ~/.ssh/test_vms"
+# Variables:
+#   VAULTCRAB_VM_LINUX     ssh destination of the Linux VM, e.g. user@192.0.2.10
+#   VAULTCRAB_VM_WIN       ssh destination of the Windows VM, e.g. admin@192.0.2.11
+#   VAULTCRAB_VM_SSH_OPTS  extra ssh/scp options (optional), e.g. "-i $HOME/.ssh/test_key"
 #
 # The Windows VM runs OpenSSH Server; the work directory is ~/vaultcrab-e2e on
 # both VMs and is replaced on every run. Only test accounts and test data.
 
-VM_LINUX=${VAULTCRAB_VM_LINUX:-mint20}
-VM_WIN=${VAULTCRAB_VM_WIN:-win}
+VM_LINUX=${VAULTCRAB_VM_LINUX:?set VAULTCRAB_VM_LINUX (see scripts/lib/vm.sh)}
+VM_WIN=${VAULTCRAB_VM_WIN:?set VAULTCRAB_VM_WIN (see scripts/lib/vm.sh)}
 # shellcheck disable=SC2206 # word splitting of the options is intended
 VM_OPTS=(-o BatchMode=yes -o ConnectTimeout=10 -o LogLevel=ERROR ${VAULTCRAB_VM_SSH_OPTS:-})
 VM_DIR=vaultcrab-e2e

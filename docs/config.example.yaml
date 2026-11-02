@@ -68,6 +68,7 @@ terminal:
                            # works over SSH; tmux needs `set -g set-clipboard on`)
   copy_system: true        # ...and to the system clipboard of this machine (xclip/xsel/wl-copy, pbcopy, Win32)
   confirm_paste: true      # show pasted text of several lines and ask before it goes into the session
+                           # (Edit / e: change it first, Ctrl+S pastes the edited text)
 
 local:                     # local terminal (t in the host list, prefix + t anywhere)
   shell:                   # empty = $SHELL (Linux/macOS); pwsh, powershell or %ComSpec% (Windows)

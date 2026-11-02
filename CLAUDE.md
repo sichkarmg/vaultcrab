@@ -10,7 +10,8 @@ Credentials stay in the user's vault (Bitwarden/Vaultwarden via `bw serve`, gopa
 - Report to the owner in Russian. Code, commits, PRs, docs, releases are in English.
 
 ## Development workflow (definition of done)
-1. Branch from main: feat/<topic>, fix/<topic>, chore/<topic>. Conventional commits (feat:, fix:, docs:, chore:, refactor:, test:). No Co-Authored-By or session links.
+1. Branch from main: feat/<topic>, fix/<topic>, chore/<topic>. Conventional commits (feat:, fix:, docs:, chore:, refactor:, test:).
+   No authorship lines in commits or PR descriptions: no "Generated with Claude Code", no Co-Authored-By trailers, no session links.
 2. Add or update tests. `gofmt`, `go vet`, `go test ./...` must pass. Run `scripts/e2e.sh` (Mint 20 and Windows test VMs) for changes touching connections, vault, or platform code.
 3. Update README.md and README.ru.md for user-facing changes, `docs/config.example.yaml` for config changes, and CHANGELOG.md.
 4. Keep the idle power budget: no timers or redraws without state change; the idle wake-up test must stay green.

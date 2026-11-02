@@ -1,4 +1,6 @@
 #!/usr/bin/env python3
+# SPDX-License-Identifier: MIT
+# Copyright (c) 2026 sichkarmg
 """
 Export SecureCRT sessions (login/password) to a JSON file for import into Bitwarden.
 

@@ -80,5 +80,7 @@ Options: `--root-folder NAME` (default `SecureCRT`, `''` for none), `--skip-no-p
 `-p PASSPHRASE` (unsafe: stays in the shell history; prefer `--ask-passphrase`). The output file
 is created with mode 0600.
 
+The converters are part of Vaultcrab and licensed under the [MIT License](../LICENSE).
+
 Contributions of converters for other programs are welcome (see [CONTRIBUTING.md](../CONTRIBUTING.md)):
 test data only, no real hosts or passwords.

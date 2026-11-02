@@ -10,6 +10,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 - Settings → Tab status (`ui.tab_status: color`): instead of the state icon, the tab number is
   coloured (green connected, yellow connecting, red broken, blue new output).
+- Each pane header of a split tab has a `✕` button that closes just that pane (a live session asks
+  first); `Ctrl+D` closes a broken or finished pane. The status bar and the help mention both.
 
 ### Fixed
 - With many tabs the `0:Hosts` tab no longer scrolls out of the tab bar.

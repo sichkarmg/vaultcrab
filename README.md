@@ -185,7 +185,9 @@ can also be changed in the program (`,` or `⚙`). Command line: `-config FILE`,
 
 Keys: `Enter` connect, `/` search, `x` scripts, `t` local shell, `a`/`e`/`C`/`D` add/edit/copy/delete,
 `p` copy password, `?` help. Session commands use the prefix `Ctrl+B` (configurable): `|` and `-`
-split, arrows move focus, `z` zoom, `[` scrollback, `x` close pane.
+split, arrows move focus, `z` zoom, `[` scrollback, `x` close pane, `&` close the tab with all its
+panes. In a split tab each pane header has a `✕` button that closes just that pane; `Ctrl+D` closes a
+broken or finished pane (`Enter` reconnects it).
 
 ## External clients (VNC, SMB, SFTP, …)
 

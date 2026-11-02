@@ -278,6 +278,8 @@ func (t *tab) key(m *Model, msg tea.KeyMsg) tea.Cmd {
 			t.reconnect()
 		case tea.KeyPgUp:
 			t.enterHistory(m, true)
+		case tea.KeyCtrlD: // as EOF in a shell: close this pane (the tab if it is the last)
+			m.confirmClosePane(t)
 		}
 		return nil
 	}
@@ -324,6 +326,10 @@ func (t *tab) mouse(m *Model, msg tea.MouseMsg, x0, y0 int) tea.Cmd {
 	}
 	if msg.Action == tea.MouseActionPress && msg.Button == tea.MouseButtonLeft {
 		t.ws.Focus(hit.Pane)
+		if t.closeButtonAt(m, hit.Pane, x, y) {
+			m.confirmClosePane(t) // asks only for a live session
+			return nil
+		}
 	}
 	s := t.ws.Session(hit.Pane)
 	tr, ok := t.ws.TermRect(hit.Pane)
@@ -438,11 +444,26 @@ func (t *tab) paneLines(m *Model, id core.PaneID, pr core.Rect, focused bool) []
 		} else {
 			head += stDim.Render(title + " " + info)
 		}
+		btn := m.paneCloseButton()
+		if bw := ansi.StringWidth(btn); pr.W > bw+4 {
+			head = padRight(ansi.Truncate(head, pr.W-bw, m.g.ell), pr.W-bw) + stQuit.Render(btn)
+		}
 		out = append(out, padRight(ansi.Truncate(head, pr.W, m.g.ell), pr.W))
 	}
 	tr, _ := t.ws.TermRect(id)
 	lines := s.Term.Render(pr.W, tr.H, core.RenderOpts{Cursor: focused && !t.history[id]})
 	return append(out, lines...)
+}
+
+// paneCloseButton is drawn at the right end of each pane header.
+func (m *Model) paneCloseButton() string { return " " + m.ascii("✕") + " " }
+
+// closeButtonAt reports whether (x, y) of the tab body is the close button
+// in the header of pane id.
+func (t *tab) closeButtonAt(m *Model, id core.PaneID, x, y int) bool {
+	pr, ok := t.ws.Geometry().Panes[id]
+	bw := ansi.StringWidth(m.paneCloseButton())
+	return ok && t.ws.Headers() && pr.H > 1 && pr.W > bw+4 && y == pr.Y && x >= pr.X+pr.W-bw && x < pr.X+pr.W
 }
 
 func (t *tab) status(m *Model) string {
@@ -452,13 +473,13 @@ func (t *tab) status(m *Model) string {
 	out := s.Host.Target() + " · " + st.String()
 	switch {
 	case s.Exited() && s.Host.Scheme == core.SchemeLocal:
-		out = s.Host.Fields["command"] + " · finished · Enter: run again"
+		out = s.Host.Fields["command"] + " · finished · Enter: run again · Ctrl+D: close"
 	case st == core.SessionDisconnected && s.Host.Scheme == core.SchemeLocal:
-		out += ": " + errText(err) + " · Enter: run again"
+		out += ": " + errText(err) + " · Enter: run again · Ctrl+D: close"
 	case st == core.SessionDisconnected:
-		out += ": " + errText(err) + " · Enter: reconnect"
+		out += ": " + errText(err) + " · Enter: reconnect · Ctrl+D: close"
 	case st == core.SessionIdle:
-		out += " · not connected · Enter: connect"
+		out += " · not connected · Enter: connect · Ctrl+D: close"
 	case err != nil:
 		out += ": " + err.Error()
 	}

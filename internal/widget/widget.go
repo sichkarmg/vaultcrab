@@ -282,7 +282,7 @@ func RunWith(ctx context.Context, run Exec, argv []string, timeout time.Duration
 	lines := Clean(out)
 	switch {
 	case errors.Is(err, ErrTimeout):
-		err = fmt.Errorf("timed out after %s", timeout)
+		err = fmt.Errorf("%w after %s", ErrTimeout, timeout) // "timed out after 10s"
 	case err != nil && len(lines) == 0:
 		err = fmt.Errorf("%s: %w", argv[0], err)
 	case err != nil:

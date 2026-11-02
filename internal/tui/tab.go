@@ -174,6 +174,9 @@ func (t *tab) paneAction(m *Model, action string, msg tea.KeyMsg) tea.Cmd {
 		})
 	case core.ActClosePane:
 		m.confirmClosePane(t)
+	case core.ActCloneTab:
+		// a new tab with a new connection to the host of the focused pane
+		return m.openHost(t.focused().Host)
 	case core.ActZoom:
 		if t.ws.Len() > 1 {
 			t.ws.ToggleZoom()

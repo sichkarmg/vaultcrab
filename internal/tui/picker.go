@@ -18,21 +18,19 @@ type pickerModal struct {
 	in     textinput.Model
 	rows   []core.Row
 	cursor int
+	first  string // ID of the host offered first (the focused session: a clone)
 	choose func(m *Model, h core.Host) tea.Cmd
 }
 
-func newPicker(m *Model, preselect string, choose func(m *Model, h core.Host) tea.Cmd) *pickerModal {
+// newPicker offers the host with ID first at the top, selected, so Enter
+// opens the same host again.
+func newPicker(m *Model, first string, choose func(m *Model, h core.Host) tea.Cmd) *pickerModal {
 	in := textinput.New()
 	in.Prompt = "/"
 	in.Placeholder = "host to open in the new pane"
 	in.Focus()
-	p := &pickerModal{in: in, choose: choose}
+	p := &pickerModal{in: in, first: first, choose: choose}
 	p.refresh(m)
-	for i, r := range p.rows {
-		if r.Host.ID == preselect {
-			p.cursor = i
-		}
-	}
 	return p
 }
 
@@ -45,6 +43,13 @@ func (p *pickerModal) refresh(m *Model) {
 	// The local shell is offered first (when the query matches it).
 	if lh := m.svc.LocalHost(); q.Match(&lh, nil) {
 		p.rows = append([]core.Row{{Kind: core.HostRow, Key: "h:local", Host: &lh}}, p.rows...)
+	}
+	// ...unless the host of the current session matches: it comes first
+	for i, r := range p.rows {
+		if i > 0 && r.Host.ID == p.first {
+			p.rows = append([]core.Row{r}, append(p.rows[:i:i], p.rows[i+1:]...)...)
+			break
+		}
 	}
 	p.cursor = max(0, min(p.cursor, len(p.rows)-1))
 }
@@ -88,6 +93,9 @@ func (p *pickerModal) view(m *Model, w, h int) []string {
 		hst := p.rows[i].Host
 		icon := padRight(m.opt.Icons.Get(string(hst.Scheme)), 2) // icon names equal scheme names; some icons are 2 wide
 		line := fmt.Sprintf("%s %-28s %s", icon, ansi.Truncate(hst.Name, 28, m.g.ell), stDim.Render(hst.Target()))
+		if hst.ID == p.first {
+			line += stDim.Render("  (this session)")
+		}
 		if i == p.cursor {
 			line = stSelected.Render(ansi.Strip(line))
 		}

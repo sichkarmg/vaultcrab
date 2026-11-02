@@ -222,6 +222,7 @@ const (
 	ActNextTab    = config.ActNextTab
 	ActPrevTab    = config.ActPrevTab
 	ActCloseTab   = config.ActCloseTab
+	ActCloneTab   = config.ActCloneTab
 	ActList       = config.ActList
 	ActHistory    = config.ActHistory
 	ActSplitRight = config.ActSplitRight

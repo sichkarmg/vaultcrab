@@ -23,6 +23,7 @@ const (
 	IconLocal        = "local"
 	IconQuit         = "quit"
 	IconSettings     = "settings"
+	IconLog          = "log"
 	IconFolder       = "folder"
 	IconFolderOpen   = "folder_open"
 	IconOrg          = "org"
@@ -52,6 +53,7 @@ var DefaultIcons = map[string]Icon{
 	IconLocal:        {"⌂", "L"},
 	IconQuit:         {"⊗", "Q"}, // unlike ✗ of a broken session
 	IconSettings:     {"⚙", "="},
+	IconLog:          {"≡", "LOG"},
 	IconFolder:       {"▸", "+"},
 	IconFolderOpen:   {"▾", "-"},
 	IconOrg:          {"◆", "@"},

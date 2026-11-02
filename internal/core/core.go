@@ -221,7 +221,18 @@ func (s *Service) Host(id string) (model.Host, bool) {
 
 func (s *Service) set(fn func()) {
 	s.mu.Lock()
+	st, syncErr := s.state, s.syncErr
 	fn()
+	if s.state != st {
+		if s.lastErr != nil {
+			logf("vault: %s -> %s: %v", st, s.state, s.lastErr)
+		} else {
+			logf("vault: %s -> %s", st, s.state)
+		}
+	}
+	if s.syncErr != nil && (syncErr == nil || s.syncErr.Error() != syncErr.Error()) {
+		logf("vault: sync with the server failed, using the local copy of bw: %v", s.syncErr)
+	}
 	s.mu.Unlock()
 	s.emit()
 }
@@ -442,9 +453,11 @@ func (s *Service) Unlock(ctx context.Context, password []byte) error {
 		return ErrNotOnline
 	}
 	if err := src.Unlock(ctx, password); err != nil {
+		logf("vault: unlock failed: %v", err)
 		s.set(func() { s.lastErr = err })
 		return err
 	}
+	logf("vault: unlocked")
 	s.Refresh(ctx)
 	return nil
 }

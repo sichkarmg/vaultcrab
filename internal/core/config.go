@@ -78,6 +78,9 @@ func (s *Service) initConfig() {
 		if s.scripts == nil {
 			s.scripts = s.opts.Config.CompiledScripts()
 		}
+		if err := applyLog(*s.opts.Config); err != nil {
+			s.conf.status.Err = fmt.Errorf("log: %w", err)
+		}
 	}
 	if s.opts.ConfigPoll == 0 {
 		s.opts.ConfigPoll = defaultConfigPoll
@@ -134,6 +137,14 @@ func (s *Service) ReloadConfig() error {
 		s.scripts = cfg.CompiledScripts()
 	}
 	s.mu.Unlock()
+	if err == nil {
+		if lerr := applyLog(cfg); lerr != nil {
+			logf("config: log: %v", lerr)
+		}
+		logf("config: reloaded %s", path)
+	} else {
+		logf("config: %s does not load, the previous config stays in use: %v", path, err)
+	}
 	if err == nil && s.opts.ApplyConfig != nil {
 		s.opts.ApplyConfig(cfg)
 	}
@@ -209,6 +220,7 @@ func restartNeeded(old, cur config.Config) []string {
 		c.UI.TabsPosition, c.UI.Accent, c.UI.Selection, c.UI.ShowTree, c.UI.ShowNotes, c.UI.ListWidth, c.UI.TabWidth, c.UI.TabStatus = "", "", "", false, false, 0, 0, ""
 		c.UI.RestoreTabs, c.UI.RestoreView = false, false
 		c.Terminal.ConfirmPaste = false
+		c.Log = config.Log{}
 		c.Widgets.Show = false
 		c.Icons.Mode = ""
 		if c.Icons.Set != nil {

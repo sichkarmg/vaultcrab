@@ -183,7 +183,11 @@ The config file is optional:
 
 A fully commented example: [`docs/config.example.yaml`](docs/config.example.yaml). Most settings
 can also be changed in the program (`,` or `⚙`). Command line: `-config FILE`, `-ascii`, `-version`.
-`VAULTCRAB_DEBUG_LOG=/path/file` logs mouse events and window sizes (key presses are never logged).
+**Event log:** Settings → Behavior → Event log (`log.enabled`) writes vault states, connections,
+external programs, config reloads and errors to `vaultcrab.log` in the cache directory (`log.file`;
+rotated at 1 MiB). Passwords, typed keys and terminal output are never logged. While it is on, a `≡`
+button in the tab bar (or prefix `g`) shows the log. `VAULTCRAB_DEBUG_LOG=/path/file` additionally
+logs mouse events and window sizes for debugging.
 
 Keys: `Enter` connect, `/` search, `x` scripts, `t` local shell, `a`/`e`/`C`/`D` add/edit/copy/delete,
 `p` copy password, `?` help. Session commands use the prefix `Ctrl+B` (configurable): `|` and `-`

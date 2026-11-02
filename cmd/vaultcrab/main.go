@@ -19,6 +19,7 @@ import (
 
 	tea "github.com/charmbracelet/bubbletea"
 
+	"github.com/sichkarmg/vaultcrab/internal/applog"
 	"github.com/sichkarmg/vaultcrab/internal/cache"
 	"github.com/sichkarmg/vaultcrab/internal/config"
 	"github.com/sichkarmg/vaultcrab/internal/connect"
@@ -142,9 +143,15 @@ func run(cfg config.Config, load func(string) (config.Config, error)) error {
 			}
 			srv, err := vault.StartServer(ctx, serveOpts)
 			if err != nil {
+				applog.Printf("bw serve: %v", err)
 				return nil, nil, err
 			}
-			return vault.NewClient(srv.URL).WithDone(srv.Done()), srv.Stop, nil
+			applog.Printf("bw serve: started at %s", srv.URL)
+			stop := func() {
+				srv.Stop()
+				applog.Printf("bw serve: stopped")
+			}
+			return vault.NewClient(srv.URL).WithDone(srv.Done()), stop, nil
 		},
 		Login: func() *exec.Cmd {
 			cmd := exec.Command(cfg.BW.Path, "login")
@@ -187,6 +194,8 @@ func run(cfg config.Config, load func(string) (config.Config, error)) error {
 		// a re-read config: the next client started uses its programs
 		ApplyConfig: func(c config.Config) { l.SetSpecs(core.LaunchSpecs(c)) },
 	})
+	applog.Printf("vaultcrab %s started (%s/%s), config %s", version, runtime.GOOS, runtime.GOARCH, cfg.Path)
+	defer applog.Printf("vaultcrab exited")
 	svc.Start(ctx)
 	defer svc.Stop()
 	defer svc.Shutdown()
@@ -293,6 +302,11 @@ func about(cfg config.Config, cacheDir, workspacePath, helper string) []tui.Info
 		{Label: "Bitwarden CLI", Value: bw},
 		{Label: "bw data dir", Value: data},
 	}
+	logFile := cfg.LogFile()
+	if !cfg.Log.Enabled {
+		logFile += " (off: Settings → Behavior → Event log)"
+	}
+	items = append(items, tui.InfoItem{Label: "Event log", Value: logFile})
 	if p := os.Getenv("VAULTCRAB_DEBUG_LOG"); p != "" {
 		items = append(items, tui.InfoItem{Label: "Debug log", Value: p})
 	}

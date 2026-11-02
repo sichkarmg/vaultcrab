@@ -32,6 +32,7 @@ type Appearance struct {
 	TabStatus  string // icon | color: how a tab shows the state of its sessions
 
 	ConfirmPaste bool // ask before pasting several lines into a session
+	Log          bool // the event log (log.enabled)
 	RestoreTabs  bool
 	RestoreView  bool
 }
@@ -103,6 +104,7 @@ func (c *Config) Appearance() Appearance {
 		TabStatus:  c.UI.TabStatus,
 
 		ConfirmPaste: c.Terminal.ConfirmPaste,
+		Log:          c.Log.Enabled,
 		RestoreTabs:  c.UI.RestoreTabs,
 		RestoreView:  c.UI.RestoreView,
 	}
@@ -164,6 +166,9 @@ func setAppearance(root *yaml.Node, old, a Appearance) {
 	}
 	if a.ConfirmPaste != old.ConfirmPaste {
 		setPath(root, []string{"terminal", "confirm_paste"}, boolean(a.ConfirmPaste))
+	}
+	if a.Log != old.Log {
+		setPath(root, []string{"log", "enabled"}, boolean(a.Log))
 	}
 	if a.RestoreTabs != old.RestoreTabs {
 		setPath(root, []string{"ui", "restore_tabs"}, boolean(a.RestoreTabs))

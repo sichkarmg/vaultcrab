@@ -10,13 +10,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 - The multi-line paste dialog has an **Edit** button (`e`): the text opens in an editor with line
   numbers; `Ctrl+S` pastes the edited text, `Esc` returns to the preview with the changes.
-- Settings → Tab status (`ui.tab_status: color`): instead of the state icon, the tab number is
-  coloured (green connected, yellow connecting, red broken, blue new output).
-- Each pane header of a split tab has a `✕` button that closes just that pane (a live session asks
-  first); `Ctrl+D` closes a broken or finished pane. The status bar and the help mention both.
-- Prefix `c` (`clone_tab`) opens a new tab with a new connection to the host of the focused pane.
-- Splitting a pane offers the host of the current pane first and selected, so `Enter` clones it
-  into the new pane.
+- Event log (Settings → Behavior → Event log, `log.enabled`, `log.file`): vault states, unlock
+  results, connections, external programs, scripts, config reloads and errors in `vaultcrab.log`
+  (rotated at 1 MiB; never passwords, keys typed or terminal output). While it is on, a `≡` button
+  in the tab bar and prefix `g` open a viewer.
 
 ### Fixed
 - With many tabs the `0:Hosts` tab no longer scrolls out of the tab bar.

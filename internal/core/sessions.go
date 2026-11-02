@@ -228,6 +228,7 @@ func (s *Service) RunScript(ctx context.Context, h model.Host, sc scripts.Script
 		sec.Wipe()
 		shown = strings.Join(connect.ExpandPassword(sc.Command, h, "******"), " ")
 	}
+	logf("script: %q for %s: %s", sc.Name, h.Name, shown) // {password} masked
 	if sc.Mode == scripts.External {
 		if s.opts.Start == nil {
 			return nil, ErrNoLauncher

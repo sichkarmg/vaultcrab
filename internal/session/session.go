@@ -14,6 +14,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/sichkarmg/vaultcrab/internal/applog"
 	"github.com/sichkarmg/vaultcrab/internal/connect"
 	"github.com/sichkarmg/vaultcrab/internal/model"
 	"github.com/sichkarmg/vaultcrab/internal/secret"
@@ -142,8 +143,16 @@ func (s *Session) Attempts() int {
 
 func (s *Session) setState(st State, err error) {
 	s.mu.Lock()
+	old := s.state
 	s.state, s.err, s.since = st, err, time.Now()
 	s.mu.Unlock()
+	if st != old || err != nil {
+		if err != nil {
+			applog.Printf("session: %s (%s): %s: %v", s.Host.Name, s.Host.Target(), st, err)
+		} else {
+			applog.Printf("session: %s (%s): %s", s.Host.Name, s.Host.Target(), st)
+		}
+	}
 	s.opts.Notify()
 }
 
@@ -162,6 +171,7 @@ func (s *Session) Connect() {
 	reconnect := s.attempts > 1
 	s.state, s.err, s.since = Connecting, nil, time.Now()
 	s.mu.Unlock()
+	applog.Printf("session: %s (%s): connecting (attempt %d)", s.Host.Name, s.Host.Target(), s.attempts)
 	switch {
 	case s.Host.Scheme == model.Local:
 		s.status("starting %s…", s.Host.Fields["command"])

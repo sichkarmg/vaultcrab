@@ -32,8 +32,8 @@ make release-check        # before a release tag, see RELEASING.md
 ```
 
 CI (`.github/workflows/ci.yml`, on pull requests and pushes to `main`) runs gofmt, vet, tests
-and `make build` on Linux, macOS and
-Windows, plus gitleaks (`.gitleaks.toml`) and govulncheck; its summary status is `ci`.
+and `make build` on Linux, macOS and Windows, plus gitleaks (`.gitleaks.toml`) and govulncheck;
+its summary status is `ci`.
 
 ## Integration tests
 

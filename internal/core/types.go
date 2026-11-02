@@ -59,6 +59,7 @@ type (
 	WidgetOutput   = widget.Output
 	WidgetSpec     = widget.Spec
 	Appearance     = config.Appearance
+	VaultSpec      = config.VaultSpec
 	Icon           = config.Icon
 	Launchers      = config.Launchers
 	Launch         = config.Launch
@@ -94,6 +95,9 @@ var (
 	Selections      = config.Selections
 	SelectionColors = config.SelectionColors
 	SaveAppearance  = config.SaveAppearance
+	// Vaults in the config file (Settings → Vaults).
+	AddVaultConfig    = config.AddVault
+	RemoveVaultConfig = config.RemoveVault
 )
 
 // Layout directions.

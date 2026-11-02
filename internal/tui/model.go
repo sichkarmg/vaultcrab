@@ -195,6 +195,12 @@ func (m *Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, nil
 	case unlockResultMsg, loginDoneMsg, launchResultMsg:
 		return m, m.handleResult(msg)
+	case vaultLoginDoneMsg:
+		if msg.err != nil {
+			m.notify(true, "bw login: %v", msg.err)
+		}
+		m.svc.ReconnectVault(m.ctx, msg.id)
+		return m, nil
 	case scriptResultMsg:
 		m.scriptResult(msg)
 		return m, nil

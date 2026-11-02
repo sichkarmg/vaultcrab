@@ -108,16 +108,18 @@ type settingsModal struct {
 	optX      int
 
 	prog *programsPage // the External programs page
+	vp   vaultsPage    // the Vaults page
 }
 
 const (
 	pageAppearance = iota
 	pageBehavior
 	pagePrograms
+	pageVaults
 	pageAbout
 )
 
-var settingsPages = []string{"Appearance", "Behavior", "External programs", "About"}
+var settingsPages = []string{"Appearance", "Behavior", "External programs", "Vaults", "About"}
 
 // newSettings opens the settings; the External programs page keeps its
 // draft between openings.
@@ -153,7 +155,7 @@ func onOff(v bool) int {
 func (s *settingsModal) settings(m *Model) []setting {
 	a := m.opt.Appearance
 	switch s.page {
-	case pageAbout, pagePrograms:
+	case pageAbout, pagePrograms, pageVaults:
 		return nil
 	case pageBehavior:
 		return []setting{
@@ -283,6 +285,11 @@ func (s *settingsModal) update(m *Model, msg tea.Msg) tea.Cmd {
 			return cmd
 		}
 	}
+	if s.page == pageVaults {
+		if cmd, handled := s.vp.update(m, k); handled {
+			return cmd
+		}
+	}
 	rows := s.settings(m)
 	n := len(rows)
 	switch k.String() {
@@ -333,6 +340,8 @@ func (s *settingsModal) mouse(m *Model, msg tea.MouseMsg, x, y int) tea.Cmd {
 		return nil
 	case pagePrograms:
 		return s.prog.mouse(m, x, y)
+	case pageVaults:
+		return s.vp.mouse(m, x, y)
 	}
 	for r, ry := range s.rowY {
 		if y == ry {
@@ -366,6 +375,8 @@ func (s *settingsModal) view(m *Model, w, h int) []string {
 	switch s.page {
 	case pagePrograms:
 		b.WriteString(s.prog.view(m, max(40, w-4-2*boxPadX), line))
+	case pageVaults:
+		b.WriteString(s.vp.view(m, max(40, w-4-2*boxPadX), line))
 	case pageAppearance, pageBehavior:
 		rows := s.settings(m)
 		s.rowY, s.optSpans = s.rowY[:0], s.optSpans[:0]

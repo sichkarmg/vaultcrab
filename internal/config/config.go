@@ -38,11 +38,64 @@ type Config struct {
 	Widgets  Widgets           `yaml:"widgets"`
 	External map[string]Launch `yaml:"external"` // keys: vnc, smb, ftp, sftp, rdp
 	Log      Log               `yaml:"log"`
+	// Vaults are further Bitwarden/Vaultwarden vaults (accounts or servers),
+	// next to the one of bw:.
+	Vaults []VaultSpec `yaml:"vaults"`
 
 	// Path is where the config was loaded from (not serialized).
 	Path string `yaml:"-"`
 	// Dir is the config directory (known_hosts etc. live here).
 	Dir string `yaml:"-"`
+}
+
+// VaultSpec is a further vault: its own bw data directory (so its own
+// server and login) and bw serve. bw.path and bw.sync_interval are shared.
+type VaultSpec struct {
+	ID      string   `yaml:"id"`       // short name: a-z, 0-9, - (prefix of its item IDs, cache directory)
+	Name    string   `yaml:"name"`     // shown in the UI (default: the ID)
+	Server  string   `yaml:"server"`   // server URL for bw config server (empty: bitwarden.com)
+	DataDir string   `yaml:"data_dir"` // BITWARDENCLI_APPDATA_DIR (default: <config dir>/bw-<id>)
+	Env     []string `yaml:"env"`      // extra environment for bw, e.g. NODE_EXTRA_CA_CERTS=/path (no secrets!)
+	URL     string   `yaml:"url"`      // use an already running bw serve instead of starting one
+}
+
+// Key identifies the settings of the vault: a vault whose key changed is
+// reconnected.
+func (v VaultSpec) Key() string {
+	return strings.Join(append([]string{v.ID, v.Name, v.Server, v.DataDir, v.URL}, v.Env...), "\x00")
+}
+
+// Label is the name of the vault (its ID if it has none).
+func (v VaultSpec) Label() string {
+	if v.Name != "" {
+		return v.Name
+	}
+	return v.ID
+}
+
+// validVaultID: lower-case letters, digits and -, 1..32 characters.
+func validVaultID(id string) bool {
+	if id == "" || len(id) > 32 {
+		return false
+	}
+	for _, r := range id {
+		if !(r >= 'a' && r <= 'z' || r >= '0' && r <= '9' || r == '-') {
+			return false
+		}
+	}
+	return true
+}
+
+// checkBWEnv rejects secrets in the environment given to bw.
+func checkBWEnv(env []string, what string) error {
+	for _, e := range env {
+		k, _, _ := strings.Cut(e, "=")
+		switch strings.ToUpper(k) {
+		case "BW_SESSION", "BW_PASSWORD", "BW_CLIENTSECRET":
+			return fmt.Errorf("%s must not contain secrets (%s)", what, k)
+		}
+	}
+	return nil
 }
 
 // Log configures the event log (Settings → Behavior → Event log).
@@ -67,6 +120,7 @@ func (c Config) LogFile() string {
 // BW configures access to the Bitwarden CLI.
 type BW struct {
 	Path         string        `yaml:"path"`          // bw executable (default "bw")
+	Name         string        `yaml:"name"`          // name of this vault in the UI when there are several (vaults:)
 	URL          string        `yaml:"url"`           // use an already running `bw serve` instead of starting one
 	DataDir      string        `yaml:"data_dir"`      // BITWARDENCLI_APPDATA_DIR for the started bw
 	Env          []string      `yaml:"env"`           // extra environment for bw, e.g. NODE_EXTRA_CA_CERTS=/path (no secrets!)
@@ -387,12 +441,24 @@ func (c *Config) finish() error {
 	if c.BW.SyncInterval <= 0 {
 		c.BW.SyncInterval = d.BW.SyncInterval
 	}
-	for _, e := range c.BW.Env {
-		k, _, _ := strings.Cut(e, "=")
-		switch strings.ToUpper(k) {
-		case "BW_SESSION", "BW_PASSWORD", "BW_CLIENTSECRET":
-			return fmt.Errorf("bw.env must not contain secrets (%s)", k)
+	ids := map[string]bool{}
+	for i, v := range c.Vaults {
+		if !validVaultID(v.ID) {
+			return fmt.Errorf("vaults[%d].id: %q (want a-z, 0-9, -; 1..32 characters)", i, v.ID)
 		}
+		if ids[v.ID] {
+			return fmt.Errorf("vaults: id %q twice", v.ID)
+		}
+		ids[v.ID] = true
+		if v.DataDir == "" && c.Dir != "" {
+			c.Vaults[i].DataDir = filepath.Join(c.Dir, "bw-"+v.ID)
+		}
+		if err := checkBWEnv(v.Env, fmt.Sprintf("vaults[%d].env", i)); err != nil {
+			return err
+		}
+	}
+	if err := checkBWEnv(c.BW.Env, "bw.env"); err != nil {
+		return err
 	}
 	switch c.UI.TabsPosition {
 	case "top", "bottom":

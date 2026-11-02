@@ -233,8 +233,32 @@ func (m *Model) statusY() int {
 	return m.h - 1
 }
 
-// vaultStatus renders the vault state for the status bar.
+// vaultStatus renders the vault state for the status bar; several vaults
+// are listed each with its state icon (and the state when it is not online).
 func (m *Model) vaultStatus() string {
+	if vs := m.svc.Vaults(); len(vs) > 1 {
+		ic := m.opt.Icons
+		var parts []string
+		for _, v := range vs {
+			s := v.Label()
+			switch {
+			case v.State == core.Online && v.SyncErr != nil:
+				s = ic.Get(core.IconCached) + " " + s + " (local copy)"
+			case v.State == core.Online:
+				s = ic.Get(core.IconOnline) + " " + s
+			case v.State == core.Locked:
+				s = ic.Get(core.IconLocked) + " " + s + " locked (u)"
+			case v.State == core.NeedLogin:
+				s = ic.Get(core.IconOffline) + " " + s + " not logged in (L)"
+			case v.State == core.Starting || v.State == core.Syncing:
+				s = ic.Get(core.IconSyncing) + " " + s + " " + v.State.String() + "…"
+			default:
+				s = ic.Get(core.IconOffline) + " " + s + " offline"
+			}
+			parts = append(parts, s)
+		}
+		return strings.Join(parts, " · ")
+	}
 	st := m.svc.Status()
 	ic := m.opt.Icons
 	var s string

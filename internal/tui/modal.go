@@ -4,6 +4,7 @@ package tui
 
 import (
 	"context"
+	"fmt"
 	"sort"
 	"strings"
 	"time"
@@ -57,6 +58,8 @@ func overlay(body, dlg []string, w, h int) []string {
 
 type unlockModal struct {
 	in    textinput.Model
+	vault core.VaultEntry // the locked vault this dialog unlocks
+	many  bool            // several vaults: name it
 	busy  bool
 	err   string
 	frame int // spinner frame while unlocking and syncing
@@ -86,7 +89,8 @@ func newUnlock(m *Model) *unlockModal {
 	}
 	in.Prompt = "> "
 	in.Focus()
-	return &unlockModal{in: in}
+	v, _ := m.svc.LockedVault()
+	return &unlockModal{in: in, vault: v, many: len(m.svc.Vaults()) > 1}
 }
 
 func (u *unlockModal) update(m *Model, msg tea.Msg) tea.Cmd {
@@ -104,7 +108,10 @@ func (u *unlockModal) update(m *Model, msg tea.Msg) tea.Cmd {
 			return nil
 		}
 		m.modal = nil
-		m.notify(false, "vault unlocked")
+		m.notify(false, "vault %s unlocked", u.vault.Label())
+		if _, ok := m.svc.LockedVault(); ok {
+			m.modal = newUnlock(m) // the next locked vault
+		}
 		return nil
 	case tea.KeyMsg:
 		if u.busy {
@@ -122,11 +129,11 @@ func (u *unlockModal) update(m *Model, msg tea.Msg) tea.Cmd {
 				return nil
 			}
 			u.busy, u.err, u.frame = true, "", 0
-			svc, ctx := m.svc, m.ctx
+			svc, ctx, id := m.svc, m.ctx, u.vault.ID
 			return tea.Batch(spinTick(), func() tea.Msg {
 				c, cancel := context.WithTimeout(ctx, 2*time.Minute)
 				defer cancel()
-				return unlockResultMsg{err: svc.Unlock(c, pw)} // Unlock wipes pw and syncs
+				return unlockResultMsg{err: svc.UnlockVault(c, id, pw)} // wipes pw and syncs
 			})
 		}
 	}
@@ -143,14 +150,14 @@ func (u *unlockModal) view(m *Model, w, h int) []string {
 		if m.opt.Icons.ASCII() {
 			frames = spinASCII
 		}
-		phase := "Unlocking the vault…"
+		phase := "Unlocking " + u.what() + "…"
 		if m.svc.Status().State == core.Syncing {
-			phase = "Syncing the vault…"
+			phase = "Syncing " + u.what() + "…"
 		}
 		body := "\n" + stKey.Render(frames[u.frame%len(frames)]) + " " + phase + "\n"
 		return m.box("Unlock", body, w)
 	}
-	body := "Bitwarden vault is locked.\n\n" + u.in.View()
+	body := fmt.Sprintf("The vault %s is locked.\n%s\n\n", stBold.Render(u.vault.Label()), stDim.Render(u.vault.Where())) + u.in.View()
 	switch {
 	case u.err != "":
 		body += "\n\n" + stErr.Render(u.err)
@@ -158,6 +165,14 @@ func (u *unlockModal) view(m *Model, w, h int) []string {
 		body += "\n\n" + stDim.Render("Enter: unlock · Esc: browse offline")
 	}
 	return m.box("Unlock", body, w)
+}
+
+// what names the vault in progress messages.
+func (u *unlockModal) what() string {
+	if u.many {
+		return u.vault.Label()
+	}
+	return "the vault"
 }
 
 // --- confirm ---

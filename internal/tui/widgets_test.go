@@ -31,7 +31,8 @@ func TestWidgetColumn(t *testing.T) {
 		Widgets: true, WidgetsWidth: 30, WidgetsMin: 130})
 	m.Update(tea.WindowSizeMsg{Width: 160, Height: 30})
 	m.View() // activates the widgets
-	v := waitView(t, m, "green-out")
+	waitView(t, m, "green-out")
+	v := waitView(t, m, "no-such-widget-cmd") // the widgets run concurrently
 	for _, want := range []string{"Demo", "second line", "Broken", "no-such-widget-cmd", "Your own scripts here", "widgets.items in"} {
 		if !strings.Contains(v, want) {
 			t.Errorf("missing %q:\n%s", want, v)

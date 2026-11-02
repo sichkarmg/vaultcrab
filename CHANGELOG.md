@@ -14,6 +14,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 - `vaultcrab --version` prints the version without the leading `v` (e.g. `vaultcrab 0.1.0`).
+- Dependencies: `github.com/jezek/xgb` (X11 clipboard) 1.1.1 → 1.3.1.
 
 ### Fixed
 - Windows: saving settings no longer fails with "Access is denied" while another Vaultcrab (or the

@@ -68,6 +68,7 @@ type UI struct {
 	Keys         map[string]string `yaml:"keys"`   // action -> key after prefix
 	ListWidth    int               `yaml:"list_width"`
 	TabWidth     int               `yaml:"tab_width"`       // longest tab title (columns), cut with … beyond
+	TabStatus    string            `yaml:"tab_status"`      // session state in a tab: icon (before the number) | color (of the number)
 	RestoreTabs  bool              `yaml:"restore_tabs"`    // reopen the tabs of the last run (not connected)
 	RestoreView  bool              `yaml:"restore_filters"` // keep the type filter, org, collection, grouping, search
 	ShowTree     bool              `yaml:"show_tree"`
@@ -261,7 +262,7 @@ func Default() Config {
 	return Config{
 		BW: BW{Path: "bw", SyncInterval: 10 * time.Minute},
 		UI: UI{
-			TabsPosition: "top", Accent: "cyan", Selection: "reverse", Mouse: true, Prefix: "ctrl+b", ListWidth: 0, TabWidth: DefaultTabWidth, ShowTree: true, ShowNotes: true, RestoreTabs: true, RestoreView: true,
+			TabsPosition: "top", Accent: "cyan", Selection: "reverse", Mouse: true, Prefix: "ctrl+b", ListWidth: 0, TabWidth: DefaultTabWidth, TabStatus: "icon", ShowTree: true, ShowNotes: true, RestoreTabs: true, RestoreView: true,
 			Keys: map[string]string{
 				ActNextTab: "n", ActPrevTab: "p", ActCloseTab: "&", ActList: "l",
 				ActHistory: "[", ActSplitRight: "|", ActSplitDown: "-", ActClosePane: "x",
@@ -383,6 +384,13 @@ func (c *Config) finish() error {
 	}
 	if c.UI.TabWidth < MinTabWidth || c.UI.TabWidth > MaxTabWidth {
 		return fmt.Errorf("ui.tab_width: %d (want %d..%d)", c.UI.TabWidth, MinTabWidth, MaxTabWidth)
+	}
+	switch c.UI.TabStatus {
+	case "icon", "color":
+	case "":
+		c.UI.TabStatus = "icon"
+	default:
+		return fmt.Errorf("ui.tab_status: %q (want icon|color)", c.UI.TabStatus)
 	}
 	if c.UI.Accent == "" {
 		c.UI.Accent = d.UI.Accent

@@ -27,8 +27,9 @@ type Appearance struct {
 	ShowTree   bool
 	ShowNotes  bool
 	Widgets    bool
-	ListWidth  int // 0 = automatic
-	TabWidth   int // the longest tab title
+	ListWidth  int    // 0 = automatic
+	TabWidth   int    // the longest tab title
+	TabStatus  string // icon | color: how a tab shows the state of its sessions
 
 	ConfirmPaste bool // ask before pasting several lines into a session
 	RestoreTabs  bool
@@ -99,6 +100,7 @@ func (c *Config) Appearance() Appearance {
 		Widgets:    c.Widgets.Show,
 		ListWidth:  c.UI.ListWidth,
 		TabWidth:   c.UI.TabWidth,
+		TabStatus:  c.UI.TabStatus,
 
 		ConfirmPaste: c.Terminal.ConfirmPaste,
 		RestoreTabs:  c.UI.RestoreTabs,
@@ -156,6 +158,9 @@ func setAppearance(root *yaml.Node, old, a Appearance) {
 	}
 	if a.TabWidth != old.TabWidth {
 		setPath(root, []string{"ui", "tab_width"}, &yaml.Node{Kind: yaml.ScalarNode, Tag: "!!int", Value: strconv.Itoa(a.TabWidth)})
+	}
+	if a.TabStatus != old.TabStatus {
+		setPath(root, []string{"ui", "tab_status"}, str(a.TabStatus))
 	}
 	if a.ConfirmPaste != old.ConfirmPaste {
 		setPath(root, []string{"terminal", "confirm_paste"}, boolean(a.ConfirmPaste))

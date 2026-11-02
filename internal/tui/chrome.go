@@ -4,6 +4,7 @@ package tui
 
 import (
 	"fmt"
+	"strconv"
 	"strings"
 	"time"
 
@@ -64,14 +65,23 @@ func (m *Model) tabLabels() []string {
 		if t.zoomed() {
 			zoom = m.opt.Icons.Get(core.IconZoom)
 		}
+		base := stTabInactive
+		if i+1 == m.active {
+			base = stTabActive
+		}
+		if m.opt.Appearance.TabStatus == "color" {
+			// the number in the state color instead of an icon
+			num := base
+			if c, ok := t.stateColor(i+1 == m.active); ok {
+				num = base.Foreground(c)
+			}
+			labels = append(labels, base.Render(" ")+num.Render(strconv.Itoa(i+1))+
+				base.Render(fmt.Sprintf(":%s%s ", string(title), zoom)))
+			continue
+		}
 		// the state icon first, outside the highlight of the active tab
 		plain := fmt.Sprintf(" %d:%s%s ", i+1, string(title), zoom)
-		icon := " " + t.icon(m, i+1 == m.active)
-		if i+1 == m.active {
-			labels = append(labels, icon+stTabActive.Render(plain))
-		} else {
-			labels = append(labels, icon+stTabInactive.Render(plain))
-		}
+		labels = append(labels, " "+t.icon(m, i+1 == m.active)+base.Render(plain))
 	}
 	return labels
 }
@@ -101,30 +111,40 @@ func (m *Model) buttonsWidth() int {
 	return 2*ansi.StringWidth(m.g.v) + ansi.StringWidth(m.settingsButton()) + ansi.StringWidth(m.quitButton())
 }
 
+// The host list tab (0) always stays at the left; the session tabs after
+// it scroll, first being the first one shown (a ‹ marks hidden ones).
 func (m *Model) tabSpans() (labels []string, starts []int, first int) {
 	labels = m.tabLabels()
 	widths := make([]int, len(labels))
 	for i, l := range labels {
 		widths[i] = ansi.StringWidth(l) + 1 // separator
 	}
+	more := ansi.StringWidth(m.g.more)
 	// Scroll so the active tab fits.
-	first = 0
-	for {
-		x := 0
-		for i := first; i <= m.active && i < len(labels); i++ {
+	first = 1
+	for first < m.active {
+		x := widths[0]
+		if first > 1 {
+			x += more
+		}
+		for i := first; i <= m.active; i++ {
 			x += widths[i]
 		}
-		if x <= m.tabsWidth() || first >= m.active {
+		if x <= m.tabsWidth() {
 			break
 		}
 		first++
 	}
-	x := 0
 	starts = make([]int, len(labels))
+	x := 0
 	for i := range labels {
-		if i < first {
+		switch {
+		case i == 0:
+		case i < first:
 			starts[i] = -1
 			continue
+		case i == first && first > 1:
+			x += more
 		}
 		starts[i] = x
 		x += widths[i]
@@ -135,14 +155,17 @@ func (m *Model) tabSpans() (labels []string, starts []int, first int) {
 func (m *Model) tabBar() string {
 	labels, starts, first := m.tabSpans()
 	var b strings.Builder
-	if first > 0 {
-		b.WriteString(m.g.more)
-	}
-	for i := first; i < len(labels); i++ {
+	for i, l := range labels {
+		if starts[i] < 0 {
+			continue
+		}
 		if starts[i] >= m.tabsWidth() {
 			break
 		}
-		b.WriteString(labels[i])
+		if i == first && first > 1 {
+			b.WriteString(m.g.more)
+		}
+		b.WriteString(l)
 		b.WriteString(stTabBar.Render(m.g.v))
 	}
 	sep := stTabBar.Render(m.g.v)

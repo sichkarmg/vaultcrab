@@ -167,6 +167,9 @@ A host is a Login item in one of these forms:
 | flag field | `user@host` or `user@host:port` (IPv6: `user@[::1]:22`) | — | `ssh` = `true` |
 | URI | `user` | `ssh://host:22`, `vnc://host:5900`, `smb://host/share`, `rdp://host`, `ftp://host/dir`, `sftp://host` | — |
 
+**Coming from another program?** Sessions can be imported into the vault with `bw import`; see
+[`imports/README.md`](imports/README.md) for the JSON format and a converter for SecureCRT.
+
 The password or private key goes into the `password` field. Optional fields: `port`, `tags`, any
 others (`env`, …) for filters; `script` (the script `Enter` runs); `jump` (VNC through an SSH
 host). Hidden fields and notes never become metadata.

@@ -26,6 +26,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   directory, `bw serve` and cache. Their items appear under a folder named after the vault; the
   host card shows the vault, account and server; the status bar shows each vault's state; the
   unlock dialog names the vault (also with a single vault: account and server).
+- `imports/README.md`: how to import sessions of other programs into the vault (Bitwarden JSON,
+  `bw import` / `bw export`), with a converter for SecureCRT.
+  coloured (green connected, yellow connecting, red broken, blue new output).
 
 ### Fixed
 - With many tabs the `0:Hosts` tab no longer scrolls out of the tab bar.

@@ -107,3 +107,42 @@ func TestPasteDialogScrolls(t *testing.T) {
 		t.Fatalf("top %d", p.top)
 	}
 }
+
+// Edit opens the pasted text in an editor: Esc returns to the preview with
+// the changes, Ctrl+S pastes the edited text (with the final line break of
+// the original).
+func TestPasteEdit(t *testing.T) {
+	m, _ := restoreModel(t, filepath.Join(t.TempDir(), "w.json")) // local shell: /bin/sh
+	m.opt.ConfirmPaste = true
+	keys(m, "t")
+	s := m.curTab().focused()
+	for st, _ := s.State(); st != core.SessionConnected; st, _ = s.State() {
+		time.Sleep(10 * time.Millisecond)
+	}
+	m.Update(pasteMsg("echo two-$((1+1))\necho three-$((1+2))\n"))
+	p := m.modal.(*pasteModal)
+	keys(m, "e")
+	if !p.editing {
+		t.Fatal("e did not open the editor")
+	}
+	v := waitView(t, m, "Edit the text to paste")
+	if !strings.Contains(v, "echo three-$((1+2))") || !strings.Contains(v, "Ctrl+S: paste") {
+		t.Fatalf("editor:\n%s", v)
+	}
+	checkFrame(t, m.View(), 120, 30)
+	keys(m, "0") // the cursor is at the end
+	keys(m, "esc")
+	if p.editing || !p.edited || p.lines[1] != "echo three-$((1+2))0" || !strings.HasSuffix(p.text, "\n") {
+		t.Fatalf("after Esc: editing %v edited %v lines %q", p.editing, p.edited, p.lines)
+	}
+	if v := ansi.Strip(m.View()); !strings.Contains(v, "echo three-$((1+2))0") {
+		t.Fatalf("preview:\n%s", v)
+	}
+	keys(m, "e", "1")
+	m.Update(tea.KeyMsg{Type: tea.KeyCtrlS})
+	if m.modal != nil {
+		t.Fatal("Ctrl+S did not paste")
+	}
+	waitView(t, m, "two-2")
+	waitView(t, m, "three-301")
+}

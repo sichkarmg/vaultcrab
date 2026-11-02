@@ -8,6 +8,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- The multi-line paste dialog has an **Edit** button (`e`): the text opens in an editor with line
+  numbers; `Ctrl+S` pastes the edited text, `Esc` returns to the preview with the changes.
 - Settings → Tab status (`ui.tab_status: color`): instead of the state icon, the tab number is
   coloured (green connected, yellow connecting, red broken, blue new output).
 - Each pane header of a split tab has a `✕` button that closes just that pane (a live session asks

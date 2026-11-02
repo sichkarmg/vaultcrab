@@ -61,6 +61,8 @@ the vault only at the moment of connecting and never written to disk.
   in the item (notes, hidden fields, TOTP, password history) is kept.
 - **Scripts, widgets, local shell.** Per-item launch scripts with placeholders, a widget column
   with the output of your commands, a local shell (`$SHELL`, or PowerShell via ConPTY on Windows).
+- **Safe multi-line paste.** Pasted text of several lines is shown first and pasted only after
+  confirmation; **Edit** (`e`) opens it in an editor (`Ctrl+S` pastes the edited text).
 - **Settings inside the program** (`,`), saved to `config.yaml`; a hand-edited config is re-read
   automatically.
 

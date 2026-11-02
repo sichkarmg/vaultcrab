@@ -220,6 +220,16 @@ func TestPanes(t *testing.T) {
 		t.Fatalf("break pane: tabs=%d panes=%d", len(m.tabs), tb.ws.Len())
 	}
 	m.setActive(1)
+	// the sessions fail to connect (no secret) asynchronously; only then does
+	// closing a pane needs no confirmation (slow CI runners are not there yet)
+	for deadline := time.Now().Add(5 * time.Second); ; time.Sleep(10 * time.Millisecond) {
+		if st, _ := tb.focused().State(); st != core.SessionConnected && st != core.SessionConnecting {
+			break
+		}
+		if time.Now().After(deadline) {
+			t.Fatal("the session is still connecting")
+		}
+	}
 	keys(m, "ctrl+b", "x") // sessions are disconnected (no secret): no confirmation
 	if tb.ws.Len() != 1 || len(svc.Sessions()) != 2 {
 		t.Fatalf("close pane: panes=%d sessions=%d", tb.ws.Len(), len(svc.Sessions()))

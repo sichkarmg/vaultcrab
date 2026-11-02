@@ -16,6 +16,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `vaultcrab --version` prints the version without the leading `v` (e.g. `vaultcrab 0.1.0`).
 
 ### Fixed
+- A config file saved in place by an editor is reloaded only after the write has finished; reading
+  it while it was truncated briefly applied an empty configuration.
 - Windows: saving settings no longer fails with "Access is denied" while another Vaultcrab (or the
   automatic reload) is reading `config.yaml`; the file is replaced with POSIX rename semantics.
 

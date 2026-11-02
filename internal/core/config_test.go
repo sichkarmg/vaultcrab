@@ -200,3 +200,30 @@ func thisOS(cmd ...string) config.PerOS {
 	p.Set(runtime.GOOS, cmd)
 	return p
 }
+
+// A file that changes during the settle time (an editor writing it) is not
+// loaded yet; a stable one is.
+func TestConfigSettled(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "config.yaml")
+	if err := os.WriteFile(path, nil, 0o600); err != nil { // truncated
+		t.Fatal(err)
+	}
+	cfg := config.Config{Path: path}
+	s := New(Options{Config: &cfg, ConfigPoll: -1})
+	ctx := context.Background()
+	st := stampOf(path)
+	go func() {
+		time.Sleep(configSettle / 4)
+		os.WriteFile(path, []byte("ssh: {timeout: 3s}\n"), 0o600) // the rest of the save
+	}()
+	if s.configSettled(ctx, st) {
+		t.Error("a file changing during the settle time was loaded")
+	}
+	if !s.configSettled(ctx, stampOf(path)) {
+		t.Error("a stable file was not loaded")
+	}
+	s.SetConfigWatch(false)
+	if s.configSettled(ctx, stampOf(path)) {
+		t.Error("loaded without the focus")
+	}
+}

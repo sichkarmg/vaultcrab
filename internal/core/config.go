@@ -206,7 +206,7 @@ func restartNeeded(old, cur config.Config) []string {
 	norm := func(c config.Config) config.Config {
 		c.External, c.Scripts = nil, nil
 		// applied live (the settings dialog)
-		c.UI.TabsPosition, c.UI.Accent, c.UI.Selection, c.UI.ShowTree, c.UI.ShowNotes, c.UI.ListWidth, c.UI.TabWidth = "", "", "", false, false, 0, 0
+		c.UI.TabsPosition, c.UI.Accent, c.UI.Selection, c.UI.ShowTree, c.UI.ShowNotes, c.UI.ListWidth, c.UI.TabWidth, c.UI.TabStatus = "", "", "", false, false, 0, 0, ""
 		c.UI.RestoreTabs, c.UI.RestoreView = false, false
 		c.Terminal.ConfirmPaste = false
 		c.Widgets.Show = false

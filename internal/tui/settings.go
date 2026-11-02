@@ -217,6 +217,7 @@ func (s *settingsModal) settings(m *Model) []setting {
 		twl = append(twl, strconv.Itoa(w))
 	}
 	modes := []string{"auto", "unicode", "ascii"}
+	tabStatuses := []string{"icon", "color"}
 	return []setting{
 		{"Tabs", []string{"top", "bottom"}, map[bool]int{false: 0, true: 1}[a.TabsBottom],
 			func(a *core.Appearance, i int) { a.TabsBottom = i == 1 }},
@@ -238,6 +239,8 @@ func (s *settingsModal) settings(m *Model) []setting {
 			func(a *core.Appearance, i int) { a.ListWidth = widths[i] }},
 		{"Tab width", twl, slices.Index(tws, a.TabWidth),
 			func(a *core.Appearance, i int) { a.TabWidth = tws[i] }},
+		{"Tab status", tabStatuses, max(0, slices.Index(tabStatuses, a.TabStatus)),
+			func(a *core.Appearance, i int) { a.TabStatus = tabStatuses[i] }},
 	}
 }
 

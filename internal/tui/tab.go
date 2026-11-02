@@ -9,6 +9,7 @@ import (
 	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/charmbracelet/lipgloss"
 	"github.com/charmbracelet/x/ansi"
 
 	"github.com/sichkarmg/vaultcrab/internal/core"
@@ -63,6 +64,24 @@ func (t *tab) icon(m *Model, shown bool) string {
 		return stActivity.Render(m.opt.Icons.Get(core.IconConnected))
 	}
 	return m.stateIcon(st)
+}
+
+// stateColor is the color of the tab's aggregated state (Settings → Tab
+// status: color): green connected, blue connected with unseen output,
+// yellow connecting, red broken; ok is false for idle tabs.
+func (t *tab) stateColor(shown bool) (lipgloss.TerminalColor, bool) {
+	st := t.ws.State()
+	switch {
+	case st == core.SessionConnected && t.activity(shown):
+		return stActivity.GetForeground(), true
+	case st == core.SessionConnected:
+		return stOK.GetForeground(), true
+	case st == core.SessionConnecting:
+		return stWarn.GetForeground(), true
+	case st == core.SessionDisconnected:
+		return stErr.GetForeground(), true
+	}
+	return nil, false
 }
 
 // output sums the output of the tab's sessions.

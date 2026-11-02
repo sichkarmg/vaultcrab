@@ -16,6 +16,8 @@ ui:
   show_notes: true         # notes of the selected item at the bottom of its card (read from the vault)
   list_width: 0            # 0 = auto
   tab_width: 24            # longest tab title (6..120 columns); longer titles are cut with …
+  tab_status: icon         # state of a tab's sessions: icon (before the number) | color (the number
+                           # itself: green connected, yellow connecting, red broken, blue new output)
   accent: cyan             # cyan | blue | green | magenta | yellow | red (keys, focused borders, folders)
   selection_color: reverse # selection and active items (list cursor, active tab, filter, status bar,
                            # buttons): reverse | cyan | blue | green |

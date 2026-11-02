@@ -171,6 +171,16 @@ The password or private key goes into the `password` field. Optional fields: `po
 others (`env`, …) for filters; `script` (the script `Enter` runs); `jump` (VNC through an SSH
 host). Hidden fields and notes never become metadata.
 
+## Several vaults
+
+Besides the vault of the `bw:` section you can add further Bitwarden/Vaultwarden vaults (other
+accounts or servers) in **Settings → Vaults** (`a`): Vaultcrab writes them to `vaults:` in the
+config, runs `bw config server` and `bw login` for each with its own bw data directory, and starts a
+`bw serve` per vault. Their items appear in the host list under a folder named after the vault, the
+host card shows which vault, account and server an item belongs to, the status bar shows the state
+of each vault, and the unlock dialog names the vault it unlocks. Items can be edited in their vault
+(not moved between vaults). See `vaults:` in [`docs/config.example.yaml`](docs/config.example.yaml).
+
 ## Configuration
 
 The config file is optional:

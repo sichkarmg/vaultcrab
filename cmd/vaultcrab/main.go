@@ -136,33 +136,14 @@ func run(cfg config.Config, load func(string) (config.Config, error)) error {
 			}
 		}
 	}
+	defVault := newVault(cfg.BW.Path, config.VaultSpec{Name: cfg.BW.Name, DataDir: cfg.BW.DataDir, Env: cfg.BW.Env, URL: cfg.BW.URL},
+		serveOpts, cacheDir)
 	svc := core.New(core.Options{
-		Connect: func(ctx context.Context) (core.Source, func(), error) {
-			if cfg.BW.URL != "" {
-				return vault.NewClient(cfg.BW.URL), nil, nil
-			}
-			srv, err := vault.StartServer(ctx, serveOpts)
-			if err != nil {
-				applog.Printf("bw serve: %v", err)
-				return nil, nil, err
-			}
-			applog.Printf("bw serve: started at %s", srv.URL)
-			stop := func() {
-				srv.Stop()
-				applog.Printf("bw serve: stopped")
-			}
-			return vault.NewClient(srv.URL).WithDone(srv.Done()), stop, nil
-		},
-		Login: func() *exec.Cmd {
-			cmd := exec.Command(cfg.BW.Path, "login")
-			cmd.Env = os.Environ()
-			if cfg.BW.DataDir != "" {
-				cmd.Env = append(cmd.Env, "BITWARDENCLI_APPDATA_DIR="+cfg.BW.DataDir)
-			}
-			cmd.Env = append(cmd.Env, cfg.BW.Env...)
-			return cmd
-		},
-		Cache:        &cache.Cache{Dir: cacheDir},
+		Connect:      defVault.Connect,
+		Login:        defVault.Login,
+		VaultName:    cfg.BW.Name,
+		NewVault:     func(sp config.VaultSpec) core.VaultOptions { return newVault(cfg.BW.Path, sp, serveOpts, cacheDir) },
+		Cache:        defVault.Cache,
 		SyncInterval: cfg.BW.SyncInterval,
 		SSH: connect.SSHOptions{
 			KnownHosts:  cfg.SSH.KnownHosts,
@@ -255,6 +236,67 @@ func run(cfg config.Config, load func(string) (config.Config, error)) error {
 		err = nil
 	}
 	return err
+}
+
+// newVault builds the connection to a vault: bw serve with its data
+// directory (or a running bw serve at sp.URL), `bw login` (after `bw config
+// server` when sp.Server is set) and its own cache. sp.ID is "" for the
+// default vault.
+func newVault(bw string, sp config.VaultSpec, base vault.ServeOptions, cacheDir string) core.VaultOptions {
+	opts := base
+	opts.DataDir, opts.Env = sp.DataDir, sp.Env
+	who := "bw serve"
+	cdir := cacheDir
+	if sp.ID != "" {
+		who = "bw serve (" + sp.ID + ")"
+		cdir = filepath.Join(cacheDir, "vault-"+sp.ID)
+	}
+	env := func() []string {
+		e := os.Environ()
+		if sp.DataDir != "" {
+			e = append(e, "BITWARDENCLI_APPDATA_DIR="+sp.DataDir)
+		}
+		return append(e, sp.Env...)
+	}
+	return core.VaultOptions{
+		ID: sp.ID, Name: sp.Label(), Server: sp.Server,
+		Connect: func(ctx context.Context) (core.Source, func(), error) {
+			if sp.URL != "" {
+				return vault.NewClient(sp.URL), nil, nil
+			}
+			if sp.DataDir != "" {
+				if err := os.MkdirAll(sp.DataDir, 0o700); err != nil {
+					return nil, nil, err
+				}
+			}
+			srv, err := vault.StartServer(ctx, opts)
+			if err != nil {
+				applog.Printf("%s: %v", who, err)
+				return nil, nil, err
+			}
+			applog.Printf("%s: started at %s", who, srv.URL)
+			stop := func() {
+				srv.Stop()
+				applog.Printf("%s: stopped", who)
+			}
+			return vault.NewClient(srv.URL).WithDone(srv.Done()), stop, nil
+		},
+		Login: func() *exec.Cmd {
+			if sp.Server != "" {
+				// the server of this vault: only possible while logged out,
+				// which is when the login is offered
+				cfgCmd := exec.Command(bw, "config", "server", sp.Server)
+				cfgCmd.Env = env()
+				if out, err := cfgCmd.CombinedOutput(); err != nil {
+					applog.Printf("bw config server %s: %v: %s", sp.Server, err, out)
+				}
+			}
+			cmd := exec.Command(bw, "login")
+			cmd.Env = env()
+			return cmd
+		},
+		Cache: &cache.Cache{Dir: cdir},
+	}
 }
 
 // about lists where the running vaultcrab and its files are (Settings → About).

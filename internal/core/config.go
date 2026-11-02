@@ -138,6 +138,7 @@ func (s *Service) ReloadConfig() error {
 	}
 	s.mu.Unlock()
 	if err == nil {
+		s.reconcileVaults(cfg.Vaults)
 		if lerr := applyLog(cfg); lerr != nil {
 			logf("config: log: %v", lerr)
 		}
@@ -221,6 +222,7 @@ func restartNeeded(old, cur config.Config) []string {
 		c.UI.RestoreTabs, c.UI.RestoreView = false, false
 		c.Terminal.ConfirmPaste = false
 		c.Log = config.Log{}
+		c.Vaults = nil // connected and disconnected while running
 		c.Widgets.Show = false
 		c.Icons.Mode = ""
 		if c.Icons.Set != nil {

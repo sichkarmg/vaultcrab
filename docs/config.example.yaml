@@ -8,6 +8,18 @@ bw:
   env:                     # extra environment for bw (never secrets)
     # - NODE_EXTRA_CA_CERTS=/etc/ssl/my-vaultwarden-ca.pem
   sync_interval: 10m
+  # name: Home             # name of this vault when there are several (vaults: below)
+
+# Further vaults (other accounts or servers). Each has its own bw data directory, bw serve, cache
+# and state; its items appear in the host list under a folder named after it. Settings → Vaults
+# adds one (bw config server + bw login), logs in, unlocks and removes them.
+# vaults:
+#   - id: work                       # a-z, 0-9, -; prefix of its item IDs
+#     name: Work                     # shown in the UI
+#     server: https://vault.example.com   # empty: bitwarden.com
+#     # data_dir: ~/.config/vaultcrab/bw-work   # default <config dir>/bw-<id>
+#     # env: [NODE_EXTRA_CA_CERTS=/etc/ssl/work-ca.pem]
+#     # url: http://127.0.0.1:8088   # an already running bw serve instead of starting one
 
 ui:
   tabs_position: top       # top | bottom

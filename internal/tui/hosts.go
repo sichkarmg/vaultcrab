@@ -245,14 +245,13 @@ func (l *hostList) key(msg tea.KeyMsg) tea.Cmd {
 		l.rebuild()
 	case "s":
 		if m.svc.Status().State == core.Offline {
-			m.svc.Reconnect(m.ctx)
 			m.notify(false, "reconnecting to bw…")
 		} else {
-			go m.svc.Refresh(m.ctx)
 			m.notify(false, "syncing vault…")
 		}
+		m.svc.Sync(m.ctx) // syncs vaults that are up, reconnects offline ones
 	case "u":
-		if m.svc.Status().State == core.Locked {
+		if _, ok := m.svc.LockedVault(); ok {
 			m.modal = newUnlock(m)
 		} else {
 			m.notify(false, "vault is %s", m.svc.Status().State)
@@ -774,6 +773,10 @@ func (l *hostList) details(w, height int) []string {
 		out = append(out, " "+stBold.Render(ansi.Truncate(h.Name, w-2, l.m.g.ell)))
 	}
 	out = append(out, "")
+	if vs := l.m.svc.Vaults(); len(vs) > 1 {
+		v := l.m.svc.VaultOf(h.ID)
+		add("vault", v.Label()+" · "+v.Where())
+	}
 	add("type", string(h.Scheme))
 	add("user", h.User)
 	add("address", h.Addr)

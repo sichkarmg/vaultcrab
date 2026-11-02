@@ -77,8 +77,12 @@ func TestSettings(t *testing.T) {
 		t.Fatal("confirm_paste not turned off")
 	}
 
-	// About (after External programs)
+	// Vaults, then About (after External programs)
 	keys(m, "tab", "tab")
+	if v := ansi.Strip(m.View()); !strings.Contains(v, "Add vault") || !strings.Contains(v, "Online") && !strings.Contains(v, "online") {
+		t.Fatalf("vaults:\n%s", v)
+	}
+	keys(m, "tab")
 	if v := ansi.Strip(m.View()); !strings.Contains(v, "Config file") || !strings.Contains(v, m.opt.ConfigPath[:20]) {
 		t.Fatalf("about:\n%s", v)
 	}

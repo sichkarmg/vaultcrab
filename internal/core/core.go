@@ -9,6 +9,7 @@ import (
 	"errors"
 	"fmt"
 	"os/exec"
+	"slices"
 	"sync"
 	"time"
 
@@ -70,6 +71,16 @@ type Options struct {
 	// Login returns an interactive command that logs the bw CLI in (run by
 	// the UI with the terminal handed over). Optional.
 	Login func() *exec.Cmd
+	// VaultName and VaultServer describe the default vault (shown when there
+	// are several). Optional.
+	VaultName, VaultServer string
+	// Vaults are further vaults (each its own bw data directory and bw
+	// serve), next to the default one above.
+	Vaults []VaultOptions
+	// NewVault builds the options of a vault added to the config while
+	// running (Settings → Vaults, a config reload). Optional: without it,
+	// new vaults need a restart.
+	NewVault func(config.VaultSpec) VaultOptions
 	// Filters are the configured filter tabs/badges.
 	Filters []filter.Filter
 	// Visibility restricts shown organizations/collections.
@@ -130,16 +141,10 @@ type Service struct {
 	opts   Options
 	events chan struct{}
 
-	mu        sync.Mutex
-	src       Source
-	release   func()
-	cancelRun context.CancelFunc
-	state     VaultState
-	lastErr   error
-	snap      model.Snapshot
-	fromCache bool
-	syncErr   error // last sync with the server failed: working from bw's local copy
-	account   string
+	mu     sync.Mutex
+	ctx    context.Context // of Start: vaults added later run in it
+	vaults []*vaultConn    // [0] is the default vault (bw:), then the vaults: of the config
+	snap   model.Snapshot  // the snapshots of all vaults merged (see merge.go)
 
 	sessions sessions
 	widgets  *widget.Runner
@@ -163,6 +168,18 @@ func New(o Options) *Service {
 		o.RetryInterval = time.Minute
 	}
 	s := &Service{opts: o, events: make(chan struct{}, 1)}
+	s.vaults = []*vaultConn{newVaultConn(s, VaultOptions{Name: o.VaultName, Server: o.VaultServer,
+		Connect: o.Connect, Login: o.Login, Cache: o.Cache})}
+	for _, vo := range o.Vaults {
+		s.vaults = append(s.vaults, newVaultConn(s, vo))
+	}
+	if o.NewVault != nil && o.Config != nil {
+		for _, sp := range o.Config.Vaults {
+			vo := o.NewVault(sp)
+			vo.spec = sp.Key()
+			s.vaults = append(s.vaults, newVaultConn(s, vo))
+		}
+	}
 	s.sessions.init(s)
 	s.initConfig()
 	s.widgets = widget.NewRunner(o.Widgets, s.emit, o.WidgetExec)
@@ -192,15 +209,39 @@ type VaultStatus struct {
 	SyncErr error
 }
 
-// Status returns the current vault status.
+// Status returns the vault status; with several vaults, a summary (see
+// Vaults for each): the state that needs the user most (locked, not logged
+// in, starting, syncing), else online if any vault is, else offline.
 func (s *Service) Status() VaultStatus {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	return VaultStatus{State: s.state, Err: s.lastErr, FromCache: s.fromCache, SyncedAt: s.snap.SyncedAt,
-		Account: s.account, SyncErr: s.syncErr}
+	if len(s.vaults) == 1 {
+		return s.vaults[0].status()
+	}
+	var out VaultStatus
+	best := -1
+	for _, v := range s.vaults {
+		st := v.status()
+		if p := statePriority[st.State]; p > best {
+			best, out.State, out.Err = p, st.State, st.Err
+		}
+		out.FromCache = out.FromCache || st.FromCache
+		if st.SyncedAt.After(out.SyncedAt) {
+			out.SyncedAt = st.SyncedAt
+		}
+		if st.SyncErr != nil && out.SyncErr == nil {
+			out.SyncErr = st.SyncErr
+		}
+	}
+	out.Account = s.vaults[0].account
+	return out
 }
 
-// Snapshot returns the current metadata snapshot (shared; do not modify).
+// statePriority orders the summary state of several vaults.
+var statePriority = map[VaultState]int{Offline: 0, Online: 1, Syncing: 2, Starting: 3, NeedLogin: 4, Locked: 5}
+
+// Snapshot returns the current metadata snapshot of all vaults (shared; do
+// not modify).
 func (s *Service) Snapshot() model.Snapshot {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -219,265 +260,99 @@ func (s *Service) Host(id string) (model.Host, bool) {
 	return model.Host{}, false
 }
 
-func (s *Service) set(fn func()) {
-	s.mu.Lock()
-	st, syncErr := s.state, s.syncErr
-	fn()
-	if s.state != st {
-		if s.lastErr != nil {
-			logf("vault: %s -> %s: %v", st, s.state, s.lastErr)
-		} else {
-			logf("vault: %s -> %s", st, s.state)
-		}
-	}
-	if s.syncErr != nil && (syncErr == nil || s.syncErr.Error() != syncErr.Error()) {
-		logf("vault: sync with the server failed, using the local copy of bw: %v", s.syncErr)
-	}
-	s.mu.Unlock()
-	s.emit()
-}
-
-// Start loads the cache and connects to the vault in the background.
+// Start loads the caches and connects to the vaults in the background.
 func (s *Service) Start(ctx context.Context) {
 	s.widgets.Start(ctx)
 	go s.watchConfig(ctx)
-	if s.opts.Cache != nil {
-		if snap, err := s.opts.Cache.Load(""); err == nil {
-			s.set(func() { s.snap, s.fromCache, s.account = snap, true, snap.Account })
-		}
-	}
-	s.startRun(ctx)
-}
-
-func (s *Service) startRun(ctx context.Context) {
-	rctx, cancel := context.WithCancel(ctx)
 	s.mu.Lock()
-	s.cancelRun = cancel
+	s.ctx = ctx
+	vs := slices.Clone(s.vaults)
 	s.mu.Unlock()
-	go s.run(rctx)
+	for _, v := range vs {
+		v.loadCache()
+		v.startRun(ctx)
+	}
 }
 
-// Reconnect releases the vault source (e.g. stops bw serve) and connects
+// Reconnect releases the vault sources (e.g. stops bw serve) and connects
 // again; used after `bw login` or when bw serve died.
 func (s *Service) Reconnect(ctx context.Context) {
-	s.Stop()
-	s.set(func() { s.state, s.lastErr = Starting, nil })
-	s.startRun(ctx)
+	for _, v := range s.vaultList() {
+		v.reconnect(ctx)
+	}
 }
 
-// Stop releases the vault source.
+// Sync syncs the vaults that are up and reconnects those that are offline
+// (s in the host list).
+func (s *Service) Sync(ctx context.Context) {
+	for _, v := range s.vaultList() {
+		if v.status().State == Offline {
+			v.reconnect(ctx)
+		} else {
+			go v.refresh(ctx)
+		}
+	}
+}
+
+// Stop releases the vault sources.
 func (s *Service) Stop() {
-	s.mu.Lock()
-	cancel, release := s.cancelRun, s.release
-	s.cancelRun, s.release, s.src = nil, nil, nil
-	s.mu.Unlock()
-	if cancel != nil {
-		cancel()
-	}
-	if release != nil {
-		release()
+	for _, v := range s.vaultList() {
+		v.stop()
 	}
 }
 
-// LoginCommand returns the interactive `bw login` command, or nil.
+// LoginCommand returns the interactive `bw login` command of the first vault
+// that is not logged in (the default vault if all are), or nil.
 func (s *Service) LoginCommand() *exec.Cmd {
-	if s.opts.Login == nil {
-		return nil
-	}
-	return s.opts.Login()
-}
-
-func (s *Service) run(ctx context.Context) {
-	src, release, err := s.opts.Connect(ctx)
-	if err != nil {
-		if ctx.Err() == nil {
-			st := Offline
-			if errors.Is(err, vault.ErrNotLoggedIn) {
-				st = NeedLogin // L runs bw login, then Reconnect
-			}
-			s.set(func() { s.state, s.lastErr = st, err })
-		}
-		return
-	}
-	s.mu.Lock()
-	if ctx.Err() != nil {
-		s.mu.Unlock()
-		if release != nil {
-			release()
-		}
-		return
-	}
-	s.src, s.release = src, release
-	s.mu.Unlock()
-	s.Refresh(ctx)
-
-	t := time.NewTicker(s.opts.SyncInterval)
-	defer t.Stop()
-	health := time.NewTicker(s.opts.HealthInterval)
-	defer health.Stop()
-	retry := time.NewTicker(s.opts.RetryInterval)
-	defer retry.Stop()
-	var died <-chan struct{}
-	if d, ok := src.(interface{ Done() <-chan struct{} }); ok {
-		died = d.Done()
-	}
-	for {
-		select {
-		case <-ctx.Done():
-			return
-		case <-died:
-			died = nil
-			s.fail(fmt.Errorf("%w: bw serve exited", vault.ErrUnavailable))
-		case <-t.C:
-			s.Refresh(ctx)
-		case <-retry.C:
-			if st := s.Status(); st.State == Online && st.SyncErr != nil {
-				s.Refresh(ctx) // the server may be back
-			}
-		case <-health.C:
-			s.checkHealth(ctx)
+	vs := s.vaultList()
+	v := vs[0]
+	for _, x := range vs {
+		if x.status().State == NeedLogin {
+			v = x
+			break
 		}
 	}
+	return v.loginCommand()
 }
 
-// checkHealth detects a vanished/locked vault between syncs and recovers
-// from transient outages.
-func (s *Service) checkHealth(ctx context.Context) {
-	src := s.source()
-	if src == nil {
-		return
-	}
-	st, err := src.Status(ctx)
-	cur := s.Status().State
-	switch {
-	case err != nil:
-		s.fail(err)
-	case cur == Offline || cur == Online && st.Status != vault.Unlocked:
-		s.Refresh(ctx)
-	}
-}
-
-func (s *Service) source() Source {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	return s.src
-}
-
-// Refresh checks the vault status and, if unlocked, syncs and reloads the
-// snapshot. Errors move the service to Offline/Locked as appropriate while
-// keeping the last known snapshot.
+// Refresh checks the vaults and, if unlocked, syncs and reloads their
+// snapshots. Errors move a vault to Offline/Locked as appropriate while
+// keeping its last known snapshot.
 func (s *Service) Refresh(ctx context.Context) {
-	src := s.source()
-	if src == nil {
-		return
+	for _, v := range s.vaultList() {
+		v.refresh(ctx)
 	}
-	st, err := src.Status(ctx)
-	if err != nil {
-		s.fail(err)
-		return
-	}
-	switch st.Status {
-	case vault.Unauthenticated:
-		s.set(func() { s.state, s.lastErr = NeedLogin, nil })
-		return
-	case vault.Locked:
-		s.set(func() {
-			s.state, s.lastErr = Locked, nil
-			s.useCacheFor(st.Account())
-		})
-		return
-	}
-	s.set(func() { s.state = Syncing })
-	// A failed sync (server unreachable) still leaves bw's local copy
-	// usable: unlock, list and passwords work offline.
-	sctx, cancel := context.WithTimeout(ctx, s.opts.SyncTimeout)
-	syncErr := src.Sync(sctx)
-	cancel()
-	if syncErr != nil && ctx.Err() == nil && !errors.Is(syncErr, vault.ErrLocked) {
-		if _, err := src.Status(ctx); err != nil { // bw serve itself is gone
-			s.fail(err)
-			return
-		}
-	}
-	snap, err := src.Snapshot(ctx)
-	if err != nil {
-		s.fail(err)
-		return
-	}
-	if s.opts.Cache != nil {
-		_ = s.opts.Cache.Save(snap)
-	}
-	s.set(func() {
-		s.snap, s.fromCache, s.account = snap, false, snap.Account
-		s.state, s.lastErr, s.syncErr = Online, nil, syncErr
-	})
-}
-
-// useCacheFor replaces a cache of another account; called with mu held.
-func (s *Service) useCacheFor(account string) {
-	if s.account == account || s.opts.Cache == nil {
-		return
-	}
-	s.account = account
-	if snap, err := s.opts.Cache.Load(account); err == nil {
-		s.snap, s.fromCache = snap, true
-	} else {
-		s.snap, s.fromCache = model.Snapshot{}, false
-	}
-}
-
-func (s *Service) fail(err error) {
-	s.set(func() {
-		s.lastErr = err
-		switch {
-		case errors.Is(err, vault.ErrLocked):
-			s.state = Locked
-		case errors.Is(err, vault.ErrUnavailable):
-			s.state = Offline
-		default:
-			if s.state == Syncing || s.state == Starting {
-				s.state = Offline
-			}
-		}
-	})
 }
 
 // ErrNotOnline is returned when an operation needs the unlocked vault.
 var ErrNotOnline = errors.New("vault is not available (offline or locked)")
 
-// Unlock unlocks the vault and refreshes. password is wiped.
+// Unlock unlocks the first locked vault (the default vault if none is
+// locked) and refreshes it. password is wiped.
 func (s *Service) Unlock(ctx context.Context, password []byte) error {
-	defer secret.Zero(password)
-	src := s.source()
-	if src == nil {
-		return ErrNotOnline
+	id := ""
+	if v, ok := s.LockedVault(); ok {
+		id = v.ID
 	}
-	if err := src.Unlock(ctx, password); err != nil {
-		logf("vault: unlock failed: %v", err)
-		s.set(func() { s.lastErr = err })
-		return err
-	}
-	logf("vault: unlocked")
-	s.Refresh(ctx)
-	return nil
+	return s.UnlockVault(ctx, id, password)
 }
 
-// Secret fetches the credential of a host for one connection attempt.
-// The caller must Wipe it.
+// UnlockVault unlocks the vault id ("" = the default vault) and refreshes
+// it. password is wiped.
+func (s *Service) UnlockVault(ctx context.Context, id string, password []byte) error {
+	defer secret.Zero(password)
+	v := s.vault(id)
+	if v == nil {
+		return fmt.Errorf("no vault %q", id)
+	}
+	return v.unlock(ctx, password)
+}
+
+// Secret fetches the credential of a host for one connection attempt from
+// its vault. The caller must Wipe it.
 func (s *Service) Secret(ctx context.Context, hostID string) (secret.Secret, error) {
-	src := s.source()
-	if src == nil {
-		return secret.Secret{}, ErrNotOnline
-	}
-	sec, err := src.Secret(ctx, hostID)
-	if err != nil {
-		if errors.Is(err, vault.ErrLocked) || errors.Is(err, vault.ErrUnavailable) {
-			s.fail(err)
-			return secret.Secret{}, ErrNotOnline
-		}
-		return secret.Secret{}, err
-	}
-	return sec, nil
+	v, id := s.route(hostID)
+	return v.secret(ctx, id)
 }
 
 // Widgets returns the latest widget outputs.

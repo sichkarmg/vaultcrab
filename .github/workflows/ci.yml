@@ -1,8 +1,10 @@
 name: ci
 
+# push: only main (after a merge); branches are checked through their PR.
+# Every branch push with an open PR used to start two identical runs.
 on:
   push:
-    branches: ["**"]
+    branches: [main]
   pull_request:
 
 permissions:
@@ -10,7 +12,8 @@ permissions:
 
 concurrency:
   group: ci-${{ github.workflow }}-${{ github.event_name }}-${{ github.ref }}
-  cancel-in-progress: true
+  # a new push to a PR cancels its previous run; runs on main all finish
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 env:
   GO_VERSION: "1.27.x"

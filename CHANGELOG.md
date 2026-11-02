@@ -12,6 +12,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   coloured (green connected, yellow connecting, red broken, blue new output).
 - Each pane header of a split tab has a `✕` button that closes just that pane (a live session asks
   first); `Ctrl+D` closes a broken or finished pane. The status bar and the help mention both.
+- Prefix `c` (`clone_tab`) opens a new tab with a new connection to the host of the focused pane.
+- Splitting a pane offers the host of the current pane first and selected, so `Enter` clones it
+  into the new pane.
 
 ### Fixed
 - With many tabs the `0:Hosts` tab no longer scrolls out of the tab bar.

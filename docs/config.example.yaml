@@ -31,6 +31,7 @@ ui:
     next_tab: n
     prev_tab: p
     close_tab: "&"
+    clone_tab: c           # new tab with a new connection to the host of the focused pane
     host_list: l
     history: "["            # scroll the output (scrollback): PgUp/PgDn, arrows, v select, Esc
     split_right: "|"

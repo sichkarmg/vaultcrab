@@ -235,6 +235,7 @@ const (
 	ActNextTab    = "next_tab"
 	ActPrevTab    = "prev_tab"
 	ActCloseTab   = "close_tab"
+	ActCloneTab   = "clone_tab"
 	ActList       = "host_list"
 	ActHistory    = "history"
 	ActSplitRight = "split_right"
@@ -264,7 +265,7 @@ func Default() Config {
 		UI: UI{
 			TabsPosition: "top", Accent: "cyan", Selection: "reverse", Mouse: true, Prefix: "ctrl+b", ListWidth: 0, TabWidth: DefaultTabWidth, TabStatus: "icon", ShowTree: true, ShowNotes: true, RestoreTabs: true, RestoreView: true,
 			Keys: map[string]string{
-				ActNextTab: "n", ActPrevTab: "p", ActCloseTab: "&", ActList: "l",
+				ActNextTab: "n", ActPrevTab: "p", ActCloseTab: "&", ActCloneTab: "c", ActList: "l",
 				ActHistory: "[", ActSplitRight: "|", ActSplitDown: "-", ActClosePane: "x",
 				ActZoom: "z", ActFocusLeft: "left", ActFocusRight: "right", ActFocusUp: "up",
 				ActFocusDown: "down", ActGrowLeft: "H", ActGrowRight: "L", ActGrowUp: "K",

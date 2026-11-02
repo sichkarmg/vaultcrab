@@ -31,6 +31,12 @@ import (
 // no wake-up of the UI unless it changed.
 const defaultConfigPoll = 5 * time.Second
 
+// configSettle: a changed config file is loaded only when it has stayed the
+// same this long. An editor that saves in place truncates the file first; read
+// at that moment it is an empty, valid config that would briefly replace the
+// real one.
+const configSettle = 100 * time.Millisecond
+
 // ConfigStatus is the outcome of the last reload of the configuration.
 type ConfigStatus struct {
 	Seq     int      // incremented on every reload, successful or not
@@ -170,11 +176,28 @@ func (s *Service) watchConfig(ctx context.Context) {
 		if !active {
 			continue // the timer is set again when the focus comes back
 		}
-		if stampOf(s.opts.Config.Path) != old {
+		if st := stampOf(s.opts.Config.Path); st != old && s.configSettled(ctx, st) {
 			_ = s.ReloadConfig()
 		}
 		t.Reset(s.opts.ConfigPoll)
 	}
+}
+
+// configSettled waits configSettle and reports whether the config file still
+// has the stamp st (no write under way) and the watch is still active. If
+// not, the next check tries again.
+func (s *Service) configSettled(ctx context.Context, st fileStamp) bool {
+	t := time.NewTimer(configSettle)
+	defer t.Stop()
+	select {
+	case <-ctx.Done():
+		return false
+	case <-t.C:
+	}
+	s.mu.Lock()
+	active := s.conf.active
+	s.mu.Unlock()
+	return active && stampOf(s.opts.Config.Path) == st
 }
 
 // restartNeeded names the changed sections that are not applied while

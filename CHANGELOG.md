@@ -17,6 +17,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Dependencies: `github.com/jezek/xgb` (X11 clipboard) 1.1.1 → 1.3.1.
 
 ### Fixed
+- A config file saved in place by an editor is reloaded only after the write has finished; reading
+  it while it was truncated briefly applied an empty configuration.
 - Windows: saving settings no longer fails with "Access is denied" while another Vaultcrab (or the
   automatic reload) is reading `config.yaml`; the file is replaced with POSIX rename semantics.
 

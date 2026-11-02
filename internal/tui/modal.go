@@ -346,7 +346,8 @@ func (h *helpModal) view(m *Model, w, hh int) []string {
 	b.WriteString("  " + k("0-9") + " go to tab · " + k(p) + " " + k(p) + " send " + p + "\n")
 	b.WriteString("  " + k("Ctrl+PgDn/PgUp") + " or " + k(m.ascii("Alt+→/←")) + " next / previous tab, without the prefix (everywhere)\n")
 	b.WriteString("  " + "settings and the item form stay in 0:Hosts (" + m.ascii("✎") + "): switch tabs while they are open\n")
-	b.WriteString("  " + k("Enter") + " in a broken session (" + m.opt.Icons.Get(core.IconDisconnected) + ") reconnects · mouse wheel scrolls the output\n")
+	b.WriteString("  " + k("Enter") + " in a broken session (" + m.opt.Icons.Get(core.IconDisconnected) + ") reconnects, " + k("Ctrl+D") + " closes it · mouse wheel scrolls the output\n")
+	b.WriteString("  " + k(m.ascii("✕")) + " in a pane header (split tab) closes that pane · " + k(p+" "+m.opt.Keys[core.ActCloseTab]) + " closes the whole tab\n")
 	b.WriteString("\n" + stDim.Render("Vaultcrab "+m.opt.Version+" · any key closes"))
 	return m.box("Help", b.String(), w)
 }

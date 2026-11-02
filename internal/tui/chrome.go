@@ -94,8 +94,6 @@ func (m *Model) tabWidth() int {
 	return core.DefaultTabWidth
 }
 
-// tabSpans returns the x ranges of tab labels as displayed, honoring the
-// horizontal scroll that keeps the active tab visible.
 // quitButton is the close button at the right end of the tab bar.
 func (m *Model) quitButton() string { return " " + m.opt.Icons.Get(core.IconQuit) + " " }
 
@@ -105,14 +103,45 @@ func (m *Model) tabsWidth() int {
 	return max(0, m.w-m.buttonsWidth())
 }
 
-// buttonsWidth is the width of the settings and close buttons at the right
-// end of the tab bar, each after a separator.
-func (m *Model) buttonsWidth() int {
-	return 2*ansi.StringWidth(m.g.v) + ansi.StringWidth(m.settingsButton()) + ansi.StringWidth(m.quitButton())
+// logButton opens the event log; shown while the log is on.
+func (m *Model) logButton() string {
+	if !m.svc.LogEnabled() {
+		return ""
+	}
+	return " " + m.opt.Icons.Get(core.IconLog) + " "
 }
 
-// The host list tab (0) always stays at the left; the session tabs after
-// it scroll, first being the first one shown (a ‹ marks hidden ones).
+// buttonsWidth is the width of the log (if shown), settings and close
+// buttons at the right end of the tab bar, each after a separator.
+func (m *Model) buttonsWidth() int {
+	w := 2*ansi.StringWidth(m.g.v) + ansi.StringWidth(m.settingsButton()) + ansi.StringWidth(m.quitButton())
+	if lb := m.logButton(); lb != "" {
+		w += ansi.StringWidth(m.g.v) + ansi.StringWidth(lb)
+	}
+	return w
+}
+
+// buttonAt names the tab bar button at column x (x >= tabsWidth): "log",
+// "settings" or "quit"; the separator before a button belongs to it.
+func (m *Model) buttonAt(x int) string {
+	sep := ansi.StringWidth(m.g.v)
+	x0 := m.tabsWidth()
+	if lb := m.logButton(); lb != "" {
+		if x < x0+sep+ansi.StringWidth(lb) {
+			return "log"
+		}
+		x0 += sep + ansi.StringWidth(lb)
+	}
+	if x < x0+sep+ansi.StringWidth(m.settingsButton()) {
+		return "settings"
+	}
+	return "quit"
+}
+
+// tabSpans returns the x ranges of tab labels as displayed (starts[i] < 0:
+// scrolled out). The host list tab (0) always stays at the left; the
+// session tabs after it scroll, first being the first one shown (a ‹ marks
+// hidden ones).
 func (m *Model) tabSpans() (labels []string, starts []int, first int) {
 	labels = m.tabLabels()
 	widths := make([]int, len(labels))
@@ -169,7 +198,11 @@ func (m *Model) tabBar() string {
 		b.WriteString(stTabBar.Render(m.g.v))
 	}
 	sep := stTabBar.Render(m.g.v)
-	return padRight(b.String(), m.tabsWidth()) + sep + stKey.Render(m.settingsButton()) + sep + stQuit.Render(m.quitButton())
+	logBtn := ""
+	if lb := m.logButton(); lb != "" {
+		logBtn = sep + stKey.Render(lb)
+	}
+	return padRight(b.String(), m.tabsWidth()) + logBtn + sep + stKey.Render(m.settingsButton()) + sep + stQuit.Render(m.quitButton())
 }
 
 // tabAt returns the tab index at column x of the tab bar, or -1.

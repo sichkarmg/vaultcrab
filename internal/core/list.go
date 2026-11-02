@@ -43,5 +43,11 @@ func (s *Service) LaunchExternal(ctx context.Context, h model.Host) error {
 	if s.opts.Launch == nil {
 		return ErrNoLauncher
 	}
-	return s.opts.Launch(ctx, h, func(ctx context.Context) (secret.Secret, error) { return s.Secret(ctx, h.ID) })
+	err := s.opts.Launch(ctx, h, func(ctx context.Context) (secret.Secret, error) { return s.Secret(ctx, h.ID) })
+	if err != nil {
+		logf("external: %s %s (%s): %v", h.Scheme, h.Name, h.Target(), err)
+	} else {
+		logf("external: %s %s (%s): started", h.Scheme, h.Name, h.Target())
+	}
+	return err
 }

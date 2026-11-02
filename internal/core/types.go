@@ -206,6 +206,7 @@ const (
 	IconLocal        = config.IconLocal
 	IconQuit         = config.IconQuit
 	IconSettings     = config.IconSettings
+	IconLog          = config.IconLog
 	IconFolder       = config.IconFolder
 	IconFolderOpen   = config.IconFolderOpen
 	IconOrg          = config.IconOrg
@@ -223,6 +224,7 @@ const (
 	ActPrevTab    = config.ActPrevTab
 	ActCloseTab   = config.ActCloseTab
 	ActCloneTab   = config.ActCloneTab
+	ActShowLog    = config.ActShowLog
 	ActList       = config.ActList
 	ActHistory    = config.ActHistory
 	ActSplitRight = config.ActSplitRight

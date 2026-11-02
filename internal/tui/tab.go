@@ -517,11 +517,15 @@ func (m *Model) mouse(msg tea.MouseMsg) tea.Cmd {
 	}
 	if msg.Y == m.tabBarY() {
 		if msg.Action == tea.MouseActionPress && msg.Button == tea.MouseButtonLeft && msg.X >= m.tabsWidth() {
-			if msg.X < m.tabsWidth()+ansi.StringWidth(m.g.v)+ansi.StringWidth(m.settingsButton()) {
-				m.openSettings() // the settings button
-				return nil
+			switch m.buttonAt(msg.X) {
+			case "log":
+				m.modal = newLogView(m)
+			case "settings":
+				m.openSettings()
+			case "quit":
+				return m.confirmQuit() // asks if sessions are open
 			}
-			return m.confirmQuit() // the close button (asks if sessions are open)
+			return nil
 		}
 		if msg.Action == tea.MouseActionPress && msg.Button == tea.MouseButtonLeft {
 			if i := m.tabAt(msg.X); i >= 0 {

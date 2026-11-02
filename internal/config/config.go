@@ -37,11 +37,31 @@ type Config struct {
 	Scripts  []ScriptSpec      `yaml:"scripts"`
 	Widgets  Widgets           `yaml:"widgets"`
 	External map[string]Launch `yaml:"external"` // keys: vnc, smb, ftp, sftp, rdp
+	Log      Log               `yaml:"log"`
 
 	// Path is where the config was loaded from (not serialized).
 	Path string `yaml:"-"`
 	// Dir is the config directory (known_hosts etc. live here).
 	Dir string `yaml:"-"`
+}
+
+// Log configures the event log (Settings → Behavior → Event log).
+type Log struct {
+	Enabled bool   `yaml:"enabled"`
+	File    string `yaml:"file"` // default: vaultcrab.log in the cache directory
+}
+
+// LogFile returns the file of the event log: log.file, or vaultcrab.log in
+// the user cache directory.
+func (c Config) LogFile() string {
+	if c.Log.File != "" {
+		return c.Log.File
+	}
+	d, err := os.UserCacheDir()
+	if err != nil {
+		d = os.TempDir()
+	}
+	return filepath.Join(d, "vaultcrab", "vaultcrab.log")
 }
 
 // BW configures access to the Bitwarden CLI.
@@ -236,6 +256,7 @@ const (
 	ActPrevTab    = "prev_tab"
 	ActCloseTab   = "close_tab"
 	ActCloneTab   = "clone_tab"
+	ActShowLog    = "show_log"
 	ActList       = "host_list"
 	ActHistory    = "history"
 	ActSplitRight = "split_right"
@@ -269,7 +290,7 @@ func Default() Config {
 				ActHistory: "[", ActSplitRight: "|", ActSplitDown: "-", ActClosePane: "x",
 				ActZoom: "z", ActFocusLeft: "left", ActFocusRight: "right", ActFocusUp: "up",
 				ActFocusDown: "down", ActGrowLeft: "H", ActGrowRight: "L", ActGrowUp: "K",
-				ActGrowDown: "J", ActBreakPane: "!", ActReconnect: "r", ActQuit: "q", ActHelp: "?", ActLocal: "t", ActSettings: ",",
+				ActGrowDown: "J", ActBreakPane: "!", ActReconnect: "r", ActQuit: "q", ActHelp: "?", ActLocal: "t", ActSettings: ",", ActShowLog: "g",
 			},
 		},
 		Icons: Icons{Mode: "auto"},

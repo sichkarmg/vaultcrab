@@ -60,7 +60,9 @@ the vault only at the moment of connecting and never written to disk.
 - **Filters and search** with a small rule language (`tag:linux folder:Lab/** scheme:ssh`), icons
   with ASCII fallbacks.
 - **Add, edit, copy and delete items** from the TUI; only the host fields change, everything else
-  in the item (notes, hidden fields, TOTP, password history) is kept.
+  in the item (notes, hidden fields, TOTP, password history) is kept. In the password field
+  `Ctrl+R` or `[Show]` shows what is typed and the current password of the item (a key by its first
+  line); `[Hide]` masks it again.
 - **Scripts, widgets, local shell.** Per-item launch scripts with placeholders, a widget column
   with the output of your commands, a local shell (`$SHELL`, or PowerShell via ConPTY on Windows).
 - **Safe multi-line paste.** Pasted text of several lines is shown first and pasted only after

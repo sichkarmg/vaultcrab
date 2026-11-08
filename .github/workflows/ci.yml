@@ -50,6 +50,23 @@ jobs:
         run: go test ./...
       - name: make build
         run: make build
+      # Native macOS binaries (with cgo, as released) for manual testing on
+      # a Mac: the artifact of the macOS job of a PR run.
+      - name: macOS test binaries
+        if: runner.os == 'macOS'
+        run: |
+          mkdir -p dist/mac
+          for arch in arm64 amd64; do
+            CGO_ENABLED=1 GOARCH=$arch go build -trimpath -ldflags "-s -w -X main.version=$(git describe --tags --always)-ci" \
+              -o "dist/mac/vaultcrab-darwin-$arch" ./cmd/vaultcrab
+          done
+          (cd dist/mac && shasum -a 256 vaultcrab-darwin-* > SHA256SUMS)
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        if: runner.os == 'macOS'
+        with:
+          name: vaultcrab-macos
+          path: dist/mac
+          retention-days: 14
 
   gitleaks:
     runs-on: ubuntu-latest

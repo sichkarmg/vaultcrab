@@ -141,7 +141,8 @@ set `bw.env: [NODE_EXTRA_CA_CERTS=/path/to/ca.pem]` in the config (passed to `bw
 
 ## Building from source
 
-Go 1.26 or newer, no cgo:
+Go 1.26 or newer. No cgo, except on macOS: built on a Mac, `make` uses cgo for the screen lock
+detection (Settings → Security); a macOS binary cross-built elsewhere works without it.
 
 ```sh
 make build          # dist/vaultcrab for this OS
@@ -204,6 +205,28 @@ Why: bw (checked with 2026.10) exits when it has to refresh its access token whi
 unreachable — typically the first sync after a sleep longer than the token lifetime (2 h on
 Vaultwarden), before the VPN is back. A new `bw serve` starts locked, which is why earlier versions
 asked for the master password after such a sleep. bw serve itself has no vault timeout timer.
+
+## Auto-lock
+
+Settings → **Security** (`unlock:` in the config, applied at once):
+
+| Setting | Default | |
+|---|---|---|
+| Lock after no input for (`lock_timeout`) | 8 hours | 15 min, 1 hour, 8 hours, 1 day, 3 days, 5 days, never |
+| Lock with the screen (`lock_on_screen_lock`) | off | also lock when the screen is locked |
+
+- The timeout counts from the last key or mouse input in Vaultcrab, in wall-clock time: time asleep
+  counts, so after a long sleep the first key opens the unlock dialog (and does nothing else). A
+  sleep by itself does not lock. Locking asks bw to lock (`bw lock`), which also drops the session
+  key; open sessions stay connected.
+- **Longer than 8 hours or never** is a weaker setting, and the settings page says so: while the
+  vault is unlocked, `bw serve` answers on `127.0.0.1` without authentication, so any program of
+  your user account can read every password for that long.
+- Screen lock detection: Linux through D-Bus (the screensaver's `ActiveChanged` — GNOME, Cinnamon,
+  MATE, KDE… — and the logind `Lock` of the session), Windows through the session lock notification,
+  macOS through `com.apple.screenIsLocked` (a closed lid counts when it locks the screen). The macOS
+  detection needs a build with cgo: the release binaries have it, a cross-built binary does not
+  (the settings page says so). Without a graphical session (e.g. over ssh) locks are not seen.
 
 ## Configuration
 

@@ -38,6 +38,7 @@ type Config struct {
 	Widgets  Widgets           `yaml:"widgets"`
 	External map[string]Launch `yaml:"external"` // keys: vnc, smb, ftp, sftp, rdp
 	Log      Log               `yaml:"log"`
+	Unlock   Unlock            `yaml:"unlock"`
 	// Vaults are further Bitwarden/Vaultwarden vaults (accounts or servers),
 	// next to the one of bw:.
 	Vaults []VaultSpec `yaml:"vaults"`
@@ -347,7 +348,8 @@ func Default() Config {
 				ActGrowDown: "J", ActBreakPane: "!", ActReconnect: "r", ActQuit: "q", ActHelp: "?", ActLocal: "t", ActSettings: ",", ActShowLog: "g",
 			},
 		},
-		Icons: Icons{Mode: "auto"},
+		Icons:  Icons{Mode: "auto"},
+		Unlock: Unlock{LockTimeout: DefaultLockTimeout},
 		Terminal: Terminal{Scrollback: 10000, Term: "xterm-256color", ForwardMouse: true, CloseOnExit: true,
 			CopyOSC52: true, CopySystem: true, ConfirmPaste: true},
 		SSH: SSH{Timeout: 15 * time.Second, Handshake: 60 * time.Second, Keepalive: 15 * time.Second, LegacyAlgorithms: true},
@@ -458,6 +460,9 @@ func (c *Config) finish() error {
 		}
 	}
 	if err := checkBWEnv(c.BW.Env, "bw.env"); err != nil {
+		return err
+	}
+	if err := c.Unlock.finish(); err != nil {
 		return err
 	}
 	switch c.UI.TabsPosition {

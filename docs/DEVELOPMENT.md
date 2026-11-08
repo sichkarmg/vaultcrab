@@ -23,7 +23,10 @@
 
 ## Build targets
 
-Linux, Windows and macOS, all with `CGO_ENABLED=0` (the Linux binary is static):
+Linux and Windows with `CGO_ENABLED=0` (the Linux binary is static). macOS with cgo when built on a
+Mac (the screen lock detection of `internal/screenlock` uses Foundation); cross-built macOS binaries
+have no cgo and work without that detection. The release job runs on macOS for that reason, and the
+macOS CI job uploads native test binaries (artifact `vaultcrab-macos`).
 
 ```sh
 make fmt-check vet test   # gofmt, go vet (also with -tags integration), go test ./...

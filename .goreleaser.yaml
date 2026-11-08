@@ -3,22 +3,37 @@
 version: 2
 project_name: vaultcrab
 
+# The release job runs on macOS: Linux and Windows are cross-built without
+# cgo (static Linux binaries), macOS natively with cgo (the screen lock
+# detection, internal/screenlock). Keep the targets in sync with PLATFORMS
+# in the Makefile.
 builds:
   - id: vaultcrab
     main: ./cmd/vaultcrab
     binary: vaultcrab
     env:
-      - CGO_ENABLED=0 # static Linux binaries, no cgo anywhere
+      - CGO_ENABLED=0
     flags:
       - -trimpath
     ldflags:
       - -s -w -X main.version={{ .Version }}
     mod_timestamp: "{{ .CommitTimestamp }}"
-    # Keep in sync with PLATFORMS in the Makefile.
     targets:
       - linux_amd64_v1
       - linux_arm64_v8.0
       - windows_amd64_v1
+  - id: vaultcrab-darwin
+    main: ./cmd/vaultcrab
+    binary: vaultcrab
+    env:
+      - CGO_ENABLED=1 # Go passes -arch to clang: both archs build on one Mac
+      - MACOSX_DEPLOYMENT_TARGET=12.0
+    flags:
+      - -trimpath
+    ldflags:
+      - -s -w -X main.version={{ .Version }}
+    mod_timestamp: "{{ .CommitTimestamp }}"
+    targets:
       - darwin_amd64_v1
       - darwin_arm64_v8.0
 

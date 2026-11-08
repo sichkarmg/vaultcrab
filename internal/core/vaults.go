@@ -139,7 +139,11 @@ func (v *vaultConn) set(fn func()) {
 		logf("%s: sync with the server failed, using the local copy of bw: %v", who, v.syncErr)
 	}
 	s.remerge()
+	up := v.state == Online && st != Online
 	s.mu.Unlock()
+	if up {
+		s.kickAutoLock() // arm the auto-lock timer
+	}
 	s.emit()
 }
 
@@ -497,8 +501,38 @@ func (v *vaultConn) unlock(ctx context.Context, password []byte) error {
 		return err
 	}
 	logf("%s: unlocked", who)
+	v.s.lock.mu.Lock()
+	v.s.lock.last = v.s.now() // the auto-lock counts from here
+	v.s.lock.mu.Unlock()
 	v.refresh(ctx)
 	return nil
+}
+
+// lockNow locks the vault if it is unlocked: its state becomes Locked with
+// reason right away (no secret is handed out any more), then bw is asked
+// to lock (which also drops the session key).
+func (v *vaultConn) lockNow(ctx context.Context, reason error) {
+	src := v.source()
+	if src == nil {
+		return
+	}
+	locked := false
+	v.set(func() {
+		if v.state == Online || v.state == Syncing {
+			v.state, v.lastErr, v.crashed, locked = Locked, reason, false, true
+		}
+	})
+	if !locked {
+		return
+	}
+	logf("%s: %v", v.who(), reason)
+	if l, ok := src.(interface{ Lock(context.Context) error }); ok {
+		if err := l.Lock(ctx); err != nil {
+			logf("%s: bw lock: %v", v.who(), err)
+		}
+	} else if w, ok := src.(interface{ WipeSession() }); ok {
+		w.WipeSession()
+	}
 }
 
 // waitUp waits (up to d) while bw serve is being restarted.
@@ -542,7 +576,10 @@ func (v *vaultConn) notOnline() error {
 func (v *vaultConn) secret(ctx context.Context, itemID string) (secret.Secret, error) {
 	v.waitUp(ctx, v.s.opts.RestartWait)
 	src := v.source()
-	if src == nil {
+	v.s.mu.Lock()
+	lockedByUs := v.state == Locked && errors.Is(v.lastErr, errAutoLocked)
+	v.s.mu.Unlock()
+	if src == nil || lockedByUs {
 		return secret.Secret{}, v.notOnline()
 	}
 	sec, err := src.Secret(ctx, itemID)

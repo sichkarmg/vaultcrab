@@ -142,6 +142,13 @@ type Options struct {
 	// FS is where the external clients are looked for (the real file
 	// system by default).
 	FS launchers.FS
+
+	// ScreenLock calls onLock whenever the user's screen is locked, until
+	// ctx ends (internal/screenlock); an error says why it cannot.
+	// Optional: without it unlock.lock_on_screen_lock has no effect.
+	ScreenLock func(ctx context.Context, onLock func()) error
+	// Now is the wall clock (tests); time.Now by default.
+	Now func() time.Time
 }
 
 // Service is safe for concurrent use.
@@ -159,6 +166,8 @@ type Service struct {
 
 	conf    configState      // guarded by mu
 	scripts []scripts.Script // guarded by mu: replaced on a config reload
+
+	lock autoLock // see autolock.go
 }
 
 // New creates a service. Call Start to begin.
@@ -196,6 +205,7 @@ func New(o Options) *Service {
 	}
 	s.sessions.init(s)
 	s.initConfig()
+	s.initAutoLock()
 	s.widgets = widget.NewRunner(o.Widgets, s.emit, o.WidgetExec)
 	return s
 }
@@ -286,6 +296,14 @@ func (s *Service) Start(ctx context.Context) {
 		v.loadCache()
 		v.startRun(ctx)
 	}
+	go s.runAutoLock(ctx)
+	s.lock.mu.Lock()
+	s.lock.enabled = s.lock.onScreen
+	screen := s.lock.onScreen
+	s.lock.mu.Unlock()
+	if screen {
+		s.startScreenWatch()
+	}
 }
 
 // Reconnect releases the vault sources (e.g. stops bw serve) and connects
@@ -317,9 +335,9 @@ func (s *Service) Stop() {
 func (s *Service) LoginCommand() *exec.Cmd {
 	vs := s.vaultList()
 	v := vs[0]
-	for _, x := range vs {
-		if x.status().State == NeedLogin {
-			v = x
+	for i, e := range s.Vaults() {
+		if e.State == NeedLogin && i < len(vs) {
+			v = vs[i]
 			break
 		}
 	}
@@ -386,6 +404,7 @@ func (s *Service) UnlockVault(ctx context.Context, id string, password []byte) e
 // Secret fetches the credential of a host for one connection attempt from
 // its vault. The caller must Wipe it.
 func (s *Service) Secret(ctx context.Context, hostID string) (secret.Secret, error) {
+	s.lockExpired() // the timer may be late after a sleep
 	v, id := s.route(hostID)
 	return v.secret(ctx, id)
 }

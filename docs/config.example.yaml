@@ -87,6 +87,15 @@ log:                       # event log (Settings → Behavior → Event log; the
                            # passwords, typed keys or terminal output; rotated at 1 MiB (<file>.1)
   file: ""                 # default: vaultcrab.log in the cache directory (~/.cache/vaultcrab on Linux)
 
+unlock:                    # locking the vaults (Settings → Security; applied at once)
+  lock_timeout: 8h         # lock after this long without keyboard/mouse input in Vaultcrab (time asleep
+                           # counts): 15m, 1h, 8h, 24h, 72h, 120h (the settings), any duration >= 1m, or never.
+                           # Longer than 8h or never: the unlocked bw serve answers any program of your
+                           # user on 127.0.0.1 for that long
+  lock_on_screen_lock: false # also lock when the screen is locked (a closed lid that locks the screen);
+                           # Linux: D-Bus screensaver / logind, Windows: session lock, macOS: needs a
+                           # build with cgo (the releases). A sleep by itself never locks
+
 local:                     # local terminal (t in the host list, prefix + t anywhere)
   shell:                   # empty = $SHELL (Linux/macOS); pwsh, powershell or %ComSpec% (Windows)
     # linux: [bash, -l]

@@ -6,7 +6,15 @@ ifeq ($(origin VERSION),undefined)
 VERSION   := $(patsubst v%,%,$(shell git describe --tags --always --dirty 2>/dev/null || echo dev))
 endif
 LDFLAGS   := -s -w -X main.version=$(VERSION)
+# No cgo (static Linux binaries), except a macOS build made on a Mac: the
+# screen lock detection on macOS needs cgo (internal/screenlock). macOS
+# binaries cross-built elsewhere work without it.
+HOSTOS    := $(shell $(GO) env GOHOSTOS)
+ifeq ($(HOSTOS),darwin)
+export CGO_ENABLED=1
+else
 export CGO_ENABLED=0
+endif
 
 # Keep in sync with .goreleaser.yaml.
 PLATFORMS := linux/amd64 linux/arm64 windows/amd64 darwin/amd64 darwin/arm64
@@ -21,7 +29,8 @@ build-all:
 	@for p in $(PLATFORMS); do \
 		os=$${p%/*}; arch=$${p#*/}; ext=; [ $$os = windows ] && ext=.exe; \
 		echo "-> $$os/$$arch"; \
-		GOOS=$$os GOARCH=$$arch $(GO) build -trimpath -ldflags '$(LDFLAGS)' \
+		cgo=0; [ $$os = darwin ] && [ $(HOSTOS) = darwin ] && cgo=1; \
+		CGO_ENABLED=$$cgo GOOS=$$os GOARCH=$$arch $(GO) build -trimpath -ldflags '$(LDFLAGS)' \
 			-o dist/vaultcrab-$$os-$$arch$$ext $(PKG) || exit 1; \
 	done
 

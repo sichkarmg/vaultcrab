@@ -69,7 +69,7 @@ func TestTUIUsesOnlyCore(t *testing.T) {
 // on a command line or in the environment of a child.
 func TestSecretStoresRunNoPrograms(t *testing.T) {
 	all := imports(t)
-	for _, pkg := range []string{"../keystore", "../quickunlock"} {
+	for _, pkg := range []string{"../keystore", "../quickunlock", "../biometric"} {
 		ims, ok := all[pkg]
 		if !ok {
 			t.Fatalf("%s not found", pkg)

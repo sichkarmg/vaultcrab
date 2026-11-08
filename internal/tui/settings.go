@@ -130,6 +130,15 @@ func securityNotes(m *Model, w int) string {
 	if a.LockOnScreenLock && p.ScreenLockErr != nil {
 		wrap(stWarn, "! Screen locks are not detected here: "+p.ScreenLockErr.Error())
 	}
+	if a.TouchID {
+		if err := m.svc.TouchIDErr(); err != nil {
+			wrap(stWarn, "! Touch ID is on but cannot be used here: "+err.Error())
+		} else {
+			wrap(stWarn, "! Touch ID is asked by Vaultcrab before it reads the master password from the Keychain. "+
+				"Vaultcrab is not signed, so the Keychain item has no biometric lock of its own: weaker than the "+
+				"master password, stronger than the PIN. Canceled or changed fingerprints fall back to the PIN.")
+		}
+	}
 	switch {
 	case a.PIN && !m.svc.HasPIN():
 		wrap(stWarn, "! PIN unlock is on but no PIN is set: choose on again to set it.")
@@ -239,6 +248,25 @@ type setting struct {
 // not called.
 var rowHooks = map[string]func(m *Model, s *settingsModal, i int) bool{
 	"PIN unlock": pinHook,
+	"Touch ID":   touchHook,
+}
+
+// touchHook: turning Touch ID on asks for the master password and the
+// prompt; off deletes its data.
+func touchHook(m *Model, s *settingsModal, i int) bool {
+	if i == 0 {
+		if err := m.svc.TouchIDErr(); err != nil {
+			s.err = "Touch ID: " + err.Error()
+			return true
+		}
+		m.modal = newTouchModal(m, s)
+		return true
+	}
+	if err := m.svc.ForgetTouchID(); err != nil {
+		s.err = "deleting the Touch ID data: " + err.Error()
+		return true
+	}
+	return false
 }
 
 var (
@@ -278,6 +306,8 @@ func (s *settingsModal) settings(m *Model) []setting {
 				set: func(a *core.Appearance, i int) { a.LockTimeout = vals[i] }},
 			{label: "Lock with the screen", opts: []string{"on", "off"}, cur: onOff(a.LockOnScreenLock),
 				set: func(a *core.Appearance, i int) { a.LockOnScreenLock = i == 0 }},
+			{label: "Touch ID", opts: []string{"on", "off"}, cur: onOff(a.TouchID),
+				set: func(a *core.Appearance, i int) { a.TouchID = i == 0 }},
 			{label: "PIN unlock", opts: []string{"on", "off"}, cur: onOff(a.PIN),
 				set: func(a *core.Appearance, i int) { a.PIN = i == 0 }},
 		}

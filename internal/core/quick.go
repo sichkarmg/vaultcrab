@@ -35,7 +35,10 @@ type WrongPIN = quickunlock.WrongPIN
 
 // QuickState says how a locked vault can be unlocked.
 type QuickState struct {
-	PIN bool // the PIN unlocks it now
+	TouchID bool // Touch ID unlocks it now (try it first)
+	// TouchWhy: why Touch ID does not, when it is on.
+	TouchWhy string
+	PIN      bool // the PIN unlocks it now
 	// Why the PIN does not, when it is on (e.g. "the master password is
 	// required after a restart of the computer"); "" otherwise.
 	Why string
@@ -109,17 +112,29 @@ func (s *Service) QuickUnlock(id string) QuickState {
 	on, _, pol := s.unlockPolicy()
 	m, ok := s.quick()
 	v := s.vault(id)
-	if !on || !ok || v == nil {
-		return QuickState{}
+	var q QuickState
+	if !ok || v == nil {
+		return q
+	}
+	if s.touchOn() {
+		if _, err := s.touchReady(v); err == nil {
+			q.TouchID = true
+		} else {
+			q.TouchWhy = err.Error()
+		}
+	}
+	if !on {
+		return q
 	}
 	switch err := m.Ready(v.key(), v.accountKey(), pol); {
 	case err == nil:
-		return QuickState{PIN: true}
+		q.PIN = true
 	case errors.Is(err, quickunlock.ErrNoPIN):
-		return QuickState{Why: "no PIN is set (Settings → Security)"}
+		q.Why = "no PIN is set (Settings → Security)"
 	default:
-		return QuickState{Why: err.Error()}
+		q.Why = err.Error()
 	}
+	return q
 }
 
 // HasPIN reports whether a PIN is set in the secure store.
@@ -225,6 +240,9 @@ func (s *Service) ForgetPIN() error {
 	}
 	extra = append(extra, s.opts.ForgetExtra...)
 	err := m.Forget(extra...)
+	if s.touchOn() {
+		err = errors.Join(err, s.ForgetTouchID())
+	}
 	logf("PIN and stored master passwords deleted from %s", s.KeystoreName())
 	return err
 }
@@ -233,6 +251,7 @@ func (s *Service) ForgetPIN() error {
 // PIN is on (password is not wiped here).
 func (v *vaultConn) sealAfterUnlock(password []byte) {
 	s := v.s
+	v.sealTouchAfterUnlock(password)
 	on, _, pol := s.unlockPolicy()
 	m, ok := s.quick()
 	if !on || !ok || !m.HasPIN() {
@@ -252,6 +271,10 @@ func (v *vaultConn) dropSealed(why string) {
 	if slices.Contains(m.Vaults(), v.key()) {
 		_ = m.Drop(v.key())
 		logf("%s: stored master password deleted (%s)", v.who(), why)
+	}
+	if m.HasTouch(v.key()) {
+		_ = m.DropTouch(v.key())
+		logf("%s: Touch ID data deleted (%s)", v.who(), why)
 	}
 }
 

@@ -74,7 +74,7 @@ func TestPINSettingsAndUnlock(t *testing.T) {
 	if s.page != pageSecurity {
 		t.Fatalf("page %d", s.page)
 	}
-	keys(m, "down", "down", "left") // PIN unlock: on
+	keys(m, "down", "down", "down", "left") // PIN unlock: on (after Touch ID)
 	p, ok := m.modal.(*pinModal)
 	if !ok {
 		t.Fatalf("modal %T:\n%s", m.modal, ansi.Strip(m.View()))

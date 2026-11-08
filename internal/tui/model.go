@@ -167,6 +167,9 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	if c := m.maybeFetchNotes(); c != nil {
 		cmd = tea.Batch(cmd, c)
 	}
+	if c := m.startTouch(); c != nil {
+		cmd = tea.Batch(cmd, c)
+	}
 	m.scheduleWake()
 	return m, cmd
 }
@@ -209,7 +212,7 @@ func (m *Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.resizeSessions()
 		m.restoreWorkspace()
 		return m, nil
-	case unlockResultMsg, pinResultMsg, pinSetMsg, loginDoneMsg, launchResultMsg:
+	case unlockResultMsg, pinResultMsg, touchResultMsg, pinSetMsg, loginDoneMsg, launchResultMsg:
 		return m, m.handleResult(msg)
 	case vaultLoginDoneMsg:
 		if msg.err != nil {
@@ -531,7 +534,7 @@ func (m *Model) handleResult(msg tea.Msg) tea.Cmd {
 		} else {
 			m.notify(false, "%s opened in external %s client", msg.host.Name, msg.host.Scheme)
 		}
-	case unlockResultMsg, pinResultMsg, pinSetMsg, loginDoneMsg:
+	case unlockResultMsg, pinResultMsg, touchResultMsg, pinSetMsg, loginDoneMsg:
 		if m.modal != nil {
 			return m.modal.update(m, msg)
 		}

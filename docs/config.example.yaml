@@ -103,6 +103,9 @@ unlock:                    # locking the vaults (Settings → Security; applied 
   pin_attempts: 5          # wrong PINs in a row (3..10) delete the stored passwords and the PIN
   master_after_reboot: true # ask for the master password after a restart of the computer
   master_every_days: 14    # and every this many days (1..90)
+  touch_id: false          # macOS: Touch ID before the PIN (Settings → Security asks for the master password
+                           # and a fingerprint once). Ignored on Linux and Windows and in macOS builds
+                           # without cgo. Falls back to the PIN, then the master password
 
 local:                     # local terminal (t in the host list, prefix + t anywhere)
   shell:                   # empty = $SHELL (Linux/macOS); pwsh, powershell or %ComSpec% (Windows)

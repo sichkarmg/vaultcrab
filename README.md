@@ -184,6 +184,27 @@ host card shows which vault, account and server an item belongs to, the status b
 of each vault, and the unlock dialog names the vault it unlocks. Items can be edited in their vault
 (not moved between vaults). See `vaults:` in [`docs/config.example.yaml`](docs/config.example.yaml).
 
+## Offline, sleep and a crashed bw serve
+
+- **Server unreachable** (no network, VPN down): the status bar says *Offline: server unreachable,
+  local copy*. The host list and the passwords come from bw's local encrypted copy, no password is
+  asked. Before each sync Vaultcrab checks that the server accepts a connection (through the proxy
+  of the bw environment, if any) and does not ask bw to sync while it does not; the check is
+  repeated after 15 s, 30 s, 1 min, … up to every 5 min (`s` checks now), and the vault is synced as
+  soon as the server is back.
+- **bw serve exited** (status *bw serve stopped, restarting…*): it is started again at once (with a
+  growing delay if it keeps exiting). A connection attempt meanwhile waits for it. The vault stays
+  unlocked: the new `bw serve` gets the session key of the old one (see the security notes).
+- **Locked**: only then is the master password asked. The unlock dialog says why when Vaultcrab did
+  not lock it itself (bw locked it, or a restarted bw serve could not reopen it).
+- `s` never restarts a running `bw serve` (that would lock it). The event log records the reason of
+  every state change (the error line of a crashed `bw serve`, the failed server check).
+
+Why: bw (checked with 2026.10) exits when it has to refresh its access token while the server is
+unreachable — typically the first sync after a sleep longer than the token lifetime (2 h on
+Vaultwarden), before the VPN is back. A new `bw serve` starts locked, which is why earlier versions
+asked for the master password after such a sleep. bw serve itself has no vault timeout timer.
+
 ## Configuration
 
 The config file is optional:
@@ -237,6 +258,12 @@ VNC password modes (`external.vnc.password`):
   unlocked, any local process of the same machine can query it (a property of the Bitwarden CLI).
   Vaultcrab stops it on exit, on signals and, through a helper process / Job Object, even when it is
   killed.
+- **Session key of bw serve.** While a vault is unlocked, Vaultcrab keeps the session key that bw
+  returned on unlock (not the master password) in memory, to restart a crashed `bw serve` unlocked.
+  The restarted process gets it as `BW_SESSION` in its environment, which processes of the same
+  user can read (they can query the unlocked `bw serve` anyway). The key is dropped when the vault
+  is locked (bw then also deletes the copy of the vault key it encrypts with it) or the connection
+  is closed; after Vaultcrab exits it opens nothing.
 - Host keys are checked against Vaultcrab's own `known_hosts`; a changed key is refused.
   `ssh.strict_host_keys: true` refuses unknown hosts too.
 - Copied text goes to the clipboard (that is the point of copying); the system clipboard is cleared

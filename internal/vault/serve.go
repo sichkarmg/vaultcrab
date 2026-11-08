@@ -22,6 +22,10 @@ type ServeOptions struct {
 	DataDir string   // BITWARDENCLI_APPDATA_DIR, empty = bw default
 	Env     []string // extra environment (e.g. NODE_EXTRA_CA_CERTS=...); never secrets
 	Spawn   Spawner  // optional: start bw serve outside vaultcrab's process tree
+	// Session is the session key of the vault this bw serve restarts (see
+	// session.go): it is passed as BW_SESSION, so the new process is
+	// unlocked. Not wiped here: the caller hands it to the new Client.
+	Session []byte
 }
 
 // Process is bw serve started by a Spawner.
@@ -81,6 +85,11 @@ func StartServer(ctx context.Context, o ServeOptions) (*Server, error) {
 		env = append(env, "BITWARDENCLI_APPDATA_DIR="+o.DataDir)
 	}
 	env = append(env, o.Env...)
+	if len(o.Session) > 0 {
+		// The environment of a process is readable by processes of the same
+		// user only, who can as well ask the unlocked bw serve itself.
+		env = append(env, "BW_SESSION="+string(o.Session))
+	}
 	if o.Spawn != nil {
 		p, err := o.Spawn.Start(argv, env)
 		if err != nil {

@@ -125,8 +125,8 @@ func (p *vaultsPage) act(m *Model, action string, v core.VaultEntry) tea.Cmd {
 		u.vault = v
 		m.modal = u
 	case "sync":
-		m.svc.ReconnectVault(m.ctx, v.ID)
-		p.status = "reconnecting " + v.Label() + "…"
+		m.svc.SyncVault(v.ID) // never restarts a running bw serve (it would lock)
+		p.status = "checking and syncing " + v.Label() + "…"
 	case "remove":
 		switch {
 		case v.ID == "":
@@ -202,7 +202,7 @@ func (p *vaultsPage) view(m *Model, w, line int) string {
 			st = stWarn.Render("online, local copy")
 		case v.State == core.Online:
 			st = stOK.Render(st)
-		case v.State == core.Locked || v.State == core.NeedLogin || v.State == core.Offline:
+		case v.State == core.Locked || v.State == core.NeedLogin || v.State == core.Offline || v.State == core.Crashed:
 			st = stWarn.Render(st)
 		}
 		b.WriteString(mark + padRight(name, 28) + " " + padRight(st, 20) + " " +

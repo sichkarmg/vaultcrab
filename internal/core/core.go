@@ -57,10 +57,13 @@ const (
 	Syncing
 	// Online: unlocked and snapshot is fresh.
 	Online
+	// Crashed: bw serve exited by itself and is being started again (with
+	// the session key of the old one, so the vault stays unlocked).
+	Crashed
 )
 
 func (s VaultState) String() string {
-	return [...]string{"starting", "offline", "need login", "locked", "syncing", "online"}[s]
+	return [...]string{"starting", "offline", "need login", "locked", "syncing", "online", "restarting bw serve"}[s]
 }
 
 // Options configures a Service.
@@ -98,11 +101,16 @@ type Options struct {
 	// SyncTimeout bounds a sync with the server (0 = 20 s); after it the
 	// local copy of bw is used.
 	SyncTimeout time.Duration
-	// RetryInterval is the sync period while the server is unreachable
-	// (0 = 1 min).
-	RetryInterval time.Duration
-	// HealthInterval is the period of cheap status checks (0 = 30 s).
-	HealthInterval time.Duration
+	// RetryInterval is the first delay of the checks while the server or
+	// bw serve is unreachable (0 = 15 s); it doubles up to RetryLimit
+	// (0 = 5 min).
+	RetryInterval, RetryLimit time.Duration
+	// RestartDelay is the first delay before restarting a bw serve that
+	// exited again soon after a restart (0 = 2 s; doubles up to RetryLimit).
+	RestartDelay time.Duration
+	// RestartWait is how long a connection waits for a restarting bw serve
+	// before it fails (0 = 20 s).
+	RestartWait time.Duration
 	// SSH configures the built-in SSH client.
 	SSH connect.SSHOptions
 	// Start runs a detached program (external-mode scripts); secret fetches
@@ -158,14 +166,20 @@ func New(o Options) *Service {
 	if o.SyncInterval == 0 {
 		o.SyncInterval = 10 * time.Minute
 	}
-	if o.HealthInterval == 0 {
-		o.HealthInterval = 30 * time.Second
+	if o.RetryLimit == 0 {
+		o.RetryLimit = 5 * time.Minute
+	}
+	if o.RestartDelay == 0 {
+		o.RestartDelay = 2 * time.Second
+	}
+	if o.RestartWait == 0 {
+		o.RestartWait = 20 * time.Second
 	}
 	if o.SyncTimeout == 0 {
 		o.SyncTimeout = 20 * time.Second
 	}
 	if o.RetryInterval == 0 {
-		o.RetryInterval = time.Minute
+		o.RetryInterval = 15 * time.Second
 	}
 	s := &Service{opts: o, events: make(chan struct{}, 1)}
 	s.vaults = []*vaultConn{newVaultConn(s, VaultOptions{Name: o.VaultName, Server: o.VaultServer,
@@ -238,7 +252,7 @@ func (s *Service) Status() VaultStatus {
 }
 
 // statePriority orders the summary state of several vaults.
-var statePriority = map[VaultState]int{Offline: 0, Online: 1, Syncing: 2, Starting: 3, NeedLogin: 4, Locked: 5}
+var statePriority = map[VaultState]int{Offline: 0, Online: 1, Syncing: 2, Starting: 3, Crashed: 4, NeedLogin: 5, Locked: 6}
 
 // Snapshot returns the current metadata snapshot of all vaults (shared; do
 // not modify).
@@ -282,15 +296,12 @@ func (s *Service) Reconnect(ctx context.Context) {
 	}
 }
 
-// Sync syncs the vaults that are up and reconnects those that are offline
-// (s in the host list).
-func (s *Service) Sync(ctx context.Context) {
+// Sync checks every vault now (s in the host list): syncs those that are
+// up and retries those that are unreachable. It never restarts a running
+// bw serve (that would lock its vault).
+func (s *Service) Sync(context.Context) {
 	for _, v := range s.vaultList() {
-		if v.status().State == Offline {
-			v.reconnect(ctx)
-		} else {
-			go v.refresh(ctx)
-		}
+		v.kickRun()
 	}
 }
 
@@ -324,8 +335,32 @@ func (s *Service) Refresh(ctx context.Context) {
 	}
 }
 
-// ErrNotOnline is returned when an operation needs the unlocked vault.
-var ErrNotOnline = errors.New("vault is not available (offline or locked)")
+// ErrNotOnline is returned when an operation needs the unlocked vault; the
+// errors below say why (errors.Is(err, ErrNotOnline) holds for each).
+var ErrNotOnline = errors.New("vault is not available")
+
+// notOnlineError is an ErrNotOnline with the reason.
+type notOnlineError string
+
+func (e notOnlineError) Error() string        { return string(e) }
+func (e notOnlineError) Is(target error) bool { return target == ErrNotOnline }
+
+var (
+	// ErrVaultLocked: the vault has to be unlocked (u).
+	ErrVaultLocked error = notOnlineError("vault is locked: unlock it (u)")
+	// ErrVaultNeedLogin: bw has no logged in account (L).
+	ErrVaultNeedLogin error = notOnlineError("bw is not logged in (L: login)")
+	// ErrServeRestarting: bw serve exited and is being started again.
+	ErrServeRestarting error = notOnlineError("bw serve stopped and is being restarted: try again in a moment")
+	// ErrServeUnreachable: bw serve does not answer (see the event log).
+	ErrServeUnreachable error = notOnlineError("bw serve does not answer (see the event log)")
+)
+
+var (
+	errServeDown        = errors.New("bw serve is down")
+	errLockedByBW       = errors.New("bw locked the vault by itself (bw lock, or a vault timeout of bw)")
+	errLockedAfterCrash = errors.New("bw serve exited and was restarted; the vault has to be unlocked again")
+)
 
 // Unlock unlocks the first locked vault (the default vault if none is
 // locked) and refreshes it. password is wiped.

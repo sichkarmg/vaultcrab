@@ -157,7 +157,12 @@ func (u *unlockModal) view(m *Model, w, h int) []string {
 		body := "\n" + stKey.Render(frames[u.frame%len(frames)]) + " " + phase + "\n"
 		return m.box("Unlock", body, w)
 	}
-	body := fmt.Sprintf("The vault %s is locked.\n%s\n\n", stBold.Render(u.vault.Label()), stDim.Render(u.vault.Where())) + u.in.View()
+	body := fmt.Sprintf("The vault %s is locked.\n%s\n", stBold.Render(u.vault.Label()), stDim.Render(u.vault.Where()))
+	if u.vault.Err != nil {
+		// why: bw serve was restarted, or bw locked it by itself
+		body += stWarn.Render(errText(u.vault.Err)) + "\n"
+	}
+	body += "\n" + u.in.View()
 	switch {
 	case u.err != "":
 		body += "\n\n" + stErr.Render(u.err)

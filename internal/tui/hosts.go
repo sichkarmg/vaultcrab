@@ -244,12 +244,12 @@ func (l *hostList) key(msg tea.KeyMsg) tea.Cmd {
 		l.grouping = l.grouping.Next()
 		l.rebuild()
 	case "s":
-		if m.svc.Status().State == core.Offline {
-			m.notify(false, "reconnecting to bw…")
+		if st := m.svc.Status(); st.State == core.Offline || st.SyncErr != nil {
+			m.notify(false, "checking the vault again…")
 		} else {
 			m.notify(false, "syncing vault…")
 		}
-		m.svc.Sync(m.ctx) // syncs vaults that are up, reconnects offline ones
+		m.svc.Sync(m.ctx) // syncs vaults that are up, retries unreachable ones
 	case "u":
 		if _, ok := m.svc.LockedVault(); ok {
 			m.modal = newUnlock(m)
@@ -653,6 +653,8 @@ func (l *hostList) listView(w, h int) []string {
 			msg = "bw is not logged in — press L to run `bw login`"
 		case len(snap.Hosts) == 0 && (st.State == core.Starting || st.State == core.Syncing):
 			msg = "loading…"
+		case len(snap.Hosts) == 0 && st.State == core.Crashed:
+			msg = "bw serve stopped, restarting it…"
 		case len(snap.Hosts) == 0 && st.State == core.Offline:
 			msg = "offline and no cache: " + errText(st.Err)
 		case len(snap.Hosts) > 0:

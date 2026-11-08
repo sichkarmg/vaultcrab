@@ -20,10 +20,20 @@ The service obtains the provider through `core.Options.Connect`
 
 - secrets are never written to the cache, the config, logs or scrollback;
 - secrets are not passed to other programs through argv or the environment
-  (the only exception is a `{password}` placeholder the user writes into a
-  command line themselves);
+  (the exceptions: a `{password}` placeholder the user writes into a command
+  line themselves, and the bw session key of a `bw serve` restarted after a
+  crash, see `internal/vault/session.go`);
 - `Snapshot` must be cheap to cache: Vaultcrab keeps it on disk for the
   offline mode.
+
+Optional methods the service uses when a provider has them:
+
+| Method | Purpose |
+|--------|---------|
+| `Done() <-chan struct{}` | Closed when the provider's process exits: the service connects again (with a growing delay if it keeps exiting). |
+| `ExitReason() string` | Why the process exited (one line for the event log). |
+| `Reachable(ctx) error` | Can the server be reached now? While it cannot, `Sync` is not called. |
+| `WipeSession()` | Forget what reopens the store without a password (on a deliberate stop). |
 
 Implemented: **Bitwarden / Vaultwarden** (`internal/vault`, talks to
 `bw serve` on 127.0.0.1). Planned: **gopass**.

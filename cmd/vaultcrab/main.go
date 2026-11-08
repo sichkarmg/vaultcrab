@@ -15,6 +15,7 @@ import (
 	"os/signal"
 	"path/filepath"
 	"runtime"
+	"sync"
 	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
@@ -258,28 +259,54 @@ func newVault(bw string, sp config.VaultSpec, base vault.ServeOptions, cacheDir 
 		}
 		return append(e, sp.Env...)
 	}
+	// The client of the last bw serve: a bw serve restarted after a crash
+	// gets its session key and so starts unlocked (see vault/session.go).
+	var (
+		mu   sync.Mutex
+		prev *vault.Client
+	)
 	return core.VaultOptions{
 		ID: sp.ID, Name: sp.Label(), Server: sp.Server,
 		Connect: func(ctx context.Context) (core.Source, func(), error) {
 			if sp.URL != "" {
-				return vault.NewClient(sp.URL), nil, nil
+				c := vault.NewClient(sp.URL)
+				c.Env = sp.Env
+				return c, nil, nil
 			}
 			if sp.DataDir != "" {
 				if err := os.MkdirAll(sp.DataDir, 0o700); err != nil {
 					return nil, nil, err
 				}
 			}
-			srv, err := vault.StartServer(ctx, opts)
+			o := opts
+			mu.Lock()
+			if prev != nil {
+				o.Session = prev.TakeSession()
+				prev = nil
+			}
+			mu.Unlock()
+			srv, err := vault.StartServer(ctx, o)
 			if err != nil {
+				secret.Zero(o.Session)
 				applog.Printf("%s: %v", who, err)
 				return nil, nil, err
 			}
-			applog.Printf("%s: started at %s", who, srv.URL)
+			c := vault.NewClient(srv.URL).WithServer(srv)
+			c.Env = sp.Env
+			if o.Session != nil {
+				c.AdoptSession(o.Session)
+				applog.Printf("%s: started at %s with the session of the previous bw serve", who, srv.URL)
+			} else {
+				applog.Printf("%s: started at %s", who, srv.URL)
+			}
+			mu.Lock()
+			prev = c
+			mu.Unlock()
 			stop := func() {
 				srv.Stop()
 				applog.Printf("%s: stopped", who)
 			}
-			return vault.NewClient(srv.URL).WithDone(srv.Done()), stop, nil
+			return c, stop, nil
 		},
 		Login: func() *exec.Cmd {
 			if sp.Server != "" {

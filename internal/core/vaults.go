@@ -80,9 +80,15 @@ type vaultConn struct {
 	s    *Service
 	opts VaultOptions
 
+	kick chan struct{} // check now (s, a wake-up); buffered
+
 	src       Source
 	release   func()
 	cancelRun context.CancelFunc
+	since     time.Time     // the current bw serve is up since
+	retries   int           // checks since the server or bw serve became unreachable
+	crashed   bool          // bw serve exited by itself and is being restarted
+	changed   chan struct{} // closed (and replaced) on every change
 	state     VaultState
 	lastErr   error
 	snap      model.Snapshot // as the vault has it (unprefixed IDs)
@@ -93,7 +99,9 @@ type vaultConn struct {
 	serverURL string
 }
 
-func newVaultConn(s *Service, o VaultOptions) *vaultConn { return &vaultConn{s: s, opts: o} }
+func newVaultConn(s *Service, o VaultOptions) *vaultConn {
+	return &vaultConn{s: s, opts: o, kick: make(chan struct{}, 1), changed: make(chan struct{})}
+}
 
 // status: with s.mu held.
 func (v *vaultConn) status() VaultStatus {
@@ -114,6 +122,8 @@ func (v *vaultConn) set(fn func()) {
 	s.mu.Lock()
 	st, syncErr := v.state, v.syncErr
 	fn()
+	close(v.changed)
+	v.changed = make(chan struct{})
 	who := "vault"
 	if len(s.vaults) > 1 {
 		who = "vault " + v.info().Label()
@@ -156,13 +166,18 @@ func (v *vaultConn) reconnect(ctx context.Context) {
 	v.startRun(ctx)
 }
 
+// stop closes the connection on purpose: the session key of the source is
+// forgotten (a later start is locked).
 func (v *vaultConn) stop() {
 	v.s.mu.Lock()
-	cancel, release := v.cancelRun, v.release
+	cancel, release, src := v.cancelRun, v.release, v.src
 	v.cancelRun, v.release, v.src = nil, nil, nil
 	v.s.mu.Unlock()
 	if cancel != nil {
 		cancel()
+	}
+	if w, ok := src.(interface{ WipeSession() }); ok {
+		w.WipeSession()
 	}
 	if release != nil {
 		release()
@@ -182,87 +197,172 @@ func (v *vaultConn) source() Source {
 	return v.src
 }
 
+// kickRun makes the run loop check the vault now (s, a wake-up).
+func (v *vaultConn) kickRun() {
+	select {
+	case v.kick <- struct{}{}:
+	default:
+	}
+}
+
+// backoff returns the delay before retry n (0, 1, ...): base doubled each
+// time up to limit.
+func backoff(base, limit time.Duration, n int) time.Duration {
+	d := base
+	for i := 0; i < n && d < limit; i++ {
+		d *= 2
+	}
+	return min(d, limit)
+}
+
+// run connects to the vault and keeps the connection: a bw serve that
+// exited is started again (with the session key of the old one, so it is
+// unlocked), a sync runs every SyncInterval, and while the server or bw
+// serve is unreachable the check is retried with a growing delay. One
+// timer, set to the next moment something is due: no periodic wake-ups
+// in between.
 func (v *vaultConn) run(ctx context.Context) {
-	o := v.s.opts
 	if v.opts.Connect == nil {
 		return
 	}
-	src, release, err := v.opts.Connect(ctx)
-	if err != nil {
-		if ctx.Err() == nil {
+	o := v.s.opts
+	for restarts := 0; ; restarts++ {
+		src, release, err := v.opts.Connect(ctx)
+		if ctx.Err() != nil {
+			if err == nil && release != nil {
+				release()
+			}
+			return
+		}
+		if err != nil {
 			st := Offline
 			if errors.Is(err, vault.ErrNotLoggedIn) {
-				st = NeedLogin // L runs bw login, then Reconnect
+				v.set(func() { v.state, v.lastErr = NeedLogin, err })
+				return // L runs bw login, then Reconnect
 			}
+			wait := backoff(o.RestartDelay, o.RetryLimit, restarts)
+			logf("%s: bw serve did not start: %v; next attempt in %s", v.who(), err, wait)
 			v.set(func() { v.state, v.lastErr = st, err })
+			if !v.sleep(ctx, wait) {
+				return
+			}
+			continue
 		}
-		return
-	}
-	v.s.mu.Lock()
-	if ctx.Err() != nil {
+		v.s.mu.Lock()
+		v.src, v.release = src, release
+		v.s.mu.Unlock()
+		if v.serve(ctx, src) {
+			return
+		}
+		// bw serve exited by itself
+		reason := ""
+		if r, ok := src.(interface{ ExitReason() string }); ok {
+			reason = r.ExitReason()
+		}
+		v.s.mu.Lock()
+		if v.src == src {
+			v.src, v.release = nil, nil
+		}
 		v.s.mu.Unlock()
 		if release != nil {
 			release()
 		}
-		return
-	}
-	v.src, v.release = src, release
-	v.s.mu.Unlock()
-	v.refresh(ctx)
-
-	t := time.NewTicker(o.SyncInterval)
-	defer t.Stop()
-	health := time.NewTicker(o.HealthInterval)
-	defer health.Stop()
-	retry := time.NewTicker(o.RetryInterval)
-	defer retry.Stop()
-	var died <-chan struct{}
-	if d, ok := src.(interface{ Done() <-chan struct{} }); ok {
-		died = d.Done()
-	}
-	for {
-		select {
-		case <-ctx.Done():
+		if reason == "" {
+			reason = "no error output"
+		}
+		if time.Since(v.servedSince()) > o.RetryLimit {
+			restarts = 0 // it ran a good while: not a crash loop
+		}
+		wait := time.Duration(0)
+		if restarts > 0 {
+			wait = backoff(o.RestartDelay, o.RetryLimit, restarts-1)
+		}
+		logf("%s: bw serve exited (%s); restarting it", v.who(), reason)
+		v.set(func() {
+			v.state, v.lastErr, v.crashed = Crashed, fmt.Errorf("%w: bw serve exited: %s", errServeDown, reason), true
+		})
+		if !v.sleep(ctx, wait) {
 			return
-		case <-died:
-			died = nil
-			v.fail(fmt.Errorf("%w: bw serve exited", vault.ErrUnavailable))
-		case <-t.C:
-			v.refresh(ctx)
-		case <-retry.C:
-			v.s.mu.Lock()
-			again := v.state == Online && v.syncErr != nil
-			v.s.mu.Unlock()
-			if again {
-				v.refresh(ctx) // the server may be back
-			}
-		case <-health.C:
-			v.checkHealth(ctx)
 		}
 	}
 }
 
-// checkHealth detects a vanished/locked vault between syncs and recovers
-// from transient outages.
-func (v *vaultConn) checkHealth(ctx context.Context) {
-	src := v.source()
-	if src == nil {
-		return
-	}
-	st, err := src.Status(ctx)
+// serve watches a connected source until ctx ends (true) or the bw serve
+// process exits (false).
+func (v *vaultConn) serve(ctx context.Context, src Source) bool {
 	v.s.mu.Lock()
-	cur := v.state
+	v.since = time.Now()
 	v.s.mu.Unlock()
-	switch {
-	case err != nil:
-		v.fail(err)
-	case cur == Offline || cur == Online && st.Status != vault.Unlocked:
+	v.refresh(ctx)
+	var died <-chan struct{}
+	if d, ok := src.(interface{ Done() <-chan struct{} }); ok {
+		died = d.Done()
+	}
+	t := time.NewTimer(v.nextCheck())
+	defer t.Stop()
+	for {
+		select {
+		case <-ctx.Done():
+			return true
+		case <-died:
+			return false
+		case <-v.kick:
+		case <-t.C:
+		}
 		v.refresh(ctx)
+		t.Reset(v.nextCheck())
 	}
 }
 
-// refresh checks the vault status and, if unlocked, syncs and reloads the
-// snapshot.
+func (v *vaultConn) servedSince() time.Time {
+	v.s.mu.Lock()
+	defer v.s.mu.Unlock()
+	return v.since
+}
+
+// sleep waits d (or a kick); false when ctx ended.
+func (v *vaultConn) sleep(ctx context.Context, d time.Duration) bool {
+	if d <= 0 {
+		return ctx.Err() == nil
+	}
+	t := time.NewTimer(d)
+	defer t.Stop()
+	select {
+	case <-ctx.Done():
+		return false
+	case <-t.C:
+	case <-v.kick:
+	}
+	return true
+}
+
+// nextCheck is the delay to the next refresh: the sync interval, or the
+// retry delay while bw serve or the server is unreachable.
+func (v *vaultConn) nextCheck() time.Duration {
+	o := v.s.opts
+	v.s.mu.Lock()
+	defer v.s.mu.Unlock()
+	switch {
+	case v.state == Offline || v.state == Online && v.syncErr != nil:
+		d := backoff(o.RetryInterval, o.RetryLimit, v.retries)
+		v.retries++
+		return d
+	}
+	v.retries = 0
+	return o.SyncInterval
+}
+
+func (v *vaultConn) who() string {
+	v.s.mu.Lock()
+	defer v.s.mu.Unlock()
+	if len(v.s.vaults) > 1 {
+		return "vault " + v.info().Label()
+	}
+	return "vault"
+}
+
+// refresh checks the vault status and, if unlocked, syncs (when the server
+// is reachable) and reloads the snapshot.
 func (v *vaultConn) refresh(ctx context.Context) {
 	src := v.source()
 	if src == nil {
@@ -280,21 +380,29 @@ func (v *vaultConn) refresh(ctx context.Context) {
 		return
 	case vault.Locked:
 		v.set(func() {
-			v.state, v.lastErr = Locked, nil
+			v.setLocked()
 			v.useCacheFor(st.Account())
 		})
 		return
 	}
-	v.set(func() { v.state = Syncing })
-	// A failed sync (server unreachable) still leaves bw's local copy
-	// usable: unlock, list and passwords work offline.
-	sctx, cancel := context.WithTimeout(ctx, v.s.opts.SyncTimeout)
-	syncErr := src.Sync(sctx)
-	cancel()
-	if syncErr != nil && ctx.Err() == nil && !errors.Is(syncErr, vault.ErrLocked) {
-		if _, err := src.Status(ctx); err != nil { // bw serve itself is gone
-			v.fail(err)
-			return
+	v.set(func() { v.state, v.lastErr = Syncing, nil })
+	// A sync while the server is unreachable would crash bw serve when its
+	// access token has to be refreshed (vault/session.go): it is not tried
+	// then. bw's local copy stays usable: unlock, list and passwords work
+	// offline.
+	var syncErr error
+	if p, ok := src.(interface{ Reachable(context.Context) error }); ok {
+		syncErr = p.Reachable(ctx)
+	}
+	if syncErr == nil {
+		sctx, cancel := context.WithTimeout(ctx, v.s.opts.SyncTimeout)
+		syncErr = src.Sync(sctx)
+		cancel()
+		if syncErr != nil && ctx.Err() == nil && !errors.Is(syncErr, vault.ErrLocked) {
+			if _, err := src.Status(ctx); err != nil { // bw serve itself is gone
+				v.fail(err)
+				return
+			}
 		}
 	}
 	snap, err := src.Snapshot(ctx)
@@ -306,9 +414,42 @@ func (v *vaultConn) refresh(ctx context.Context) {
 		_ = v.opts.Cache.Save(snap)
 	}
 	v.set(func() {
+		if v.syncErr != nil && syncErr == nil {
+			logf("%s: the server is reachable again, synced", v.who0())
+		}
+		if v.crashed {
+			logf("%s: bw serve restarted unlocked", v.who0())
+		}
 		v.snap, v.fromCache, v.account = snap, false, snap.Account
-		v.state, v.lastErr, v.syncErr = Online, nil, syncErr
+		v.state, v.lastErr, v.syncErr, v.crashed = Online, nil, syncErr, false
 	})
+}
+
+// setLocked moves the vault to Locked with the reason when vaultcrab did
+// not lock it; with s.mu held.
+func (v *vaultConn) setLocked() {
+	switch {
+	case v.crashed:
+		// restarted without a session key that still opens it
+		logf("%s: bw serve was restarted locked", v.who0())
+		v.lastErr = errLockedAfterCrash
+	case v.state == Online || v.state == Syncing:
+		// not by vaultcrab: `bw lock`, or a vault timeout of bw itself (bw
+		// serve 2026.10 has none)
+		logf("%s: bw reports the vault locked (bw lock, or a vault timeout of bw)", v.who0())
+		v.lastErr = errLockedByBW
+	case v.state != Locked:
+		v.lastErr = nil
+	}
+	v.state, v.crashed = Locked, false
+}
+
+// who0 is who with s.mu held.
+func (v *vaultConn) who0() string {
+	if len(v.s.vaults) > 1 {
+		return "vault " + v.info().Label()
+	}
+	return "vault"
 }
 
 // useCacheFor replaces a cache of another account; called with s.mu held.
@@ -326,12 +467,16 @@ func (v *vaultConn) useCacheFor(account string) {
 
 func (v *vaultConn) fail(err error) {
 	v.set(func() {
+		if errors.Is(err, vault.ErrLocked) {
+			v.setLocked()
+			return
+		}
 		v.lastErr = err
 		switch {
-		case errors.Is(err, vault.ErrLocked):
-			v.state = Locked
 		case errors.Is(err, vault.ErrUnavailable):
-			v.state = Offline
+			if v.state != Crashed {
+				v.state = Offline
+			}
 		default:
 			if v.state == Syncing || v.state == Starting {
 				v.state = Offline
@@ -343,14 +488,9 @@ func (v *vaultConn) fail(err error) {
 func (v *vaultConn) unlock(ctx context.Context, password []byte) error {
 	src := v.source()
 	if src == nil {
-		return ErrNotOnline
+		return v.notOnline()
 	}
-	who := "vault"
-	if len(v.s.vaultList()) > 1 {
-		v.s.mu.Lock()
-		who = "vault " + v.info().Label()
-		v.s.mu.Unlock()
-	}
+	who := v.who()
 	if err := src.Unlock(ctx, password); err != nil {
 		logf("%s: unlock failed: %v", who, err)
 		v.set(func() { v.lastErr = err })
@@ -361,16 +501,56 @@ func (v *vaultConn) unlock(ctx context.Context, password []byte) error {
 	return nil
 }
 
+// waitUp waits (up to d) while bw serve is being restarted.
+func (v *vaultConn) waitUp(ctx context.Context, d time.Duration) {
+	deadline := time.Now().Add(d)
+	for {
+		v.s.mu.Lock()
+		st, ch := v.state, v.changed
+		v.s.mu.Unlock()
+		if st != Crashed && st != Starting || time.Now().After(deadline) {
+			return
+		}
+		t := time.NewTimer(time.Until(deadline))
+		select {
+		case <-ctx.Done():
+			t.Stop()
+			return
+		case <-ch:
+		case <-t.C:
+		}
+		t.Stop()
+	}
+}
+
+// notOnline is the error for an operation that needs the unlocked vault,
+// saying why it is not available.
+func (v *vaultConn) notOnline() error {
+	v.s.mu.Lock()
+	defer v.s.mu.Unlock()
+	switch v.state {
+	case Locked:
+		return ErrVaultLocked
+	case NeedLogin:
+		return ErrVaultNeedLogin
+	case Crashed, Starting:
+		return ErrServeRestarting
+	}
+	return ErrServeUnreachable
+}
+
 func (v *vaultConn) secret(ctx context.Context, itemID string) (secret.Secret, error) {
+	v.waitUp(ctx, v.s.opts.RestartWait)
 	src := v.source()
 	if src == nil {
-		return secret.Secret{}, ErrNotOnline
+		return secret.Secret{}, v.notOnline()
 	}
 	sec, err := src.Secret(ctx, itemID)
 	if err != nil {
 		if errors.Is(err, vault.ErrLocked) || errors.Is(err, vault.ErrUnavailable) {
 			v.fail(err)
-			return secret.Secret{}, ErrNotOnline
+			logf("%s: no credential: %v", v.who(), err)
+			return secret.Secret{}, v.notOnline()
 		}
 		return secret.Secret{}, err
 	}
@@ -483,6 +663,14 @@ func (s *Service) LoginVault(id string) *exec.Cmd {
 		return v.loginCommand()
 	}
 	return nil
+}
+
+// SyncVault checks vault id now: syncs it if it is up, retries it if it
+// is unreachable; a running bw serve is not restarted.
+func (s *Service) SyncVault(id string) {
+	if v := s.vault(id); v != nil {
+		v.kickRun()
+	}
 }
 
 // ReconnectVault restarts the connection to vault id (after its login).

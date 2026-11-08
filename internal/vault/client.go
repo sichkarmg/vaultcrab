@@ -15,6 +15,7 @@ import (
 	"net/http"
 	"net/url"
 	"strings"
+	"sync"
 	"time"
 	"unicode/utf16"
 	"unicode/utf8"
@@ -61,18 +62,41 @@ var ErrLocked = errors.New("vault is locked")
 type Client struct {
 	BaseURL string // e.g. http://127.0.0.1:8087
 	HTTP    *http.Client
-	done    <-chan struct{}
+	// Env is the extra environment of bw (its proxy settings are used by
+	// Reachable); never secrets.
+	Env []string
+	// ProbeTimeout bounds Reachable (0 = 5 s).
+	ProbeTimeout time.Duration
+
+	srv     *Server
+	session sessionKey
+
+	mu        sync.Mutex
+	serverURL string // as bw reported it last
 }
 
-// WithDone attaches a channel closed when the server goes away (e.g.
-// Server.Done for a managed bw serve) and returns c.
-func (c *Client) WithDone(done <-chan struct{}) *Client {
-	c.done = done
+// WithServer attaches the managed bw serve of c (its exit is reported by
+// Done and ExitReason) and returns c.
+func (c *Client) WithServer(s *Server) *Client {
+	c.srv = s
 	return c
 }
 
 // Done is closed when the managed server exits; nil (never) otherwise.
-func (c *Client) Done() <-chan struct{} { return c.done }
+func (c *Client) Done() <-chan struct{} {
+	if c.srv == nil {
+		return nil
+	}
+	return c.srv.Done()
+}
+
+// ExitReason describes why the managed server exited ("" if unknown).
+func (c *Client) ExitReason() string {
+	if c.srv == nil {
+		return ""
+	}
+	return ExitReason(c.srv.stderrBytes())
+}
 
 // NewClient returns a client for the given base URL.
 func NewClient(base string) *Client {
@@ -162,6 +186,12 @@ func (c *Client) Status(ctx context.Context) (StatusInfo, error) {
 	if err := json.Unmarshal(data, &t); err != nil {
 		return StatusInfo{}, err
 	}
+	c.mu.Lock()
+	c.serverURL = t.Template.ServerURL
+	c.mu.Unlock()
+	if t.Template.Status != Unlocked {
+		c.WipeSession() // no longer opens the vault
+	}
 	return t.Template, nil
 }
 
@@ -175,12 +205,16 @@ func (c *Client) Unlock(ctx context.Context, password []byte) error {
 	body = append(body, '}')
 	defer secret.Zero(body)
 	data, err := c.do(ctx, http.MethodPost, "/unlock", body)
+	if err == nil {
+		c.session.set(sessionFrom(data)) // to restart a crashed bw serve unlocked
+	}
 	secret.Zero(data) // contains the session key
 	return err
 }
 
-// Lock locks the vault.
+// Lock locks the vault and forgets the session key.
 func (c *Client) Lock(ctx context.Context) error {
+	c.WipeSession()
 	_, err := c.do(ctx, http.MethodPost, "/lock", nil)
 	return err
 }

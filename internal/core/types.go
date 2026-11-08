@@ -60,6 +60,7 @@ type (
 	WidgetSpec     = widget.Spec
 	Appearance     = config.Appearance
 	VaultSpec      = config.VaultSpec
+	Unlock         = config.Unlock
 	Icon           = config.Icon
 	Launchers      = config.Launchers
 	Launch         = config.Launch
@@ -83,6 +84,9 @@ var (
 	PlaceholderOf = connect.VNCPlaceholder
 )
 
+// LongLockTimeout is the longest lock timeout without a warning.
+const LongLockTimeout = config.LongLockTimeout
+
 // WidgetClock is the built-in clock widget (WidgetSpec.Builtin).
 const WidgetClock = widget.BuiltinClock
 
@@ -95,6 +99,9 @@ var (
 	Selections      = config.Selections
 	SelectionColors = config.SelectionColors
 	SaveAppearance  = config.SaveAppearance
+	// The lock timeouts (Settings → Security).
+	LockTimeouts     = config.LockTimeouts
+	LockTimeoutLabel = config.LockTimeoutLabel
 	// Vaults in the config file (Settings → Vaults).
 	AddVaultConfig    = config.AddVault
 	RemoveVaultConfig = config.RemoveVault

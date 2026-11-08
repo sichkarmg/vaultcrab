@@ -84,7 +84,7 @@ func TestProgramsPage(t *testing.T) {
 
 	keys(m, ",")
 	s := m.modal.(*settingsModal)
-	keys(m, "tab", "tab")
+	keys(m, "tab", "tab", "tab")
 	if s.page != pagePrograms {
 		t.Fatalf("page %d", s.page)
 	}

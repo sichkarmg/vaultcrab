@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
@@ -76,6 +77,27 @@ func TestSettings(t *testing.T) {
 	if m.opt.ConfirmPaste || !strings.Contains(string(must(os.ReadFile(m.opt.ConfigPath))), "confirm_paste: false") {
 		t.Fatal("confirm_paste not turned off")
 	}
+
+	// Security: the lock timeout (default 8 hours); a longer one warns that
+	// the vault stays open to every program of the user
+	keys(m, "tab")
+	if v := ansi.Strip(m.View()); !strings.Contains(v, "Lock after no input for") || !strings.Contains(v, "[") && !strings.Contains(v, "8 hours") {
+		t.Fatalf("security:\n%s", v)
+	}
+	if v := ansi.Strip(m.View()); strings.Contains(v, "stays unlocked") {
+		t.Fatalf("warning with 8 hours:\n%s", v)
+	}
+	keys(m, "right")
+	if m.opt.Appearance.LockTimeout != "24h" || !strings.Contains(string(must(os.ReadFile(m.opt.ConfigPath))), "lock_timeout: 24h") {
+		t.Fatalf("lock_timeout %q", m.opt.Appearance.LockTimeout)
+	}
+	if p := m.svc.Policy(); p.Timeout != 24*time.Hour {
+		t.Fatalf("policy not applied: %+v", p)
+	}
+	if v := ansi.Strip(m.View()); !strings.Contains(v, "stays unlocked for 1 day") || !strings.Contains(v, "any program of your user account") {
+		t.Fatalf("no warning for 1 day:\n%s", v)
+	}
+	keys(m, "left")
 
 	// Vaults, then About (after External programs)
 	keys(m, "tab", "tab")

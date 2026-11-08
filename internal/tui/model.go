@@ -124,7 +124,7 @@ func New(ctx context.Context, svc *core.Service, opt Options) *Model {
 		}
 		m.opt.Appearance = core.Appearance{TabsBottom: opt.TabsBottom, IconMode: mode, SSHIcon: opt.Icons.Icon(core.IconSSH),
 			Accent: core.Accents[0].Name, Selection: core.Selections[0].Name, ShowTree: opt.ShowTree, ShowNotes: opt.ShowNotes, Widgets: opt.Widgets, ListWidth: opt.ListWidth, TabWidth: core.DefaultTabWidth, TabStatus: "icon",
-			ConfirmPaste: opt.ConfirmPaste, RestoreTabs: opt.RestoreTabs, RestoreView: opt.RestoreView}
+			ConfirmPaste: opt.ConfirmPaste, RestoreTabs: opt.RestoreTabs, RestoreView: opt.RestoreView, LockTimeout: "8h"}
 	}
 	setAccent(core.AccentColor(m.opt.Appearance.Accent))
 	setSelection(m.opt.Appearance.Selection)
@@ -171,6 +171,21 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 }
 
 func (m *Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
+	switch msg.(type) {
+	case tea.KeyMsg, tea.MouseMsg:
+		// user input: the auto-lock counts from here; after the lock timeout
+		// (a sleep counts) the vaults are locked first and the key opens
+		// the unlock dialog instead of doing what it would
+		if m.svc.Activity() {
+			if _, ok := msg.(tea.KeyMsg); ok {
+				if _, open := m.modal.(*unlockModal); !open {
+					m.unlockOffered = true
+					m.modal = newUnlock(m)
+				}
+				return m, nil
+			}
+		}
+	}
 	switch msg := msg.(type) {
 	case notesWaitMsg:
 		return m, m.notesWait(msg)

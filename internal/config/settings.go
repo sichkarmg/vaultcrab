@@ -35,6 +35,10 @@ type Appearance struct {
 	Log          bool // the event log (log.enabled)
 	RestoreTabs  bool
 	RestoreView  bool
+
+	// Security page
+	LockTimeout      string // unlock.lock_timeout
+	LockOnScreenLock bool   // unlock.lock_on_screen_lock
 }
 
 // SSHIcons are the icons offered for SSH items in the settings (the first
@@ -107,6 +111,9 @@ func (c *Config) Appearance() Appearance {
 		Log:          c.Log.Enabled,
 		RestoreTabs:  c.UI.RestoreTabs,
 		RestoreView:  c.UI.RestoreView,
+
+		LockTimeout:      c.Unlock.LockTimeout,
+		LockOnScreenLock: c.Unlock.LockOnScreenLock,
 	}
 }
 
@@ -175,6 +182,12 @@ func setAppearance(root *yaml.Node, old, a Appearance) {
 	}
 	if a.RestoreView != old.RestoreView {
 		setPath(root, []string{"ui", "restore_filters"}, boolean(a.RestoreView))
+	}
+	if a.LockTimeout != old.LockTimeout {
+		setPath(root, []string{"unlock", "lock_timeout"}, str(a.LockTimeout))
+	}
+	if a.LockOnScreenLock != old.LockOnScreenLock {
+		setPath(root, []string{"unlock", "lock_on_screen_lock"}, boolean(a.LockOnScreenLock))
 	}
 }
 

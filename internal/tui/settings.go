@@ -57,8 +57,36 @@ func setSelection(name string) {
 	stButton = sel.Bold(true)
 }
 
+// securityNotes explains the Security page and warns about weak choices.
+func securityNotes(m *Model, w int) string {
+	a := m.opt.Appearance
+	p := m.svc.Policy()
+	var b strings.Builder
+	wrap := func(st lipgloss.Style, text string) {
+		b.WriteString(st.Render(ansi.Wordwrap(text, w, " ")) + "\n")
+	}
+	b.WriteString("\n")
+	wrap(stDim, "The vaults are locked after this long without keyboard or mouse input in Vaultcrab; "+
+		"time asleep counts. A sleep of the computer by itself does not lock.")
+	if t := p.Timeout; t == 0 || t > core.LongLockTimeout {
+		what := "for " + core.LockTimeoutLabel(a.LockTimeout)
+		if t == 0 {
+			what = "until you lock it or quit"
+		}
+		wrap(stWarn, "! The vault stays unlocked "+what+". While it is unlocked, bw serve answers on "+
+			"127.0.0.1 without authentication: any program of your user account can read every password.")
+	}
+	if a.LockOnScreenLock && p.ScreenLockErr != nil {
+		wrap(stWarn, "! Screen locks are not detected here: "+p.ScreenLockErr.Error())
+	}
+	return b.String()
+}
+
 // applyAppearance changes the look of the running UI.
 func (m *Model) applyAppearance(a core.Appearance) {
+	if a.LockTimeout != m.opt.Appearance.LockTimeout || a.LockOnScreenLock != m.opt.Appearance.LockOnScreenLock {
+		m.svc.SetLockPolicy(core.Unlock{LockTimeout: a.LockTimeout, LockOnScreenLock: a.LockOnScreenLock})
+	}
 	if a.Log != m.opt.Appearance.Log && a.Log != m.svc.LogEnabled() {
 		if err := m.svc.SetLogging(a.Log); err != nil {
 			m.notify(true, "event log: %v", err)
@@ -114,12 +142,13 @@ type settingsModal struct {
 const (
 	pageAppearance = iota
 	pageBehavior
+	pageSecurity
 	pagePrograms
 	pageVaults
 	pageAbout
 )
 
-var settingsPages = []string{"Appearance", "Behavior", "External programs", "Vaults", "About"}
+var settingsPages = []string{"Appearance", "Behavior", "Security", "External programs", "Vaults", "About"}
 
 // newSettings opens the settings; the External programs page keeps its
 // draft between openings.
@@ -157,6 +186,26 @@ func (s *settingsModal) settings(m *Model) []setting {
 	switch s.page {
 	case pageAbout, pagePrograms, pageVaults:
 		return nil
+	case pageSecurity:
+		var labels []string
+		cur := -1
+		vals := []string{}
+		for i, t := range core.LockTimeouts {
+			labels, vals = append(labels, t.Label), append(vals, t.Value)
+			if t.Value == a.LockTimeout {
+				cur = i
+			}
+		}
+		if cur < 0 { // another duration from the config file
+			labels, vals = append(labels, core.LockTimeoutLabel(a.LockTimeout)), append(vals, a.LockTimeout)
+			cur = len(vals) - 1
+		}
+		return []setting{
+			{"Lock after no input for", labels, cur,
+				func(a *core.Appearance, i int) { a.LockTimeout = vals[i] }},
+			{"Lock with the screen", []string{"on", "off"}, onOff(a.LockOnScreenLock),
+				func(a *core.Appearance, i int) { a.LockOnScreenLock = i == 0 }},
+		}
 	case pageBehavior:
 		return []setting{
 			{"Confirm multi-line paste", []string{"on", "off"}, onOff(a.ConfirmPaste),
@@ -377,7 +426,7 @@ func (s *settingsModal) view(m *Model, w, h int) []string {
 		b.WriteString(s.prog.view(m, max(40, w-4-2*boxPadX), line))
 	case pageVaults:
 		b.WriteString(s.vp.view(m, max(40, w-4-2*boxPadX), line))
-	case pageAppearance, pageBehavior:
+	case pageAppearance, pageBehavior, pageSecurity:
 		rows := s.settings(m)
 		s.rowY, s.optSpans = s.rowY[:0], s.optSpans[:0]
 		const labelW = 25
@@ -411,6 +460,9 @@ func (s *settingsModal) view(m *Model, w, h int) []string {
 			s.rowY = append(s.rowY, line)
 			s.optSpans = append(s.optSpans, spans)
 			line++
+		}
+		if s.page == pageSecurity {
+			b.WriteString(securityNotes(m, max(40, w-4-2*boxPadX)))
 		}
 		b.WriteString("\n")
 		switch {

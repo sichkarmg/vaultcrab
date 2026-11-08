@@ -255,3 +255,54 @@ func TestDefaultWidgetsRun(t *testing.T) {
 		t.Errorf("custom widgets: %+v %v", c2.Widgets, err)
 	}
 }
+
+func TestUnlockConfig(t *testing.T) {
+	dir := t.TempDir()
+	load := func(y string) (Config, error) {
+		p := filepath.Join(dir, "c.yaml")
+		os.WriteFile(p, []byte(y), 0o600)
+		return Load(p)
+	}
+	c, err := load("ui: {accent: cyan}\n")
+	if err != nil || c.Unlock.LockTimeout != "8h" || c.Unlock.Timeout() != 8*time.Hour || c.Unlock.LockOnScreenLock {
+		t.Fatalf("default: %+v %v", c.Unlock, err)
+	}
+	c, err = load("unlock: {lock_timeout: never, lock_on_screen_lock: true}\n")
+	if err != nil || c.Unlock.Timeout() != 0 || !c.Unlock.LockOnScreenLock {
+		t.Fatalf("never: %+v %v", c.Unlock, err)
+	}
+	c, err = load("unlock: {lock_timeout: 72h}\n")
+	if err != nil || c.Unlock.Timeout() != 72*time.Hour {
+		t.Fatalf("72h: %+v %v", c.Unlock, err)
+	}
+	for _, bad := range []string{"10s", "soon", "-1h"} {
+		if _, err := load("unlock: {lock_timeout: " + bad + "}\n"); err == nil {
+			t.Errorf("lock_timeout %q accepted", bad)
+		}
+	}
+	for _, lt := range LockTimeouts {
+		if _, err := parseLockTimeout(lt.Value); err != nil {
+			t.Errorf("offered %q: %v", lt.Value, err)
+		}
+	}
+}
+
+func TestSaveUnlockSettings(t *testing.T) {
+	p := filepath.Join(t.TempDir(), "config.yaml")
+	os.WriteFile(p, []byte("# mine\nui: {accent: cyan}\n"), 0o600)
+	c, _ := Load(p)
+	old := c.Appearance()
+	a := old
+	a.LockTimeout, a.LockOnScreenLock = "24h", true
+	if err := SaveAppearance(p, old, a); err != nil {
+		t.Fatal(err)
+	}
+	c, err := Load(p)
+	if err != nil || c.Unlock.LockTimeout != "24h" || !c.Unlock.LockOnScreenLock {
+		t.Fatalf("%+v %v", c.Unlock, err)
+	}
+	b, _ := os.ReadFile(p)
+	if !strings.Contains(string(b), "# mine") {
+		t.Fatalf("comment lost:\n%s", b)
+	}
+}

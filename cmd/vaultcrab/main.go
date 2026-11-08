@@ -26,6 +26,7 @@ import (
 	"github.com/sichkarmg/vaultcrab/internal/connect"
 	"github.com/sichkarmg/vaultcrab/internal/core"
 	"github.com/sichkarmg/vaultcrab/internal/hostlist"
+	"github.com/sichkarmg/vaultcrab/internal/screenlock"
 	"github.com/sichkarmg/vaultcrab/internal/secret"
 	"github.com/sichkarmg/vaultcrab/internal/session"
 	"github.com/sichkarmg/vaultcrab/internal/spawn"
@@ -144,6 +145,7 @@ func run(cfg config.Config, load func(string) (config.Config, error)) error {
 		Login:        defVault.Login,
 		VaultName:    cfg.BW.Name,
 		NewVault:     func(sp config.VaultSpec) core.VaultOptions { return newVault(cfg.BW.Path, sp, serveOpts, cacheDir) },
+		ScreenLock:   screenlock.Watch,
 		Cache:        defVault.Cache,
 		SyncInterval: cfg.BW.SyncInterval,
 		SSH: connect.SSHOptions{

@@ -98,6 +98,7 @@ func (s *Service) newSSHSession(h model.Host, cols, rows int, vncSpec *connect.L
 		Secret:     sec,
 		Dial:       dial,
 		Notify:     s.emit,
+		Debug:      s.connDebug.Load,
 	})
 	s.sessions.mu.Lock()
 	s.sessions.list = append(s.sessions.list, sess)

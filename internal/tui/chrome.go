@@ -312,6 +312,8 @@ func (m *Model) statusBar() string {
 	switch {
 	case m.prefix:
 		right = " [" + m.opt.Prefix + "] "
+	case m.debugButton() != "":
+		right = m.debugButton()
 	case m.opt.Version != "" && m.w >= 60:
 		right = " Vaultcrab " + m.opt.Version + " "
 	}

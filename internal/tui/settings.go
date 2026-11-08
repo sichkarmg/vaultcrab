@@ -166,6 +166,9 @@ func (m *Model) applyAppearance(a core.Appearance) {
 			m.notify(true, "event log: %v", err)
 		}
 	}
+	if a.ConnDebug != m.opt.Appearance.ConnDebug {
+		m.svc.SetConnDebug(a.ConnDebug)
+	}
 	m.opt.Appearance = a
 	m.opt.TabsBottom = a.TabsBottom
 	m.opt.Icons = m.opt.Icons.With(a.IconMode, core.IconSSH, a.SSHIcon)
@@ -352,6 +355,8 @@ func (s *settingsModal) settings(m *Model) []setting {
 				func(a *core.Appearance, i int) { a.RestoreView = i == 0 }},
 			{"Event log", []string{"on", "off"}, onOff(a.Log),
 				func(a *core.Appearance, i int) { a.Log = i == 0 }},
+			{"Connection debug", []string{"on", "off"}, onOff(a.ConnDebug),
+				func(a *core.Appearance, i int) { a.ConnDebug = i == 0 }},
 		}
 	}
 	var icons []string

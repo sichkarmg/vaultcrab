@@ -351,6 +351,12 @@ rotated at 1 MiB). Passwords, typed keys and terminal output are never logged. W
 button in the tab bar (or prefix `g`) shows the log. `VAULTCRAB_DEBUG_LOG=/path/file` additionally
 logs mouse events and window sizes for debugging.
 
+**Connection debug** (Settings → Behavior, `ssh.debug`, on by default): every connection attempt is
+traced like `ssh -vvv` — name resolution, TCP, the server version, the host key and its check, the
+authentication methods offered (keys by type and fingerprint, never a password), the channel through
+a jump host, the PTY. When the attempt fails, the steps are shown in the pane; `y` or `[Copy debug]` at
+the right of the status bar copies them.
+
 Keys: `Enter` connect, `/` search, `x` scripts, `t` local shell, `j` through a jump host,
 `a`/`e`/`C`/`D` add/edit/copy/delete, `p` copy password, `?` help. Session commands use the prefix
 `Ctrl+B` (configurable): `|` and `-` split (the host of the current pane is offered first, so `Enter`

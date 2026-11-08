@@ -5,6 +5,7 @@ package tui
 import (
 	"context"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -37,9 +38,9 @@ func TestEventLogView(t *testing.T) {
 	s := m.modal.(*settingsModal)
 	s.page = pageBehavior
 	rows := s.settings(m)
-	r := len(rows) - 1
-	if rows[r].label != "Event log" {
-		t.Fatalf("last Behavior row %q", rows[r].label)
+	r := slices.IndexFunc(rows, func(x setting) bool { return x.label == "Event log" })
+	if r < 0 {
+		t.Fatal("no Event log row")
 	}
 	s.change(m, r, 0)
 	if !svc.LogEnabled() {

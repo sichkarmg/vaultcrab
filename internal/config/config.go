@@ -193,6 +193,9 @@ type SSH struct {
 	// LegacyAlgorithms allows weak algorithms as a last resort (old network
 	// devices, e.g. MikroTik RouterOS 6).
 	LegacyAlgorithms bool `yaml:"legacy_algorithms"`
+	// Debug records every connection attempt step by step (like ssh -vvv)
+	// and shows the steps in the pane when the connection fails.
+	Debug bool `yaml:"debug"`
 }
 
 // VaultView limits which organizations/collections are shown.
@@ -362,7 +365,7 @@ func Default() Config {
 		Jump:   JumpSettings{History: true, HistoryLimit: 200},
 		Terminal: Terminal{Scrollback: 10000, Term: "xterm-256color", ForwardMouse: true, CloseOnExit: true,
 			CopyOSC52: true, CopySystem: true, ConfirmPaste: true},
-		SSH: SSH{Timeout: 15 * time.Second, Handshake: 60 * time.Second, Keepalive: 15 * time.Second, LegacyAlgorithms: true},
+		SSH: SSH{Timeout: 15 * time.Second, Handshake: 60 * time.Second, Keepalive: 15 * time.Second, LegacyAlgorithms: true, Debug: true},
 		// One filter tab per connection type (with the type's icon); more
 		// examples (tags, fields, favorites) are in docs/config.example.yaml.
 		Filters:  schemeFilters(),

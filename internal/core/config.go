@@ -141,6 +141,7 @@ func (s *Service) ReloadConfig() error {
 		s.reconcileVaults(cfg.Vaults)
 		s.SetLockPolicy(cfg.Unlock)
 		s.jumpHist.Configure(cfg.Jump.HistoryLimit, cfg.Jump.History)
+		s.connDebug.Store(cfg.SSH.Debug)
 		if lerr := applyLog(cfg); lerr != nil {
 			logf("config: log: %v", lerr)
 		}

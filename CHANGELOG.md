@@ -8,6 +8,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- Connection debug (Settings → Behavior, `ssh.debug`, on by default): each attempt is traced like
+  `ssh -vvv` (DNS, TCP, versions, host key check, authentication methods, jump channel, PTY; no
+  secrets); a failed attempt shows the steps in its pane, `y` or `[Copy debug]` copies them.
 - Connections through a jump host (`j` in the host list, prefix `j` anywhere): a two-step picker,
   first the jump host (a template or any SSH host; used ones first, fuzzy search), then the target
   (an IP or `[user@]host[:port]` typed, a target used before, or a host of the list). Built-in SSH

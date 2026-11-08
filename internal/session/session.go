@@ -11,6 +11,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strings"
 	"sync"
 	"time"
 
@@ -68,6 +69,9 @@ type Options struct {
 	// Hold keeps the pane open after a clean exit (script output stays
 	// visible; Enter runs it again).
 	Hold bool
+	// Debug reports whether connection attempts are traced (ssh.debug): the
+	// steps are written into the terminal when the attempt fails.
+	Debug func() bool
 }
 
 // SSHDialer adapts connect.DialSSH.
@@ -98,6 +102,7 @@ type Session struct {
 	remote   Remote
 	cancel   context.CancelFunc
 	attempts int
+	debug    string // the trace of the last connection attempt
 	since    time.Time
 	exited   bool // the remote shell exited cleanly (status 0)
 }
@@ -201,11 +206,21 @@ func (s *Session) status(format string, args ...any) {
 
 func (s *Session) run(ctx context.Context) {
 	cctx, ccancel := context.WithTimeout(ctx, s.opts.Timeout)
+	var tr *connect.Trace
+	if s.opts.Debug != nil && s.opts.Debug() && s.Host.Scheme != model.Local {
+		tr = connect.NewTrace()
+		cctx = connect.WithTrace(cctx, tr)
+		tr.Add("%s: %s %s, attempt %d (timeout %s)", s.Host.Name, s.Host.Scheme, s.Host.Target(), s.Attempts(), s.opts.Timeout)
+	}
 	var sec secret.Secret
 	if s.opts.Secret != nil { // nil for a local shell
 		var err error
+		tr.Add("reading the credential from the vault")
 		if sec, err = s.opts.Secret(cctx); err != nil {
 			ccancel()
+			tr.Add("credential: %v", err)
+			s.setDebug(tr)
+			s.writeDebug(ctx, tr)
 			s.fail(ctx, fmt.Errorf("credential: %w", err))
 			return
 		}
@@ -214,7 +229,11 @@ func (s *Session) run(ctx context.Context) {
 	r, err := s.opts.Dial(cctx, s.Host, &sec, cols, rows)
 	sec.Wipe()
 	ccancel()
+	s.setDebug(tr)
 	if err != nil {
+		tr.Add("failed: %v", err)
+		s.setDebug(tr)
+		s.writeDebug(ctx, tr)
 		s.fail(ctx, err)
 		return
 	}
@@ -273,6 +292,38 @@ func (s *Session) run(ctx context.Context) {
 	s.exited = clean
 	s.mu.Unlock()
 	s.setState(Disconnected, cause)
+}
+
+func (s *Session) setDebug(tr *connect.Trace) {
+	if tr == nil {
+		return
+	}
+	s.mu.Lock()
+	s.debug = tr.String()
+	s.mu.Unlock()
+}
+
+// Debug returns the steps of the last connection attempt ("" without
+// ssh.debug). They hold no secret.
+func (s *Session) Debug() string {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.debug
+}
+
+// writeDebug shows the steps of a failed attempt in the terminal.
+func (s *Session) writeDebug(ctx context.Context, tr *connect.Trace) {
+	lines := tr.Lines()
+	if len(lines) == 0 || ctx.Err() != nil {
+		return
+	}
+	var b strings.Builder
+	b.WriteString("\r\n\x1b[0;2m--- connection debug (ssh.debug; y copies it) ---\r\n")
+	for _, l := range lines {
+		b.WriteString(strings.ReplaceAll(l, "\x1b", "^[") + "\r\n")
+	}
+	b.WriteString("---\x1b[0m")
+	s.Term.WriteString(b.String())
 }
 
 func (s *Session) fail(ctx context.Context, err error) {

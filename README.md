@@ -228,6 +228,39 @@ Settings → **Security** (`unlock:` in the config, applied at once):
   detection needs a build with cgo: the release binaries have it, a cross-built binary does not
   (the settings page says so). Without a graphical session (e.g. over ssh) locks are not seen.
 
+### Quick unlock: PIN
+
+Settings → Security → **PIN unlock**: enter the PIN twice, then the master password of an unlocked
+vault (bw checks it). The master password is kept encrypted in the secure store of the system — the
+macOS Keychain, the Windows Credential Manager (DPAPI) or the Linux Secret Service (GNOME Keyring,
+KWallet, KeePassXC); the config only gets `unlock.pin: true`. The unlock dialog then asks for the PIN
+(`Tab`: the master password).
+
+- At least 6 digits (`pin_alphanumeric: true` allows letters); a repeated digit or a plain sequence
+  is refused. The input is hidden.
+- Encryption: argon2id derives a key from the PIN (random salt, 256 MiB, 3 passes, about a second);
+  it encrypts (AES-256-GCM) an X25519 private key, and the master passwords are sealed to its public
+  key. So the stored copy is renewed after every unlock with the master password without the PIN.
+- Wrong PINs are counted in the secure store; after `pin_attempts` (default 5) in a row the stored
+  passwords and the PIN are deleted and the master password is needed.
+- The master password is asked again after a restart of the computer (`master_after_reboot`) and
+  every `master_every_days` days (default 14). A logout of bw, another account, or a password bw no
+  longer accepts (a changed master password) deletes the stored copy.
+- `p` on the Security page changes the PIN; `F` twice or **`vaultcrab forget`** deletes the PIN and
+  every stored master password (and the Touch ID data).
+- Secrets never go into argv, the environment, the log or the config; on Linux and macOS Vaultcrab
+  disables core dumps (on Linux the process is also closed to ptrace by other processes of the user).
+- Without a secure store (Linux without a Secret Service or with a locked keyring, Windows over SSH,
+  a macOS build without cgo) the PIN is not available, and the settings page says why.
+
+**Threat model, strongest first:**
+
+1. **Master password** — nothing is stored; as strong as the password and Bitwarden's KDF.
+2. **PIN** — weaker than the master password. The attempt limit only applies inside Vaultcrab:
+   someone who copies the secure store (a process of your account while the keyring is open, or a
+   backup) can try PINs offline without it; each try costs about a second of argon2id, and 6 digits
+   are a million candidates. Use a PIN only on your own computer, and prefer a long one.
+
 ## Configuration
 
 The config file is optional:

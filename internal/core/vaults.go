@@ -381,6 +381,7 @@ func (v *vaultConn) refresh(ctx context.Context) {
 	switch st.Status {
 	case vault.Unauthenticated:
 		v.set(func() { v.state, v.lastErr = NeedLogin, nil })
+		v.dropSealed("bw is logged out")
 		return
 	case vault.Locked:
 		v.set(func() {
@@ -495,15 +496,16 @@ func (v *vaultConn) unlock(ctx context.Context, password []byte) error {
 		return v.notOnline()
 	}
 	who := v.who()
+	pw := slices.Clone(password) // for the PIN; src.Unlock wipes password
+	defer secret.Zero(pw)
 	if err := src.Unlock(ctx, password); err != nil {
 		logf("%s: unlock failed: %v", who, err)
 		v.set(func() { v.lastErr = err })
 		return err
 	}
 	logf("%s: unlocked", who)
-	v.s.lock.mu.Lock()
-	v.s.lock.last = v.s.now() // the auto-lock counts from here
-	v.s.lock.mu.Unlock()
+	v.s.touch() // the auto-lock counts from here
+	v.sealAfterUnlock(pw)
 	v.refresh(ctx)
 	return nil
 }

@@ -4,6 +4,7 @@ package tui
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"sort"
 	"strings"
@@ -63,6 +64,10 @@ type unlockModal struct {
 	busy  bool
 	err   string
 	frame int // spinner frame while unlocking and syncing
+
+	pin     bool   // asking for the PIN (Tab: the master password)
+	pinOK   bool   // the PIN can unlock this vault
+	pinNote string // why the master password is needed although the PIN is on
 }
 
 // spinTickMsg advances the spinner of the unlock dialog.
@@ -90,8 +95,24 @@ func newUnlock(m *Model) *unlockModal {
 	in.Prompt = "> "
 	in.Focus()
 	v, _ := m.svc.LockedVault()
-	return &unlockModal{in: in, vault: v, many: len(m.svc.Vaults()) > 1}
+	u := &unlockModal{in: in, vault: v, many: len(m.svc.Vaults()) > 1}
+	q := m.svc.QuickUnlock(v.ID)
+	u.pinOK, u.pinNote = q.PIN, q.Why
+	u.setPIN(q.PIN)
+	return u
 }
+
+// setPIN switches the input between the PIN and the master password.
+func (u *unlockModal) setPIN(on bool) {
+	u.pin = on && u.pinOK
+	u.in.SetValue("")
+	u.in.Placeholder = "master password"
+	if u.pin {
+		u.in.Placeholder = "PIN"
+	}
+}
+
+type pinResultMsg struct{ err error }
 
 func (u *unlockModal) update(m *Model, msg tea.Msg) tea.Cmd {
 	switch msg := msg.(type) {
@@ -101,6 +122,21 @@ func (u *unlockModal) update(m *Model, msg tea.Msg) tea.Cmd {
 		}
 		u.frame++
 		return spinTick()
+	case pinResultMsg:
+		u.busy = false
+		switch {
+		case msg.err == nil:
+			return u.update(m, unlockResultMsg{})
+		case errors.Is(msg.err, core.ErrWrongPIN):
+			u.err = msg.err.Error()
+		default:
+			// too many wrong PINs, the master password is required, bw
+			// refused the stored one: on to the master password
+			u.err = msg.err.Error()
+			u.pinOK = false
+			u.setPIN(false)
+		}
+		return nil
 	case unlockResultMsg:
 		u.busy = false
 		if msg.err != nil {
@@ -122,6 +158,12 @@ func (u *unlockModal) update(m *Model, msg tea.Msg) tea.Cmd {
 			u.in.SetValue("")
 			m.modal = nil
 			return nil
+		case "tab":
+			if u.pinOK {
+				u.setPIN(!u.pin)
+				u.err = ""
+			}
+			return nil
 		case "enter":
 			pw := []byte(u.in.Value())
 			u.in.SetValue("")
@@ -130,6 +172,13 @@ func (u *unlockModal) update(m *Model, msg tea.Msg) tea.Cmd {
 			}
 			u.busy, u.err, u.frame = true, "", 0
 			svc, ctx, id := m.svc, m.ctx, u.vault.ID
+			if u.pin {
+				return tea.Batch(spinTick(), func() tea.Msg {
+					c, cancel := context.WithTimeout(ctx, 2*time.Minute)
+					defer cancel()
+					return pinResultMsg{err: svc.UnlockWithPIN(c, id, pw)} // wipes pw
+				})
+			}
 			return tea.Batch(spinTick(), func() tea.Msg {
 				c, cancel := context.WithTimeout(ctx, 2*time.Minute)
 				defer cancel()
@@ -151,6 +200,9 @@ func (u *unlockModal) view(m *Model, w, h int) []string {
 			frames = spinASCII
 		}
 		phase := "Unlocking " + u.what() + "…"
+		if u.pin {
+			phase = "Checking the PIN and unlocking " + u.what() + "…"
+		}
 		if m.svc.Status().State == core.Syncing {
 			phase = "Syncing " + u.what() + "…"
 		}
@@ -162,12 +214,23 @@ func (u *unlockModal) view(m *Model, w, h int) []string {
 		// why: bw serve was restarted, or bw locked it by itself
 		body += stWarn.Render(errText(u.vault.Err)) + "\n"
 	}
+	if u.pinNote != "" && !u.pin {
+		body += stDim.Render("PIN: "+u.pinNote) + "\n"
+	}
 	body += "\n" + u.in.View()
+	hint := "Enter: unlock · Esc: browse offline"
+	if u.pinOK {
+		other := "PIN"
+		if u.pin {
+			other = "master password"
+		}
+		hint = "Enter: unlock · Tab: " + other + " · Esc: browse offline"
+	}
 	switch {
 	case u.err != "":
-		body += "\n\n" + stErr.Render(u.err)
+		body += "\n\n" + stErr.Render(u.err) + "\n" + stDim.Render(hint)
 	default:
-		body += "\n\n" + stDim.Render("Enter: unlock · Esc: browse offline")
+		body += "\n\n" + stDim.Render(hint)
 	}
 	return m.box("Unlock", body, w)
 }

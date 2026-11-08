@@ -57,6 +57,57 @@ func setSelection(name string) {
 	stButton = sel.Bold(true)
 }
 
+// pinHook: turning the PIN on opens the dialog that sets it (the PIN is on
+// once it is set); turning it off deletes it and the stored passwords.
+func pinHook(m *Model, s *settingsModal, i int) bool {
+	if i == 0 { // on
+		if err := m.svc.KeystoreErr(); err != nil {
+			s.err = "PIN unlock needs a secure store: " + err.Error()
+			return true
+		}
+		m.modal = newPINModal(m, s)
+		return true
+	}
+	if err := m.svc.ForgetPIN(); err != nil {
+		s.err = "deleting the PIN: " + err.Error()
+		return true
+	}
+	return false // a.PIN = false, saved
+}
+
+// securityKey handles p (change the PIN) and F F (forget the stored
+// secrets) on the Security page.
+func (s *settingsModal) securityKey(m *Model, k string) (tea.Cmd, bool) {
+	if k != "F" {
+		s.forget = false
+	}
+	switch k {
+	case "p":
+		if !m.opt.Appearance.PIN {
+			return nil, false
+		}
+		m.modal = newPINModal(m, s)
+		return nil, true
+	case "F":
+		if !s.forget {
+			s.forget = true
+			s.status, s.err = "", "press F again to delete the PIN and the stored master passwords"
+			return nil, true
+		}
+		s.forget = false
+		if err := m.svc.ForgetPIN(); err != nil {
+			s.err = "forget: " + err.Error()
+			return nil, true
+		}
+		a := m.opt.Appearance
+		a.PIN = false
+		s.apply(m, a)
+		s.status = "the PIN and the stored master passwords were deleted"
+		return nil, true
+	}
+	return nil, false
+}
+
 // securityNotes explains the Security page and warns about weak choices.
 func securityNotes(m *Model, w int) string {
 	a := m.opt.Appearance
@@ -79,13 +130,27 @@ func securityNotes(m *Model, w int) string {
 	if a.LockOnScreenLock && p.ScreenLockErr != nil {
 		wrap(stWarn, "! Screen locks are not detected here: "+p.ScreenLockErr.Error())
 	}
+	switch {
+	case a.PIN && !m.svc.HasPIN():
+		wrap(stWarn, "! PIN unlock is on but no PIN is set: choose on again to set it.")
+	case a.PIN:
+		wrap(stWarn, "! The PIN is weaker than the master password. The master password is kept in "+
+			m.svc.KeystoreName()+", encrypted with a key derived from the PIN. The attempt limit applies to Vaultcrab; "+
+			"someone who copies that store can try PINs without it (each try costs about a second of argon2id). "+
+			"Unlock with the PIN only on your own computer.")
+		wrap(stDim, "p: change PIN · F F: delete the PIN and the stored master passwords (also: vaultcrab forget)")
+	case m.svc.KeystoreErr() != nil:
+		wrap(stDim, "PIN unlock is not available: "+m.svc.KeystoreErr().Error())
+	default:
+		wrap(stDim, "PIN unlock keeps the master password in "+m.svc.KeystoreName()+" for a PIN of at least 6 digits.")
+	}
 	return b.String()
 }
 
 // applyAppearance changes the look of the running UI.
 func (m *Model) applyAppearance(a core.Appearance) {
-	if a.LockTimeout != m.opt.Appearance.LockTimeout || a.LockOnScreenLock != m.opt.Appearance.LockOnScreenLock {
-		m.svc.SetLockPolicy(core.Unlock{LockTimeout: a.LockTimeout, LockOnScreenLock: a.LockOnScreenLock})
+	if a.Unlock() != m.opt.Appearance.Unlock() {
+		m.svc.SetLockPolicy(a.Unlock())
 	}
 	if a.Log != m.opt.Appearance.Log && a.Log != m.svc.LogEnabled() {
 		if err := m.svc.SetLogging(a.Log); err != nil {
@@ -137,6 +202,8 @@ type settingsModal struct {
 
 	prog *programsPage // the External programs page
 	vp   vaultsPage    // the Vaults page
+
+	forget bool // F pressed once on the Security page
 }
 
 const (
@@ -166,6 +233,12 @@ type setting struct {
 	opts  []string // as shown
 	cur   int
 	set   func(a *core.Appearance, i int)
+}
+
+// rowHooks run before a row changes (by label); true = handled, its set is
+// not called.
+var rowHooks = map[string]func(m *Model, s *settingsModal, i int) bool{
+	"PIN unlock": pinHook,
 }
 
 var (
@@ -200,12 +273,43 @@ func (s *settingsModal) settings(m *Model) []setting {
 			labels, vals = append(labels, core.LockTimeoutLabel(a.LockTimeout)), append(vals, a.LockTimeout)
 			cur = len(vals) - 1
 		}
-		return []setting{
-			{"Lock after no input for", labels, cur,
-				func(a *core.Appearance, i int) { a.LockTimeout = vals[i] }},
-			{"Lock with the screen", []string{"on", "off"}, onOff(a.LockOnScreenLock),
-				func(a *core.Appearance, i int) { a.LockOnScreenLock = i == 0 }},
+		rows := []setting{
+			{label: "Lock after no input for", opts: labels, cur: cur,
+				set: func(a *core.Appearance, i int) { a.LockTimeout = vals[i] }},
+			{label: "Lock with the screen", opts: []string{"on", "off"}, cur: onOff(a.LockOnScreenLock),
+				set: func(a *core.Appearance, i int) { a.LockOnScreenLock = i == 0 }},
+			{label: "PIN unlock", opts: []string{"on", "off"}, cur: onOff(a.PIN),
+				set: func(a *core.Appearance, i int) { a.PIN = i == 0 }},
 		}
+		if !a.PIN {
+			return rows
+		}
+		attempts := []int{3, 5, 10}
+		days := []int{7, 14, 30}
+		intOpts := func(vs []int, cur int, unit string) ([]string, int, []int) {
+			vs = slices.Clone(vs)
+			if !slices.Contains(vs, cur) {
+				vs = append(vs, cur)
+				slices.Sort(vs)
+			}
+			var l []string
+			for _, v := range vs {
+				l = append(l, strconv.Itoa(v)+unit)
+			}
+			return l, slices.Index(vs, cur), vs
+		}
+		al, ac, av := intOpts(attempts, a.PINAttempts, "")
+		dl, dc, dv := intOpts(days, a.MasterEveryDays, " days")
+		return append(rows,
+			setting{label: "PIN characters", opts: []string{"digits", "letters and digits"}, cur: map[bool]int{false: 0, true: 1}[a.PINAlphanumeric],
+				set: func(a *core.Appearance, i int) { a.PINAlphanumeric = i == 1 }},
+			setting{label: "Wrong PINs allowed", opts: al, cur: ac,
+				set: func(a *core.Appearance, i int) { a.PINAttempts = av[i] }},
+			setting{label: "Master password at restart", opts: []string{"on", "off"}, cur: onOff(a.MasterAfterBoot),
+				set: func(a *core.Appearance, i int) { a.MasterAfterBoot = i == 0 }},
+			setting{label: "Master password every", opts: dl, cur: dc,
+				set: func(a *core.Appearance, i int) { a.MasterEveryDays = dv[i] }},
+		)
 	case pageBehavior:
 		return []setting{
 			{"Confirm multi-line paste", []string{"on", "off"}, onOff(a.ConfirmPaste),
@@ -308,9 +412,17 @@ func (s *settingsModal) change(m *Model, r, i int) {
 	if r < 0 || r >= len(rows) || i < 0 || i >= len(rows[r].opts) || i == rows[r].cur {
 		return
 	}
-	old := m.opt.Appearance
-	a := old
+	if h := rowHooks[rows[r].label]; h != nil && h(m, s, i) {
+		return // handled (e.g. a dialog opened)
+	}
+	a := m.opt.Appearance
 	rows[r].set(&a, i)
+	s.apply(m, a)
+}
+
+// apply applies a and saves what changed to the config file.
+func (s *settingsModal) apply(m *Model, a core.Appearance) {
+	old := m.opt.Appearance
 	m.applyAppearance(a)
 	s.status, s.err = "", ""
 	if m.opt.ConfigPath == "" {
@@ -341,6 +453,11 @@ func (s *settingsModal) update(m *Model, msg tea.Msg) tea.Cmd {
 	}
 	rows := s.settings(m)
 	n := len(rows)
+	if s.page == pageSecurity {
+		if cmd, handled := s.securityKey(m, k.String()); handled {
+			return cmd
+		}
+	}
 	switch k.String() {
 	case "esc", "q", "enter", ",":
 		m.modal = nil

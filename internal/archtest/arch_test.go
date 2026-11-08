@@ -63,3 +63,21 @@ func TestTUIUsesOnlyCore(t *testing.T) {
 		}
 	}
 }
+
+// The packages that hold the PIN, the stored master passwords and the
+// secure store of the system run no programs: their secrets cannot end up
+// on a command line or in the environment of a child.
+func TestSecretStoresRunNoPrograms(t *testing.T) {
+	all := imports(t)
+	for _, pkg := range []string{"../keystore", "../quickunlock"} {
+		ims, ok := all[pkg]
+		if !ok {
+			t.Fatalf("%s not found", pkg)
+		}
+		for _, im := range ims {
+			if im == "os/exec" || im == "syscall" && pkg != "../keystore" {
+				t.Errorf("%s imports %s", pkg, im)
+			}
+		}
+	}
+}

@@ -21,6 +21,7 @@ import (
 // Errors of Touch ID, for the UI.
 var (
 	ErrTouchCanceled    = biometric.ErrCanceled
+	ErrTouchTimeout     = biometric.ErrTimeout
 	ErrTouchUnsupported = biometric.ErrUnsupported
 	ErrBiometryChanged  = quickunlock.ErrBiometryChanged
 )

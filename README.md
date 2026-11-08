@@ -270,6 +270,9 @@ Settings → Security → **Touch ID** (`unlock.touch_id`): the master password 
 once; if Touch ID is not available, canceled, not recognized or **the enrolled fingerprints changed**
 (the stored data is then deleted), it falls back to the PIN and then to the master password. The
 reboot and N-days rules of the PIN apply too; `vaultcrab forget` deletes the Touch ID data.
+**Enter** on the empty input (or **Ctrl+T**) asks for Touch ID again from the same dialog. A dialog
+that opened by itself while you were away (the auto-lock fired during a sleep) waits for Enter
+instead of showing a prompt nobody would see.
 
 **Weaker model than a signed app.** Vaultcrab is not signed with an Apple Developer ID, so its
 Keychain item cannot carry a biometric access control of the Data Protection Keychain. Vaultcrab

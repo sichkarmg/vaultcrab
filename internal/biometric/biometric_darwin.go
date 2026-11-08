@@ -137,10 +137,13 @@ func (system) Authenticate(ctx context.Context, reason string) error {
 	}()
 	select {
 	case <-ctx.Done():
+		if errors.Is(ctx.Err(), context.DeadlineExceeded) {
+			return ErrTimeout
+		}
 		return ctx.Err()
 	case code := <-done:
 		if code == -2 {
-			return ErrCanceled
+			return ErrTimeout
 		}
 		return mapErr(code)
 	}

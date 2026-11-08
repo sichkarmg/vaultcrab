@@ -93,6 +93,7 @@ type Model struct {
 	lastClick     time.Time
 	lastClickKey  string
 	unlockOffered bool
+	lastInput     time.Time // the last key or mouse event (wall clock)
 	quitting      bool
 	discardTabs   bool // quit without saving the open tabs
 
@@ -114,6 +115,7 @@ func New(ctx context.Context, svc *core.Service, opt Options) *Model {
 	}
 	m := &Model{svc: svc, opt: opt, ctx: ctx, keymap: map[string]string{}, g: unicodeGlyphs, wake: time.NewTimer(time.Hour)}
 	m.wake.Stop()
+	m.lastInput = time.Now().Round(0)
 	if opt.Icons.ASCII() {
 		m.g = asciiGlyphs
 	}
@@ -177,6 +179,7 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 func (m *Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg.(type) {
 	case tea.KeyMsg, tea.MouseMsg:
+		m.lastInput = time.Now().Round(0)
 		// user input: the auto-lock counts from here; after the lock timeout
 		// (a sleep counts) the vaults are locked first and the key opens
 		// the unlock dialog instead of doing what it would

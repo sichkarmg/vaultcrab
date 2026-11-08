@@ -16,6 +16,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   logind), Windows (session lock), macOS (`com.apple.screenIsLocked`, needs cgo). A sleep by itself
   does not lock.
 
+- Quick unlock with a PIN (Settings → Security → PIN unlock): the master password is kept in the
+  macOS Keychain / Windows Credential Manager / Linux Secret Service, encrypted with an argon2id key of
+  the PIN; 5 wrong PINs (`pin_attempts`) delete it; the master password is required again after a
+  restart and every 14 days; a logout or a changed master password deletes it; change the PIN with
+  `p`. The README describes why a PIN is weaker than the master password.
+- `vaultcrab forget` deletes the PIN and every stored master password.
+- No core dumps on Linux and macOS (and no ptrace by other processes of the user on Linux).
+
 ### Changed
 - The macOS release binaries are built natively on a macOS runner with cgo (for the screen lock
   detection); Linux and Windows stay static without cgo. The macOS CI job uploads native test

@@ -95,6 +95,14 @@ unlock:                    # locking the vaults (Settings → Security; applied 
   lock_on_screen_lock: false # also lock when the screen is locked (a closed lid that locks the screen);
                            # Linux: D-Bus screensaver / logind, Windows: session lock, macOS: needs a
                            # build with cgo (the releases). A sleep by itself never locks
+  pin: false               # quick unlock with a PIN; turn it on in Settings → Security (that sets the PIN).
+                           # The PIN and the master passwords are kept in the secure store of the system
+                           # (macOS Keychain, Windows Credential Manager, Linux Secret Service), never here.
+                           # Weaker than the master password: see the README
+  pin_alphanumeric: false  # letters too (default: at least 6 digits)
+  pin_attempts: 5          # wrong PINs in a row (3..10) delete the stored passwords and the PIN
+  master_after_reboot: true # ask for the master password after a restart of the computer
+  master_every_days: 14    # and every this many days (1..90)
 
 local:                     # local terminal (t in the host list, prefix + t anywhere)
   shell:                   # empty = $SHELL (Linux/macOS); pwsh, powershell or %ComSpec% (Windows)

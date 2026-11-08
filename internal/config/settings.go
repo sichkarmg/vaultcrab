@@ -39,6 +39,18 @@ type Appearance struct {
 	// Security page
 	LockTimeout      string // unlock.lock_timeout
 	LockOnScreenLock bool   // unlock.lock_on_screen_lock
+	PIN              bool   // unlock.pin
+	PINAlphanumeric  bool   // unlock.pin_alphanumeric
+	PINAttempts      int    // unlock.pin_attempts
+	MasterAfterBoot  bool   // unlock.master_after_reboot
+	MasterEveryDays  int    // unlock.master_every_days
+}
+
+// Unlock is the unlock: section the Security page edits.
+func (a Appearance) Unlock() Unlock {
+	return Unlock{LockTimeout: a.LockTimeout, LockOnScreenLock: a.LockOnScreenLock, PIN: a.PIN,
+		PINAlphanumeric: a.PINAlphanumeric, PINAttempts: a.PINAttempts, MasterAfterReboot: a.MasterAfterBoot,
+		MasterEveryDays: a.MasterEveryDays}
 }
 
 // SSHIcons are the icons offered for SSH items in the settings (the first
@@ -114,6 +126,11 @@ func (c *Config) Appearance() Appearance {
 
 		LockTimeout:      c.Unlock.LockTimeout,
 		LockOnScreenLock: c.Unlock.LockOnScreenLock,
+		PIN:              c.Unlock.PIN,
+		PINAlphanumeric:  c.Unlock.PINAlphanumeric,
+		PINAttempts:      c.Unlock.PINAttempts,
+		MasterAfterBoot:  c.Unlock.MasterAfterReboot,
+		MasterEveryDays:  c.Unlock.MasterEveryDays,
 	}
 }
 
@@ -188,6 +205,22 @@ func setAppearance(root *yaml.Node, old, a Appearance) {
 	}
 	if a.LockOnScreenLock != old.LockOnScreenLock {
 		setPath(root, []string{"unlock", "lock_on_screen_lock"}, boolean(a.LockOnScreenLock))
+	}
+	integer := func(v int) *yaml.Node { return &yaml.Node{Kind: yaml.ScalarNode, Tag: "!!int", Value: strconv.Itoa(v)} }
+	if a.PIN != old.PIN {
+		setPath(root, []string{"unlock", "pin"}, boolean(a.PIN))
+	}
+	if a.PINAlphanumeric != old.PINAlphanumeric {
+		setPath(root, []string{"unlock", "pin_alphanumeric"}, boolean(a.PINAlphanumeric))
+	}
+	if a.PINAttempts != old.PINAttempts {
+		setPath(root, []string{"unlock", "pin_attempts"}, integer(a.PINAttempts))
+	}
+	if a.MasterAfterBoot != old.MasterAfterBoot {
+		setPath(root, []string{"unlock", "master_after_reboot"}, boolean(a.MasterAfterBoot))
+	}
+	if a.MasterEveryDays != old.MasterEveryDays {
+		setPath(root, []string{"unlock", "master_every_days"}, integer(a.MasterEveryDays))
 	}
 }
 

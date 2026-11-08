@@ -18,8 +18,10 @@ import (
 	"github.com/sichkarmg/vaultcrab/internal/connect"
 	"github.com/sichkarmg/vaultcrab/internal/filter"
 	"github.com/sichkarmg/vaultcrab/internal/hostlist"
+	"github.com/sichkarmg/vaultcrab/internal/keystore"
 	"github.com/sichkarmg/vaultcrab/internal/launchers"
 	"github.com/sichkarmg/vaultcrab/internal/model"
+	"github.com/sichkarmg/vaultcrab/internal/quickunlock"
 	"github.com/sichkarmg/vaultcrab/internal/scripts"
 	"github.com/sichkarmg/vaultcrab/internal/secret"
 	"github.com/sichkarmg/vaultcrab/internal/session"
@@ -149,6 +151,18 @@ type Options struct {
 	ScreenLock func(ctx context.Context, onLock func()) error
 	// Now is the wall clock (tests); time.Now by default.
 	Now func() time.Time
+
+	// Keystore is the secure store of the system for the quick unlock
+	// (internal/keystore); nil = none (KeystoreErr says why).
+	Keystore    keystore.Store
+	KeystoreErr error
+	// BootID identifies the boot of the system (quickunlock.BootID).
+	BootID func() string
+	// PINKDF overrides the argon2id parameters of a new PIN (tests).
+	PINKDF quickunlock.KDF
+	// ForgetExtra names further items of the store that ForgetPIN deletes
+	// (Touch ID).
+	ForgetExtra []string
 }
 
 // Service is safe for concurrent use.

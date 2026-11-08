@@ -124,7 +124,8 @@ func New(ctx context.Context, svc *core.Service, opt Options) *Model {
 		}
 		m.opt.Appearance = core.Appearance{TabsBottom: opt.TabsBottom, IconMode: mode, SSHIcon: opt.Icons.Icon(core.IconSSH),
 			Accent: core.Accents[0].Name, Selection: core.Selections[0].Name, ShowTree: opt.ShowTree, ShowNotes: opt.ShowNotes, Widgets: opt.Widgets, ListWidth: opt.ListWidth, TabWidth: core.DefaultTabWidth, TabStatus: "icon",
-			ConfirmPaste: opt.ConfirmPaste, RestoreTabs: opt.RestoreTabs, RestoreView: opt.RestoreView, LockTimeout: "8h"}
+			ConfirmPaste: opt.ConfirmPaste, RestoreTabs: opt.RestoreTabs, RestoreView: opt.RestoreView, LockTimeout: "8h",
+			PINAttempts: 5, MasterAfterBoot: true, MasterEveryDays: 14}
 	}
 	setAccent(core.AccentColor(m.opt.Appearance.Accent))
 	setSelection(m.opt.Appearance.Selection)
@@ -208,7 +209,7 @@ func (m *Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.resizeSessions()
 		m.restoreWorkspace()
 		return m, nil
-	case unlockResultMsg, loginDoneMsg, launchResultMsg:
+	case unlockResultMsg, pinResultMsg, pinSetMsg, loginDoneMsg, launchResultMsg:
 		return m, m.handleResult(msg)
 	case vaultLoginDoneMsg:
 		if msg.err != nil {
@@ -530,7 +531,7 @@ func (m *Model) handleResult(msg tea.Msg) tea.Cmd {
 		} else {
 			m.notify(false, "%s opened in external %s client", msg.host.Name, msg.host.Scheme)
 		}
-	case unlockResultMsg, loginDoneMsg:
+	case unlockResultMsg, pinResultMsg, pinSetMsg, loginDoneMsg:
 		if m.modal != nil {
 			return m.modal.update(m, msg)
 		}

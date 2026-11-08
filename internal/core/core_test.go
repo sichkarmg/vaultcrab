@@ -24,6 +24,7 @@ type fakeSource struct {
 	secrets  map[string]string
 	syncErr  error // the server is unreachable, bw works from its local copy
 	syncHang bool
+	password string // "" = "master"
 }
 
 func (f *fakeSource) Status(context.Context) (vault.StatusInfo, error) {
@@ -37,7 +38,15 @@ func (f *fakeSource) Status(context.Context) (vault.StatusInfo, error) {
 func (f *fakeSource) Unlock(_ context.Context, pw []byte) error {
 	f.mu.Lock()
 	defer f.mu.Unlock()
-	if string(pw) != "master" {
+	want := f.password
+	if want == "" {
+		want = "master"
+	}
+	ok := string(pw) == want
+	for i := range pw {
+		pw[i] = 0 // like vault.Client
+	}
+	if !ok {
 		return errors.New("Invalid master password.")
 	}
 	f.status = vault.Unlocked

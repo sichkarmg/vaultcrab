@@ -26,6 +26,8 @@ import (
 	"github.com/sichkarmg/vaultcrab/internal/connect"
 	"github.com/sichkarmg/vaultcrab/internal/core"
 	"github.com/sichkarmg/vaultcrab/internal/hostlist"
+	"github.com/sichkarmg/vaultcrab/internal/keystore"
+	"github.com/sichkarmg/vaultcrab/internal/quickunlock"
 	"github.com/sichkarmg/vaultcrab/internal/screenlock"
 	"github.com/sichkarmg/vaultcrab/internal/secret"
 	"github.com/sichkarmg/vaultcrab/internal/session"
@@ -47,10 +49,18 @@ func main() {
 	showVersion := flag.Bool("version", false, "print version and exit")
 	cfgPath := flag.String("config", "", "config file (default: <user config dir>/vaultcrab/config.yaml)")
 	ascii := flag.Bool("ascii", false, "use ASCII icons")
+	flag.Usage = func() {
+		fmt.Fprintf(flag.CommandLine.Output(), "usage: vaultcrab [flags]\n       vaultcrab forget   delete the PIN and the master passwords kept for the quick unlock\n\nflags:\n")
+		flag.PrintDefaults()
+	}
 	flag.Parse()
 	if *showVersion {
 		fmt.Println("vaultcrab", version)
 		return
+	}
+	harden() // no core dumps (the master password is in memory while unlocking)
+	if flag.Arg(0) == "forget" {
+		os.Exit(forget(*cfgPath))
 	}
 	if *cfgPath == "" {
 		offerMigration()
@@ -138,6 +148,7 @@ func run(cfg config.Config, load func(string) (config.Config, error)) error {
 			}
 		}
 	}
+	ks, ksErr := keystore.Open()
 	defVault := newVault(cfg.BW.Path, config.VaultSpec{Name: cfg.BW.Name, DataDir: cfg.BW.DataDir, Env: cfg.BW.Env, URL: cfg.BW.URL},
 		serveOpts, cacheDir)
 	svc := core.New(core.Options{
@@ -146,6 +157,9 @@ func run(cfg config.Config, load func(string) (config.Config, error)) error {
 		VaultName:    cfg.BW.Name,
 		NewVault:     func(sp config.VaultSpec) core.VaultOptions { return newVault(cfg.BW.Path, sp, serveOpts, cacheDir) },
 		ScreenLock:   screenlock.Watch,
+		Keystore:     ks,
+		KeystoreErr:  ksErr,
+		BootID:       quickunlock.BootID,
 		Cache:        defVault.Cache,
 		SyncInterval: cfg.BW.SyncInterval,
 		SSH: connect.SSHOptions{
@@ -399,3 +413,37 @@ func (s spawner) Start(argv, env []string) (vault.Process, error) {
 func launcher(cfg config.Config) *connect.Launcher {
 	return &connect.Launcher{Specs: core.LaunchSpecs(cfg), Fallbacks: connect.DefaultFallbacks()}
 }
+
+// forget deletes the PIN and every stored master password (vaultcrab
+// forget): also for vaults no longer in the config, and the data of Touch
+// ID.
+func forget(cfgPath string) int {
+	ks, err := keystore.Open()
+	if err != nil {
+		fmt.Fprintln(os.Stderr, "vaultcrab forget:", err)
+		return 1
+	}
+	keys := []string{"vault/default"}
+	if cfg, err := config.Load(cfgPath); err == nil {
+		for _, v := range cfg.Vaults {
+			keys = append(keys, "vault/"+v.ID)
+		}
+	}
+	keys = append(keys, forgetExtra(keys)...)
+	m := quickunlock.Manager{Store: ks}
+	had := m.HasPIN() || len(m.Vaults()) > 0
+	if err := m.Forget(keys...); err != nil {
+		fmt.Fprintln(os.Stderr, "vaultcrab forget:", err)
+		return 1
+	}
+	if had {
+		fmt.Printf("Deleted the PIN and the stored master passwords from %s.\n", ks.Name())
+	} else {
+		fmt.Printf("Nothing stored in %s (checked the PIN and the vaults of the config).\n", ks.Name())
+	}
+	fmt.Println("Unlock with the master password from now on; Settings → Security sets a new PIN.")
+	return 0
+}
+
+// forgetExtra names the Touch ID items of the vault items keys.
+func forgetExtra(keys []string) []string { return nil }

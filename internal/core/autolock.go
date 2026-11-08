@@ -35,6 +35,7 @@ type autoLock struct {
 	watching bool  // the screen lock watcher runs
 	watchErr error // why it does not
 	enabled  bool  // events of the watcher lock (lock_on_screen_lock)
+	unlock   config.Unlock
 }
 
 // LockPolicy is the auto-lock in effect.
@@ -61,7 +62,7 @@ func (s *Service) initAutoLock() {
 	if s.opts.Config != nil {
 		u = s.opts.Config.Unlock
 	}
-	a.timeout, a.onScreen = u.Timeout(), u.LockOnScreenLock
+	a.timeout, a.onScreen, a.unlock = u.Timeout(), u.LockOnScreenLock, u
 }
 
 func (s *Service) kickAutoLock() {
@@ -91,8 +92,17 @@ func (s *Service) Policy() LockPolicy {
 func (s *Service) SetLockPolicy(u config.Unlock) {
 	a := &s.lock
 	a.mu.Lock()
+	if u.PINAttempts == 0 || u.MasterEveryDays == 0 { // not from a loaded config
+		d := config.DefaultUnlock()
+		if u.PINAttempts == 0 {
+			u.PINAttempts = d.PINAttempts
+		}
+		if u.MasterEveryDays == 0 {
+			u.MasterEveryDays = d.MasterEveryDays
+		}
+	}
 	changed := a.timeout != u.Timeout() || a.onScreen != u.LockOnScreenLock
-	a.timeout, a.onScreen = u.Timeout(), u.LockOnScreenLock
+	a.timeout, a.onScreen, a.unlock = u.Timeout(), u.LockOnScreenLock, u
 	a.enabled = a.onScreen
 	start := a.onScreen && !a.watching && a.watchErr == nil
 	a.mu.Unlock()

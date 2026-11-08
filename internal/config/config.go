@@ -349,7 +349,7 @@ func Default() Config {
 			},
 		},
 		Icons:  Icons{Mode: "auto"},
-		Unlock: Unlock{LockTimeout: DefaultLockTimeout},
+		Unlock: DefaultUnlock(),
 		Terminal: Terminal{Scrollback: 10000, Term: "xterm-256color", ForwardMouse: true, CloseOnExit: true,
 			CopyOSC52: true, CopySystem: true, ConfirmPaste: true},
 		SSH: SSH{Timeout: 15 * time.Second, Handshake: 60 * time.Second, Keepalive: 15 * time.Second, LegacyAlgorithms: true},

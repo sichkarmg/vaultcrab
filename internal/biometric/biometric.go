@@ -26,6 +26,9 @@ var (
 	ErrUnavailable = errors.New("Touch ID is not available or no fingerprint is enrolled")
 	// ErrCanceled: the user canceled the prompt (or chose the password).
 	ErrCanceled = errors.New("Touch ID was canceled")
+	// ErrTimeout: nobody touched the sensor in time (e.g. the prompt
+	// appeared while the Mac was asleep).
+	ErrTimeout = errors.New("Touch ID timed out: nobody touched the sensor")
 	// ErrFailed: the fingerprint was not recognized.
 	ErrFailed = errors.New("Touch ID did not recognize the fingerprint")
 	// ErrLockout: too many failed attempts; macOS wants the login password.

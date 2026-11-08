@@ -71,6 +71,19 @@ type unlockModal struct {
 
 	touch        bool // Touch ID prompt shown
 	touchPending bool // ask for Touch ID first (started by startTouch)
+	touchOK      bool // Touch ID can unlock this vault (Enter on an empty input, Ctrl+T)
+}
+
+// touchAwayAfter: a dialog that opens on its own (the auto-lock fired, bw
+// locked the vault) this long after the last key or mouse event does not
+// ask for Touch ID at once: nobody may be at the Mac (it may be asleep), and
+// the prompt would time out. Enter or Ctrl+T asks for it then.
+const touchAwayAfter = 30 * time.Second
+
+// present reports whether the user gave input recently (wall clock: a sleep
+// counts).
+func (m *Model) present() bool {
+	return time.Now().Round(0).Sub(m.lastInput) < touchAwayAfter
 }
 
 // spinTickMsg advances the spinner of the unlock dialog.
@@ -102,7 +115,8 @@ func newUnlock(m *Model) *unlockModal {
 	q := m.svc.QuickUnlock(v.ID)
 	u.pinOK, u.pinNote = q.PIN, q.Why
 	u.setPIN(q.PIN)
-	u.touchPending = q.TouchID
+	u.touchOK = q.TouchID
+	u.touchPending = q.TouchID && m.present()
 	return u
 }
 
@@ -149,12 +163,15 @@ func (u *unlockModal) update(m *Model, msg tea.Msg) tea.Cmd {
 		if msg.err == nil {
 			return u.update(m, unlockResultMsg{})
 		}
-		// canceled, not recognized, unavailable, changed fingerprints: on
-		// to the PIN (if it can) or the master password
+		// canceled, timed out, not recognized, unavailable, changed
+		// fingerprints: on to the PIN (if it can) or the master password;
+		// Enter on the empty input or Ctrl+T asks for Touch ID again while
+		// it can still unlock
 		u.err = msg.err.Error()
-		if errors.Is(msg.err, core.ErrBiometryChanged) || errors.Is(msg.err, core.ErrMasterRequired) {
-			u.pinOK = u.pinOK && !errors.Is(msg.err, core.ErrMasterRequired)
+		if errors.Is(msg.err, core.ErrMasterRequired) {
+			u.pinOK = false
 		}
+		u.touchOK = m.svc.QuickUnlock(u.vault.ID).TouchID
 		u.setPIN(u.pinOK)
 		return nil
 	case pinResultMsg:
@@ -199,10 +216,18 @@ func (u *unlockModal) update(m *Model, msg tea.Msg) tea.Cmd {
 				u.err = ""
 			}
 			return nil
+		case "ctrl+t":
+			if u.touchOK {
+				u.touchPending, u.err = true, "" // startTouch asks
+			}
+			return nil
 		case "enter":
 			pw := []byte(u.in.Value())
 			u.in.SetValue("")
 			if len(pw) == 0 {
+				if u.touchOK {
+					u.touchPending, u.err = true, ""
+				}
 				return nil
 			}
 			u.busy, u.err, u.frame = true, "", 0
@@ -255,14 +280,18 @@ func (u *unlockModal) view(m *Model, w, h int) []string {
 		body += stDim.Render("PIN: "+u.pinNote) + "\n"
 	}
 	body += "\n" + u.in.View()
-	hint := "Enter: unlock · Esc: browse offline"
+	hint := "Enter: unlock"
+	if u.touchOK && u.in.Value() == "" {
+		hint = "Enter: Touch ID"
+	}
 	if u.pinOK {
 		other := "PIN"
 		if u.pin {
 			other = "master password"
 		}
-		hint = "Enter: unlock · Tab: " + other + " · Esc: browse offline"
+		hint += " · Tab: " + other
 	}
+	hint += " · Esc: browse offline"
 	switch {
 	case u.err != "":
 		body += "\n\n" + stErr.Render(u.err) + "\n" + stDim.Render(hint)

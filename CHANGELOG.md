@@ -24,7 +24,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Touch ID on macOS (Settings → Security → Touch ID, `unlock.touch_id`): asked first, then the PIN,
   then the master password; changed fingerprints delete its data; the README explains why this
   variant (an unsigned app) is weaker than a biometric Keychain item of a signed app. Ignored on Linux
-  and Windows.
+  and Windows. Enter on the empty input (or Ctrl+T) asks for Touch ID again in the unlock dialog; a
+  dialog that opened by itself while nobody was at the Mac (auto-lock during a sleep) waits for Enter
+  before showing the prompt, and a prompt nobody touched says it timed out.
 - `vaultcrab forget` deletes the PIN, the Touch ID data and every stored master password.
 - No core dumps on Linux and macOS (and no ptrace by other processes of the user on Linux).
 

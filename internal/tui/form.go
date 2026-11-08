@@ -67,6 +67,22 @@ type hostForm struct {
 	notesLoaded bool
 	notesOrig   string
 	notesErr    string
+
+	// the password shown (Ctrl+R or [Show]): what is typed, or the current
+	// password of the item read from the vault (shown, never put into the
+	// field: a saved key keeps its lines)
+	pwShow    bool
+	pwCur     string // the current password ("" = not read)
+	pwReading bool
+	pwErr     string
+	pwRow     int // dialog row of the password field (mouse)
+	pwBtnX    int // dialog column of [Show]/[Hide]
+}
+
+type formPasswordMsg struct {
+	id   string
+	text string
+	err  error
 }
 
 const notesHeight = 4
@@ -284,6 +300,20 @@ func (f *hostForm) update(m *Model, msg tea.Msg) tea.Cmd {
 		m.notify(false, "saved %s", r.name)
 		return nil
 	}
+	if r, ok := msg.(formPasswordMsg); ok {
+		f.pwReading = false
+		if r.id == f.pwSource() && f.pwShow {
+			if r.err != nil {
+				f.pwErr = r.err.Error()
+			} else {
+				f.pwCur = r.text
+				if f.pwCur == "" {
+					f.pwErr = "the item has no password"
+				}
+			}
+		}
+		return nil
+	}
 	if r, ok := msg.(formNotesMsg); ok {
 		if r.id == f.notesFrom && !f.notesLoaded {
 			if r.err != nil {
@@ -324,8 +354,13 @@ func (f *hostForm) update(m *Model, msg tea.Msg) tea.Cmd {
 	switch k.String() {
 	case "esc":
 		f.in[fPassword].SetValue("")
+		f.hidePassword()
 		m.modal = nil
 		return nil
+	case "ctrl+r":
+		if f.focus == fPassword {
+			return f.togglePassword(m)
+		}
 	case "tab", "down":
 		f.move(1)
 		return nil
@@ -432,6 +467,7 @@ func (f *hostForm) save(m *Model) tea.Cmd {
 		return nil
 	}
 	f.in[fPassword].SetValue("")
+	f.hidePassword()
 	f.busy, f.err, f.frame = true, "", 0
 	id, folder, svc, ctx := f.id, strings.TrimSpace(f.in[fFolder].Value()), m.svc, m.ctx
 	return tea.Batch(spinTick(), func() tea.Msg {
@@ -440,6 +476,79 @@ func (f *hostForm) save(m *Model) tea.Cmd {
 		_, err := svc.SaveHost(c, id, e, folder) // wipes e.Password
 		return formSavedMsg{name: e.Name, err: err}
 	})
+}
+
+// pwSource is the item whose current password [Show] reads: the edited
+// item, or the copied one ("" for a new item).
+func (f *hostForm) pwSource() string {
+	if f.id != "" {
+		return f.id
+	}
+	return f.copyOf
+}
+
+// togglePassword shows or hides the password: what is typed, and, while
+// nothing is typed, the current password of the item from the vault.
+func (f *hostForm) togglePassword(m *Model) tea.Cmd {
+	if f.pwShow {
+		f.hidePassword()
+		return nil
+	}
+	f.pwShow, f.pwErr = true, ""
+	f.in[fPassword].EchoMode = textinput.EchoNormal
+	id := f.pwSource()
+	if id == "" || f.pwCur != "" {
+		return nil
+	}
+	f.pwReading = true
+	svc, ctx := m.svc, m.ctx
+	return func() tea.Msg {
+		c, cancel := context.WithTimeout(ctx, 30*time.Second)
+		defer cancel()
+		sec, err := svc.Secret(c, id)
+		if err != nil {
+			return formPasswordMsg{id: id, err: err}
+		}
+		text := string(sec.Value) // shown in the form: a string
+		sec.Wipe()
+		return formPasswordMsg{id: id, text: text}
+	}
+}
+
+// hidePassword masks the field and forgets the current password read.
+func (f *hostForm) hidePassword() {
+	f.pwShow, f.pwCur, f.pwErr, f.pwReading = false, "", "", false
+	f.in[fPassword].EchoMode = textinput.EchoPassword
+}
+
+// currentPassword renders the current password of the item below the
+// field: a private key by its first line and the number of lines.
+func (f *hostForm) currentPassword(m *Model) string {
+	switch {
+	case f.pwErr != "":
+		return stErr.Render(f.pwErr)
+	case f.pwReading:
+		return stDim.Render("reading the password" + m.g.ell)
+	case f.pwCur == "":
+		return ""
+	}
+	text := strings.ReplaceAll(f.pwCur, "\x1b", "^[")
+	if lines := strings.Split(strings.TrimSpace(strings.ReplaceAll(text, "\r", "")), "\n"); len(lines) > 1 || strings.Contains(text, "PRIVATE KEY") {
+		return stDim.Render("current: ") + lines[0] + stDim.Render(fmt.Sprintf(" … (a private key, %d lines)", len(lines)))
+	}
+	return stDim.Render("current: ") + text
+}
+
+// mouse: [Show]/[Hide] next to the password.
+func (f *hostForm) mouse(m *Model, msg tea.MouseMsg, x, y int) tea.Cmd {
+	if f.busy || msg.Action != tea.MouseActionPress || msg.Button != tea.MouseButtonLeft {
+		return nil
+	}
+	if y == f.pwRow && x >= f.pwBtnX && x < f.pwBtnX+8 {
+		f.setFocus(fPassword)
+		return f.togglePassword(m)
+	}
+	return nil
 }
 
 // busyView shows the progress of saving instead of the fields, like the
@@ -516,6 +625,18 @@ func (f *hostForm) view(m *Model, w, h int) []string {
 				lines := strings.Split(f.notes.View(), "\n")
 				val = strings.Join(lines, "\n"+strings.Repeat(" ", 14))
 			}
+		case fPassword:
+			f.in[i].Width = max(20, min(52, w-32))
+			btn := "[Show]"
+			if f.pwShow {
+				btn = "[Hide]"
+			}
+			f.pwRow = boxPadY + boxTitleGap + strings.Count(b.String(), "\n")
+			f.pwBtnX = boxPadX + 14 + f.in[i].Width + 3
+			val = padRight(f.in[i].View(), f.in[i].Width+2) + " " + stButton.Render(btn)
+			if cur := f.currentPassword(m); cur != "" {
+				val += "\n" + strings.Repeat(" ", 14) + cur
+			}
 		default:
 			f.in[i].Width = max(20, min(60, w-24))
 			val = f.in[i].View()
@@ -534,6 +655,8 @@ func (f *hostForm) view(m *Model, w, h int) []string {
 		b.WriteString(stErr.Render(f.err))
 	case f.focus == fNotes:
 		b.WriteString(stDim.Render("Notes: Enter new line · Tab: next field · Ctrl+S: save · Esc: cancel"))
+	case f.focus == fPassword:
+		b.WriteString(stDim.Render("Ctrl+R or [Show]: show / hide the password · Tab: next field · Enter/Ctrl+S: save · Esc: cancel"))
 	default:
 		b.WriteString(stDim.Render("Tab/Up/Down: field · Left/Right: choose · Enter/Ctrl+S: save · Esc: cancel"))
 	}

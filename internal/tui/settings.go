@@ -440,6 +440,12 @@ func (s *settingsModal) settings(m *Model) []setting {
 			func(a *core.Appearance, i int) { a.TabWidth = tws[i] }},
 		{"Tab status", tabStatuses, max(0, slices.Index(tabStatuses, a.TabStatus)),
 			func(a *core.Appearance, i int) { a.TabStatus = tabStatuses[i] }},
+		{"Close button on a tab", []string{"on", "off"}, onOff(a.TabCloseButton),
+			func(a *core.Appearance, i int) { a.TabCloseButton = i == 0 }},
+		{"Click on status closes", []string{"on", "off"}, onOff(a.TabStatusClose),
+			func(a *core.Appearance, i int) { a.TabStatusClose = i == 0 }},
+		{"Group tabs of a host", []string{"on", "off"}, onOff(a.GroupTabs),
+			func(a *core.Appearance, i int) { a.GroupTabs = i == 0 }},
 	}
 }
 

@@ -367,6 +367,12 @@ move focus, `z` zoom, `[` scrollback, `x` close pane, `&` close the tab with all
 tab each pane header has a `✕` button that closes just that pane; `Ctrl+D`
 closes a broken or finished pane (`Enter` reconnects it).
 
+**Tab bar** (Settings → Appearance): `✕` on the active tab closes it, connected or not
+(`ui.tab_close_button`, on); a click on the state icon or number of a tab closes it, the active tab
+after a confirmation (`ui.tab_status_close`, off); the tabs of one host are grouped into one entry
+`N:host ×3 ▸` — a click opens the group (a `▾ host ×3` header followed by its tabs), a click on the
+header folds it again (`ui.group_tabs`, on). Tab numbers and keys still address every tab.
+
 ## External clients (VNC, SMB, SFTP, …)
 
 Clients are configured per scheme and OS under `external:` or in Settings → External programs,

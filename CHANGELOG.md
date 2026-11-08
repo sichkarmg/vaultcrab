@@ -8,6 +8,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- Tab bar (Settings → Appearance): `✕` on the active tab closes it, connected or not
+  (`ui.tab_close_button`, on); a click on the state icon or number closes a tab, the active one after a
+  confirmation (`ui.tab_status_close`, off); the tabs of one host are grouped into one entry that opens
+  and folds on a click (`ui.group_tabs`, on).
 - Connection debug (Settings → Behavior, `ssh.debug`, on by default): each attempt is traced like
   `ssh -vvv` (DNS, TCP, versions, host key check, authentication methods, jump channel, PTY; no
   secrets); a failed attempt shows the steps in its pane, `y` or `[Copy debug]` copies them.

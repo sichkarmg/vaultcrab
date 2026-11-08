@@ -4,6 +4,7 @@ package tui
 
 import (
 	"fmt"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -44,46 +45,126 @@ func (m *Model) sessionIcon(s *core.Session) string {
 	return m.stateIcon(st)
 }
 
-// tabLabels returns the rendered labels of all tabs (index 0 = host list).
-func (m *Model) tabLabels() []string {
-	labels := make([]string, 0, len(m.tabs)+1)
+// barItem is an entry of the tab bar: the host list, a session tab, or a
+// group of the tabs of one host (collapsed: one entry; open: a header
+// followed by its tabs).
+type barItem struct {
+	label   string
+	tab     int    // the tab (0 = host list); of a collapsed group, the tab it shows
+	group   string // the host of a group entry ("" = a plain tab)
+	header  bool   // the header of an open group
+	members []int  // the tabs of a group
+	status  [2]int // the x range (relative) of the state icon and number
+	close   [2]int // the x range (relative) of the close button ([0 0] = none)
+}
+
+// groupKey groups tabs: the host of the focused pane.
+func (t *tab) groupKey() string { return t.focused().Host.ID }
+
+// tabItems returns the entries of the tab bar (index 0 = host list).
+func (m *Model) tabItems() []barItem {
 	hosts := fmt.Sprintf(" 0:%s ", "Hosts")
 	if m.parked != nil {
 		hosts = " 0:Hosts " + m.ascii("✎") + " " // a dialog waits there
 	}
+	st := stTabInactive
 	if m.active == 0 {
-		labels = append(labels, stTabActive.Render(hosts))
-	} else {
-		labels = append(labels, stTabInactive.Render(hosts))
+		st = stTabActive
 	}
+	items := []barItem{{label: st.Render(hosts), tab: 0}}
+	count := map[string]int{}
+	if m.opt.Appearance.GroupTabs {
+		for _, t := range m.tabs {
+			count[t.groupKey()]++
+		}
+	}
+	seen := map[string]bool{}
 	for i, t := range m.tabs {
-		title := []rune(t.title(m.g))
-		if tw := m.tabWidth(); ansi.StringWidth(string(title)) > tw {
-			title = []rune(ansi.Truncate(string(title), tw, m.g.ell))
-		}
-		zoom := ""
-		if t.zoomed() {
-			zoom = m.opt.Icons.Get(core.IconZoom)
-		}
-		base := stTabInactive
-		if i+1 == m.active {
-			base = stTabActive
-		}
-		if m.opt.Appearance.TabStatus == "color" {
-			// the number in the state color instead of an icon
-			num := base
-			if c, ok := t.stateColor(i+1 == m.active); ok {
-				num = base.Foreground(c)
-			}
-			labels = append(labels, base.Render(" ")+num.Render(strconv.Itoa(i+1))+
-				base.Render(fmt.Sprintf(":%s%s ", string(title), zoom)))
+		k := t.groupKey()
+		if count[k] < 2 {
+			items = append(items, m.tabItem(i+1, ""))
 			continue
 		}
-		// the state icon first, outside the highlight of the active tab
-		plain := fmt.Sprintf(" %d:%s%s ", i+1, string(title), zoom)
-		labels = append(labels, " "+t.icon(m, i+1 == m.active)+base.Render(plain))
+		if seen[k] {
+			continue
+		}
+		seen[k] = true
+		var members []int
+		for j, u := range m.tabs {
+			if u.groupKey() == k {
+				members = append(members, j+1)
+			}
+		}
+		if m.openGroups[k] {
+			title := ansi.Truncate(sessionTitle(t.focused(), m.g), m.tabWidth(), m.g.ell)
+			h := stTabBar.Render(fmt.Sprintf(" %s %s ×%d ", m.ascii("▾"), title, len(members)))
+			items = append(items, barItem{label: h, tab: members[0], group: k, header: true, members: members})
+			for _, n := range members {
+				items = append(items, m.tabItem(n, ""))
+			}
+			continue
+		}
+		shown := members[0]
+		if slices.Contains(members, m.active) {
+			shown = m.active
+		}
+		it := m.tabItem(shown, fmt.Sprintf(" ×%d %s", len(members), m.ascii("▸")))
+		it.group, it.members = k, members
+		items = append(items, it)
 	}
-	return labels
+	return items
+}
+
+// tabItem renders the entry of tab n (1-based); more follows the title (a
+// collapsed group).
+func (m *Model) tabItem(n int, more string) barItem {
+	t := m.tabs[n-1]
+	active := n == m.active
+	title := t.title(m.g)
+	if tw := m.tabWidth(); ansi.StringWidth(title) > tw {
+		title = ansi.Truncate(title, tw, m.g.ell)
+	}
+	zoom := ""
+	if t.zoomed() {
+		zoom = m.opt.Icons.Get(core.IconZoom)
+	}
+	base := stTabInactive
+	if active {
+		base = stTabActive
+	}
+	num := strconv.Itoa(n)
+	it := barItem{tab: n}
+	var head string
+	if m.opt.Appearance.TabStatus == "color" {
+		// the number in the state color instead of an icon
+		ns := base
+		if c, ok := t.stateColor(active); ok {
+			ns = base.Foreground(c)
+		}
+		head = base.Render(" ") + ns.Render(num) + base.Render(":")
+	} else {
+		// the state icon first, outside the highlight of the active tab
+		head = " " + t.icon(m, active) + base.Render(" "+num+":")
+	}
+	it.status = [2]int{0, ansi.StringWidth(head)}
+	label := head + base.Render(title+zoom+more+" ")
+	if active && m.opt.Appearance.TabCloseButton {
+		x := ansi.StringWidth(label)
+		btn := m.ascii("✕")
+		label += stQuit.Render(btn) + " "
+		it.close = [2]int{x, x + ansi.StringWidth(btn) + 1}
+	}
+	it.label = label
+	return it
+}
+
+// tabLabels returns the rendered labels of the tab bar entries.
+func (m *Model) tabLabels() []string {
+	var out []string
+	for _, it := range m.tabItems() {
+		out = append(out, it.label)
+	}
+	return out
 }
 
 // tabWidth is the longest tab title (Settings → Tab width, ui.tab_width).
@@ -143,7 +224,15 @@ func (m *Model) buttonAt(x int) string {
 // session tabs after it scroll, first being the first one shown (a ‹ marks
 // hidden ones).
 func (m *Model) tabSpans() (labels []string, starts []int, first int) {
-	labels = m.tabLabels()
+	items := m.tabItems()
+	labels = make([]string, len(items))
+	activeItem := 0
+	for i, it := range items {
+		labels[i] = it.label
+		if it.tab == m.active && !it.header && (m.active == 0) == (i == 0) {
+			activeItem = i
+		}
+	}
 	widths := make([]int, len(labels))
 	for i, l := range labels {
 		widths[i] = ansi.StringWidth(l) + 1 // separator
@@ -151,12 +240,12 @@ func (m *Model) tabSpans() (labels []string, starts []int, first int) {
 	more := ansi.StringWidth(m.g.more)
 	// Scroll so the active tab fits.
 	first = 1
-	for first < m.active {
+	for first < activeItem {
 		x := widths[0]
 		if first > 1 {
 			x += more
 		}
-		for i := first; i <= m.active; i++ {
+		for i := first; i <= activeItem; i++ {
 			x += widths[i]
 		}
 		if x <= m.tabsWidth() {
@@ -205,18 +294,28 @@ func (m *Model) tabBar() string {
 	return padRight(b.String(), m.tabsWidth()) + logBtn + sep + stKey.Render(m.settingsButton()) + sep + stQuit.Render(m.quitButton())
 }
 
-// tabAt returns the tab index at column x of the tab bar, or -1.
+// tabAt returns the tab at column x of the tab bar (0 = host list), or -1;
+// a collapsed group gives the tab it shows.
 func (m *Model) tabAt(x int) int {
+	if it, _, ok := m.itemAt(x); ok {
+		return it.tab
+	}
+	return -1
+}
+
+// itemAt returns the tab bar entry at column x and x relative to it.
+func (m *Model) itemAt(x int) (barItem, int, bool) {
 	labels, starts, _ := m.tabSpans()
+	items := m.tabItems()
 	for i := range labels {
-		if starts[i] < 0 {
+		if starts[i] < 0 || i >= len(items) {
 			continue
 		}
 		if x >= starts[i] && x < starts[i]+ansi.StringWidth(labels[i]) {
-			return i
+			return items[i], x - starts[i], true
 		}
 	}
-	return -1
+	return barItem{}, 0, false
 }
 
 func (m *Model) tabBarY() int {

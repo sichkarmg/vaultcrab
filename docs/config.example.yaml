@@ -30,6 +30,10 @@ ui:
   tab_width: 24            # longest tab title (6..120 columns); longer titles are cut with …
   tab_status: icon         # state of a tab's sessions: icon (before the number) | color (the number
                            # itself: green connected, yellow connecting, red broken, blue new output)
+  tab_close_button: true   # ✕ on the active tab closes it (connected or not; asks if a session is live)
+  tab_status_close: false  # a click on the state icon or number of a tab closes it (the active tab
+                           # after a confirmation)
+  group_tabs: true         # the tabs of one host are one entry "N:host ×3 ▸"; a click opens the group
   accent: cyan             # cyan | blue | green | magenta | yellow | red (keys, focused borders, folders)
   selection_color: reverse # selection and active items (list cursor, active tab, filter, status bar,
                            # buttons): reverse | cyan | blue | green |

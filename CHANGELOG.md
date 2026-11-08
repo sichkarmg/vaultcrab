@@ -21,7 +21,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   the PIN; 5 wrong PINs (`pin_attempts`) delete it; the master password is required again after a
   restart and every 14 days; a logout or a changed master password deletes it; change the PIN with
   `p`. The README describes why a PIN is weaker than the master password.
-- `vaultcrab forget` deletes the PIN and every stored master password.
+- Touch ID on macOS (Settings → Security → Touch ID, `unlock.touch_id`): asked first, then the PIN,
+  then the master password; changed fingerprints delete its data; the README explains why this
+  variant (an unsigned app) is weaker than a biometric Keychain item of a signed app. Ignored on Linux
+  and Windows.
+- `vaultcrab forget` deletes the PIN, the Touch ID data and every stored master password.
 - No core dumps on Linux and macOS (and no ptrace by other processes of the user on Linux).
 
 ### Changed

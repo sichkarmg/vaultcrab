@@ -32,6 +32,8 @@ type Unlock struct {
 	// MasterEveryDays asks for the master password every this many days
 	// (1..90).
 	MasterEveryDays int `yaml:"master_every_days"`
+	// TouchID asks for Touch ID before the PIN (macOS; ignored elsewhere).
+	TouchID bool `yaml:"touch_id"`
 }
 
 // DefaultLockTimeout is the lock timeout without unlock.lock_timeout.

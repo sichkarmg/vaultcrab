@@ -19,6 +19,7 @@ import (
 // vault (checked by bw) that is stored with it.
 type pinModal struct {
 	back   *settingsModal
+	touch  bool // turning Touch ID on: only the master password, then the prompt
 	change bool // a PIN is set: ask for it first
 	step   int  // 0 current PIN, 1 new PIN, 2 repeat, 3 master password
 	in     textinput.Model
@@ -54,6 +55,14 @@ func newPINModal(m *Model, back *settingsModal) *pinModal {
 	return p
 }
 
+// newTouchModal turns Touch ID on: the master password, checked by bw, then
+// the Touch ID prompt.
+func newTouchModal(m *Model, back *settingsModal) *pinModal {
+	p := newPINModal(m, back)
+	p.touch, p.change, p.step = true, false, 3
+	return p
+}
+
 func (p *pinModal) wipe() {
 	for i := range p.pin {
 		p.pin[i] = 0
@@ -73,7 +82,7 @@ func (p *pinModal) update(m *Model, msg tea.Msg) tea.Cmd {
 		p.busy = false
 		if msg.err != nil {
 			p.err = msg.err.Error()
-			if p.step == 3 && !errors.Is(msg.err, core.ErrWeakPIN) {
+			if p.touch || p.step == 3 && !errors.Is(msg.err, core.ErrWeakPIN) {
 				return nil // the master password: try again
 			}
 			p.wipe()
@@ -82,9 +91,15 @@ func (p *pinModal) update(m *Model, msg tea.Msg) tea.Cmd {
 		}
 		p.wipe()
 		a := m.opt.Appearance
-		a.PIN = true
-		p.back.apply(m, a)
-		p.back.status = "PIN set; the master password of " + p.vault.Label() + " is in " + m.svc.KeystoreName()
+		if p.touch {
+			a.TouchID = true
+			p.back.apply(m, a)
+			p.back.status = "Touch ID on; the master password of " + p.vault.Label() + " is in " + m.svc.KeystoreName()
+		} else {
+			a.PIN = true
+			p.back.apply(m, a)
+			p.back.status = "PIN set; the master password of " + p.vault.Label() + " is in " + m.svc.KeystoreName()
+		}
 		m.modal = p.back
 		return nil
 	case tea.KeyMsg:
@@ -131,6 +146,13 @@ func (p *pinModal) update(m *Model, msg tea.Msg) tea.Cmd {
 				p.busy = true
 				pin := append([]byte(nil), p.pin...)
 				svc, ctx, id := m.svc, m.ctx, p.vault.ID
+				if p.touch {
+					return func() tea.Msg {
+						c, cancel := context.WithTimeout(ctx, 2*time.Minute)
+						defer cancel()
+						return pinSetMsg{err: svc.EnableTouchID(c, id, v)} // wipes v
+					}
+				}
 				return func() tea.Msg {
 					c, cancel := context.WithTimeout(ctx, 2*time.Minute)
 					defer cancel()
@@ -150,6 +172,9 @@ func (p *pinModal) view(m *Model, w, h int) []string {
 	if p.change {
 		title = "Change PIN"
 	}
+	if p.touch {
+		title = "Touch ID"
+	}
 	var b strings.Builder
 	digits := "at least 6 digits"
 	if m.opt.Appearance.PINAlphanumeric {
@@ -163,11 +188,17 @@ func (p *pinModal) view(m *Model, w, h int) []string {
 	case 2:
 		b.WriteString("The new PIN again:")
 	case 3:
+		what := "the PIN unlocks the vault"
+		if p.touch {
+			what = "Touch ID unlocks the vault (the prompt follows)"
+		}
 		b.WriteString("Master password of " + stBold.Render(p.vault.Label()) + "\n" +
-			stDim.Render("checked by bw, then kept in "+m.svc.KeystoreName()+" so that the PIN unlocks the vault"))
+			stDim.Render("checked by bw, then kept in "+m.svc.KeystoreName()+" so that "+what))
 	}
 	b.WriteString("\n\n" + p.in.View() + "\n\n")
 	switch {
+	case p.busy && p.touch:
+		b.WriteString(stDim.Render("checking the master password; then touch the sensor…"))
 	case p.busy:
 		b.WriteString(stDim.Render("checking the master password, deriving the key of the PIN…"))
 	case p.err != "":

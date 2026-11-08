@@ -44,13 +44,14 @@ type Appearance struct {
 	PINAttempts      int    // unlock.pin_attempts
 	MasterAfterBoot  bool   // unlock.master_after_reboot
 	MasterEveryDays  int    // unlock.master_every_days
+	TouchID          bool   // unlock.touch_id
 }
 
 // Unlock is the unlock: section the Security page edits.
 func (a Appearance) Unlock() Unlock {
 	return Unlock{LockTimeout: a.LockTimeout, LockOnScreenLock: a.LockOnScreenLock, PIN: a.PIN,
 		PINAlphanumeric: a.PINAlphanumeric, PINAttempts: a.PINAttempts, MasterAfterReboot: a.MasterAfterBoot,
-		MasterEveryDays: a.MasterEveryDays}
+		MasterEveryDays: a.MasterEveryDays, TouchID: a.TouchID}
 }
 
 // SSHIcons are the icons offered for SSH items in the settings (the first
@@ -131,6 +132,7 @@ func (c *Config) Appearance() Appearance {
 		PINAttempts:      c.Unlock.PINAttempts,
 		MasterAfterBoot:  c.Unlock.MasterAfterReboot,
 		MasterEveryDays:  c.Unlock.MasterEveryDays,
+		TouchID:          c.Unlock.TouchID,
 	}
 }
 
@@ -218,6 +220,9 @@ func setAppearance(root *yaml.Node, old, a Appearance) {
 	}
 	if a.MasterAfterBoot != old.MasterAfterBoot {
 		setPath(root, []string{"unlock", "master_after_reboot"}, boolean(a.MasterAfterBoot))
+	}
+	if a.TouchID != old.TouchID {
+		setPath(root, []string{"unlock", "touch_id"}, boolean(a.TouchID))
 	}
 	if a.MasterEveryDays != old.MasterEveryDays {
 		setPath(root, []string{"unlock", "master_every_days"}, integer(a.MasterEveryDays))

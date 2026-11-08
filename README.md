@@ -256,10 +256,28 @@ KWallet, KeePassXC); the config only gets `unlock.pin: true`. The unlock dialog 
 **Threat model, strongest first:**
 
 1. **Master password** — nothing is stored; as strong as the password and Bitwarden's KDF.
-2. **PIN** — weaker than the master password. The attempt limit only applies inside Vaultcrab:
+2. **Touch ID** — a fingerprint in front of the stored password; see the next section for why it is
+   weaker than with a signed app. Changed fingerprints invalidate it.
+3. **PIN** — weaker than the master password. The attempt limit only applies inside Vaultcrab:
    someone who copies the secure store (a process of your account while the keyring is open, or a
    backup) can try PINs offline without it; each try costs about a second of argon2id, and 6 digits
    are a million candidates. Use a PIN only on your own computer, and prefer a long one.
+
+### Quick unlock: Touch ID (macOS)
+
+Settings → Security → **Touch ID** (`unlock.touch_id`): the master password of an unlocked vault
+(checked by bw) and one fingerprint turn it on. The unlock dialog then shows the Touch ID prompt at
+once; if Touch ID is not available, canceled, not recognized or **the enrolled fingerprints changed**
+(the stored data is then deleted), it falls back to the PIN and then to the master password. The
+reboot and N-days rules of the PIN apply too; `vaultcrab forget` deletes the Touch ID data.
+
+**Weaker model than a signed app.** Vaultcrab is not signed with an Apple Developer ID, so its
+Keychain item cannot carry a biometric access control of the Data Protection Keychain. Vaultcrab
+asks for Touch ID itself and then reads the item from the login keychain (accessible only while the
+Mac is unlocked, never synced). A program that reads the item directly skips Touch ID — macOS asks
+the user to allow that for any binary other than the one that created it (also for a new Vaultcrab
+version: allow it once). On Linux and Windows the setting is ignored; macOS binaries built without cgo
+(cross-compiled) have no Touch ID — the release binaries have it.
 
 ## Configuration
 

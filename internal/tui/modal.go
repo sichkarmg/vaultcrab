@@ -68,6 +68,9 @@ type unlockModal struct {
 	pin     bool   // asking for the PIN (Tab: the master password)
 	pinOK   bool   // the PIN can unlock this vault
 	pinNote string // why the master password is needed although the PIN is on
+
+	touch        bool // Touch ID prompt shown
+	touchPending bool // ask for Touch ID first (started by startTouch)
 }
 
 // spinTickMsg advances the spinner of the unlock dialog.
@@ -99,7 +102,26 @@ func newUnlock(m *Model) *unlockModal {
 	q := m.svc.QuickUnlock(v.ID)
 	u.pinOK, u.pinNote = q.PIN, q.Why
 	u.setPIN(q.PIN)
+	u.touchPending = q.TouchID
 	return u
+}
+
+type touchResultMsg struct{ err error }
+
+// startTouch shows the Touch ID prompt for an unlock dialog that wants it
+// (called after every update: the dialog may have just opened).
+func (m *Model) startTouch() tea.Cmd {
+	u, ok := m.modal.(*unlockModal)
+	if !ok || !u.touchPending || u.busy {
+		return nil
+	}
+	u.touchPending, u.touch, u.busy, u.frame = false, true, true, 0
+	svc, ctx, id := m.svc, m.ctx, u.vault.ID
+	return tea.Batch(spinTick(), func() tea.Msg {
+		c, cancel := context.WithTimeout(ctx, 2*time.Minute)
+		defer cancel()
+		return touchResultMsg{err: svc.UnlockWithTouchID(c, id)}
+	})
 }
 
 // setPIN switches the input between the PIN and the master password.
@@ -122,6 +144,19 @@ func (u *unlockModal) update(m *Model, msg tea.Msg) tea.Cmd {
 		}
 		u.frame++
 		return spinTick()
+	case touchResultMsg:
+		u.busy, u.touch = false, false
+		if msg.err == nil {
+			return u.update(m, unlockResultMsg{})
+		}
+		// canceled, not recognized, unavailable, changed fingerprints: on
+		// to the PIN (if it can) or the master password
+		u.err = msg.err.Error()
+		if errors.Is(msg.err, core.ErrBiometryChanged) || errors.Is(msg.err, core.ErrMasterRequired) {
+			u.pinOK = u.pinOK && !errors.Is(msg.err, core.ErrMasterRequired)
+		}
+		u.setPIN(u.pinOK)
+		return nil
 	case pinResultMsg:
 		u.busy = false
 		switch {
@@ -200,7 +235,9 @@ func (u *unlockModal) view(m *Model, w, h int) []string {
 			frames = spinASCII
 		}
 		phase := "Unlocking " + u.what() + "…"
-		if u.pin {
+		if u.touch {
+			phase = "Touch ID: touch the sensor to unlock " + u.what() + "…"
+		} else if u.pin {
 			phase = "Checking the PIN and unlocking " + u.what() + "…"
 		}
 		if m.svc.Status().State == core.Syncing {

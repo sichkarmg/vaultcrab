@@ -21,6 +21,7 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 
 	"github.com/sichkarmg/vaultcrab/internal/applog"
+	"github.com/sichkarmg/vaultcrab/internal/biometric"
 	"github.com/sichkarmg/vaultcrab/internal/cache"
 	"github.com/sichkarmg/vaultcrab/internal/config"
 	"github.com/sichkarmg/vaultcrab/internal/connect"
@@ -50,7 +51,7 @@ func main() {
 	cfgPath := flag.String("config", "", "config file (default: <user config dir>/vaultcrab/config.yaml)")
 	ascii := flag.Bool("ascii", false, "use ASCII icons")
 	flag.Usage = func() {
-		fmt.Fprintf(flag.CommandLine.Output(), "usage: vaultcrab [flags]\n       vaultcrab forget   delete the PIN and the master passwords kept for the quick unlock\n\nflags:\n")
+		fmt.Fprintf(flag.CommandLine.Output(), "usage: vaultcrab [flags]\n       vaultcrab forget   delete the PIN, Touch ID data and master passwords kept for the quick unlock\n\nflags:\n")
 		flag.PrintDefaults()
 	}
 	flag.Parse()
@@ -160,6 +161,7 @@ func run(cfg config.Config, load func(string) (config.Config, error)) error {
 		Keystore:     ks,
 		KeystoreErr:  ksErr,
 		BootID:       quickunlock.BootID,
+		Biometric:    biometric.Default,
 		Cache:        defVault.Cache,
 		SyncInterval: cfg.BW.SyncInterval,
 		SSH: connect.SSHOptions{
@@ -423,27 +425,30 @@ func forget(cfgPath string) int {
 		fmt.Fprintln(os.Stderr, "vaultcrab forget:", err)
 		return 1
 	}
-	keys := []string{"vault/default"}
+	ids := []string{"default"}
 	if cfg, err := config.Load(cfgPath); err == nil {
 		for _, v := range cfg.Vaults {
-			keys = append(keys, "vault/"+v.ID)
+			ids = append(ids, v.ID)
 		}
 	}
-	keys = append(keys, forgetExtra(keys)...)
+	var keys []string
+	for _, id := range ids {
+		keys = append(keys, "vault/"+id)
+	}
 	m := quickunlock.Manager{Store: ks}
 	had := m.HasPIN() || len(m.Vaults()) > 0
-	if err := m.Forget(keys...); err != nil {
+	for _, id := range ids {
+		had = had || m.HasTouch(id)
+	}
+	if err := errors.Join(m.Forget(keys...), m.ForgetTouch(ids...)); err != nil {
 		fmt.Fprintln(os.Stderr, "vaultcrab forget:", err)
 		return 1
 	}
 	if had {
-		fmt.Printf("Deleted the PIN and the stored master passwords from %s.\n", ks.Name())
+		fmt.Printf("Deleted the PIN, the stored master passwords and the Touch ID data from %s.\n", ks.Name())
 	} else {
 		fmt.Printf("Nothing stored in %s (checked the PIN and the vaults of the config).\n", ks.Name())
 	}
 	fmt.Println("Unlock with the master password from now on; Settings → Security sets a new PIN.")
 	return 0
 }
-
-// forgetExtra names the Touch ID items of the vault items keys.
-func forgetExtra(keys []string) []string { return nil }

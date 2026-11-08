@@ -13,6 +13,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/sichkarmg/vaultcrab/internal/biometric"
 	"github.com/sichkarmg/vaultcrab/internal/cache"
 	"github.com/sichkarmg/vaultcrab/internal/config"
 	"github.com/sichkarmg/vaultcrab/internal/connect"
@@ -160,9 +161,10 @@ type Options struct {
 	BootID func() string
 	// PINKDF overrides the argon2id parameters of a new PIN (tests).
 	PINKDF quickunlock.KDF
-	// ForgetExtra names further items of the store that ForgetPIN deletes
-	// (Touch ID).
+	// ForgetExtra names further items of the store that ForgetPIN deletes.
 	ForgetExtra []string
+	// Biometric is Touch ID (biometric.Default); nil = none.
+	Biometric biometric.Authenticator
 }
 
 // Service is safe for concurrent use.
@@ -317,6 +319,11 @@ func (s *Service) Start(ctx context.Context) {
 	s.lock.mu.Unlock()
 	if screen {
 		s.startScreenWatch()
+	}
+	if s.touchOn() {
+		if err := s.TouchIDErr(); err != nil {
+			logf("Touch ID (unlock.touch_id) is ignored here: %v", err)
+		}
 	}
 }
 

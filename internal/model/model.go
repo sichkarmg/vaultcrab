@@ -113,6 +113,21 @@ func (h *Host) HasTag(tag string) bool {
 	return false
 }
 
+// Credential is a Login item that is not a host but marked as an SSH
+// credential (a custom field "credential" = true): its password field holds
+// a password or a private key used for hosts typed by hand (through a jump
+// host). Metadata only.
+type Credential struct {
+	ID       string `json:"id"`
+	Name     string `json:"name"`
+	User     string `json:"user,omitempty"`
+	FolderID string `json:"folderId,omitempty"`
+	OrgID    string `json:"orgId,omitempty"`
+}
+
+// CredentialField marks a Login item as an SSH credential.
+const CredentialField = "credential"
+
 // Folder is a vault folder. Nested folders use "/" in the name; Path is the
 // split form ("A/B/C" → [A B C]).
 type Folder struct {
@@ -143,6 +158,7 @@ type Snapshot struct {
 	Folders     []Folder     `json:"folders"`
 	Orgs        []Org        `json:"orgs"`
 	Collections []Collection `json:"collections"`
+	Credentials []Credential `json:"credentials,omitempty"`
 }
 
 // SplitPath splits a nested folder/collection name. Empty segments are dropped.

@@ -17,6 +17,9 @@ const (
 	KeyFile                 // a private key file on this computer
 	KeyAgent                // the ssh-agent (SSH_AUTH_SOCK, Windows OpenSSH agent)
 	KeyVault                // the password or key of a vault item
+	// KeyPassword: a password typed when connecting, kept in memory until
+	// Vaultcrab exits (one per jump host or template).
+	KeyPassword
 )
 
 // Key is a parsed key reference of a template (key:, jump_key:):
@@ -24,6 +27,7 @@ const (
 //	~/.ssh/id_ed25519   a file (~ is the home directory)
 //	agent               the ssh-agent
 //	vault:<item>        the credential of a vault item (name or ID)
+//	password            a password typed once, kept in memory
 type Key struct {
 	Kind  KeyKind
 	Value string // the expanded path, or the vault item name/ID
@@ -37,6 +41,8 @@ func ParseKey(s string) (Key, error) {
 		return Key{}, nil
 	case strings.EqualFold(s, "agent"):
 		return Key{Kind: KeyAgent}, nil
+	case strings.EqualFold(s, "password"):
+		return Key{Kind: KeyPassword}, nil
 	case strings.HasPrefix(strings.ToLower(s), "vault:"):
 		v := strings.TrimSpace(s[len("vault:"):])
 		if v == "" {
@@ -52,6 +58,8 @@ func (k Key) String() string {
 	switch k.Kind {
 	case KeyAgent:
 		return "agent"
+	case KeyPassword:
+		return "password"
 	case KeyVault:
 		return "vault:" + k.Value
 	case KeyFile:

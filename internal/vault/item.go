@@ -180,6 +180,21 @@ func toHost(it *bwItem) (model.Host, bool) {
 	return h, true
 }
 
+// toCredential converts a Login item marked with a custom field
+// "credential" = true (and not a host) to a Credential.
+func toCredential(it *bwItem) (model.Credential, bool) {
+	if it.Type != itemTypeLogin || it.Login == nil || it.DeletedDate != nil {
+		return model.Credential{}, false
+	}
+	for _, f := range it.Fields {
+		if f.Type != fieldHidden && f.Type != fieldLinked && strings.EqualFold(strings.TrimSpace(f.Name), model.CredentialField) && truthy(str(f.Value)) {
+			return model.Credential{ID: it.ID, Name: it.Name, User: strings.TrimSpace(str(it.Login.Username)),
+				FolderID: str(it.FolderID), OrgID: str(it.OrganizationID)}, true
+		}
+	}
+	return model.Credential{}, false
+}
+
 func splitHostPort(s string) (string, int) {
 	if host, port, err := net.SplitHostPort(s); err == nil {
 		if p, err := strconv.Atoi(port); err == nil {
@@ -217,6 +232,8 @@ func buildSnapshot(items []bwItem, folders []bwFolder, orgs []bwOrg, cols []bwCo
 	for i := range items {
 		if h, ok := toHost(&items[i]); ok {
 			s.Hosts = append(s.Hosts, h)
+		} else if c, ok := toCredential(&items[i]); ok {
+			s.Credentials = append(s.Credentials, c)
 		}
 	}
 	s.Sort()

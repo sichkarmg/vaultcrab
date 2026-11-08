@@ -19,5 +19,9 @@
  {"object":"item","id":"i8","organizationId":null,"folderId":null,"type":1,"name":"ssh flag no host",
   "fields":[{"name":"ssh","value":"true","type":2}],"login":{"username":"justuser","password":"x"}},
  {"object":"item","id":"i9","organizationId":null,"folderId":null,"type":1,"name":"ssh false",
-  "fields":[{"name":"ssh","value":"false","type":2}],"login":{"username":"u@h","password":"x"}}
+  "fields":[{"name":"ssh","value":"false","type":2}],"login":{"username":"u@h","password":"x"}},
+ {"object":"item","id":"i10","organizationId":null,"folderId":"f3","type":1,"name":"workstations",
+  "fields":[{"name":"Credential","value":"true","type":2}],"login":{"username":"wsadmin","password":"TOPSECRET-WS"}},
+ {"object":"item","id":"i11","organizationId":null,"folderId":null,"type":1,"name":"hidden mark",
+  "fields":[{"name":"credential","value":"true","type":1}],"login":{"username":"x","password":"x"}}
 ]}}

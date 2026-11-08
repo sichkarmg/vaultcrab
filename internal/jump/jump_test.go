@@ -54,6 +54,7 @@ func TestParseKey(t *testing.T) {
 	}{
 		{"", Key{}},
 		{"agent", Key{Kind: KeyAgent}},
+		{"password", Key{Kind: KeyPassword}},
 		{"Agent", Key{Kind: KeyAgent}},
 		{"vault: jump key", Key{Kind: KeyVault, Value: "jump key"}},
 		{"~/.ssh/id_ed25519", Key{Kind: KeyFile, Value: filepath.Join(home, ".ssh", "id_ed25519")}},
@@ -78,7 +79,7 @@ func TestHistoryOrder(t *testing.T) {
 	h := NewHistory(path, 3, true)
 	add := func(jump, target string, at time.Time, n int) {
 		for range n {
-			if err := h.Add(jump, target, "", "", at); err != nil {
+			if err := h.Add(jump, target, "", "", "", at); err != nil {
 				t.Fatal(err)
 			}
 		}
@@ -117,10 +118,21 @@ func TestHistoryOrder(t *testing.T) {
 		t.Fatalf("reloaded %+v (file %s)", got, b)
 	}
 	// the same target as another user is its own entry; the same user counts up
-	h2.Add("h:abc", "10.9.9.9", "root", "", now)
-	h2.Add("h:abc", "10.9.9.9", "root", "", now)
+	h2.Add("h:abc", "10.9.9.9", "root", "", "", now)
+	h2.Add("h:abc", "10.9.9.9", "root", "", "", now)
 	if got := h2.Targets("h:abc", now); len(got) != 2 || got[0].User != "root" || got[0].Count != 2 {
 		t.Fatalf("users %+v", got)
+	}
+	// the credential chosen last through a jump host is offered again
+	h3 := NewHistory(filepath.Join(t.TempDir(), "h3.json"), 0, true)
+	h3.Add("h:abc", "10.9.9.1", "", "", "password", now.Add(time.Minute))
+	h3.Add("h:abc", "10.9.9.2", "", "", "vault:cred1", now.Add(2*time.Minute))
+	h3.Add("h:abc", "10.9.9.3", "", "item9", "", now.Add(3*time.Minute)) // a vault target: not a choice
+	if c := h3.LastCred("h:abc"); c != "vault:cred1" {
+		t.Fatalf("last cred %q", c)
+	}
+	if c := h3.LastCred("t:none"); c != "" {
+		t.Fatalf("last cred of an unused jump %q", c)
 	}
 	if err := h2.Clear(); err != nil {
 		t.Fatal(err)
@@ -137,14 +149,14 @@ func TestHistoryOrder(t *testing.T) {
 func TestHistoryDisabled(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "jump-history.json")
 	h := NewHistory(path, 0, false)
-	if err := h.Add("t:ws", "10.0.0.1", "", "", time.Now()); err != nil {
+	if err := h.Add("t:ws", "10.0.0.1", "", "", "", time.Now()); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := os.Stat(path); !os.IsNotExist(err) {
 		t.Fatal("disabled history wrote the file")
 	}
 	h.Configure(0, true)
-	h.Add("t:ws", "10.0.0.1", "", "", time.Now())
+	h.Add("t:ws", "10.0.0.1", "", "", "", time.Now())
 	h.Configure(0, false)
 	if got := h.Targets("t:ws", time.Now()); len(got) != 0 {
 		t.Fatalf("disabled history read %v", got)

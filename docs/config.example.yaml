@@ -136,8 +136,10 @@ jump_templates: []
   #   user: admin                  # on the targets (empty: typed as user@ip, else the jump user)
   #   port: 22                     # of the targets
   #   key: ~/.ssh/id_ed25519       # of the targets: a file (passphrase asked once per run, kept in
-  #                                # memory only) | agent | vault:<item name or ID>;
-  #                                # empty: as the jump host
+  #                                # memory only) | agent | password (typed once per run, kept in
+  #                                # memory) | vault:<item name or ID> (an SSH host or a Login item
+  #                                # with the field credential = true); empty: as the jump host.
+  #                                # Ctrl+K in step 2 of the picker chooses another one per jump host.
   #   jump_key: agent              # of the jump host; empty: the credential of its vault item, else key
   #   host_key_check: ask          # a new host key: ask (default) | accept-new (remembered without
   #                                # asking) | strict (only keys already in known_hosts). A key that

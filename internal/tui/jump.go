@@ -34,6 +34,9 @@ type jumpPicker struct {
 
 	listY int // dialog row of the first list row (mouse)
 	rows  int // list rows shown
+
+	cred string      // step 2: the credential of a typed address (JumpSpec.Cred)
+	cp   *credPicker // step 2: choosing it (Ctrl+K)
 }
 
 // jumpSugg is a target suggestion of step 2.
@@ -69,6 +72,7 @@ func (p *jumpPicker) toStep(m *Model, step int) {
 		return
 	}
 	p.in.Placeholder = "IP or [user@]host[:port]"
+	p.cred = m.svc.JumpLastCred(p.via.Key) // the choice of the last time
 	p.suggest(m)
 }
 
@@ -109,7 +113,11 @@ func (p *jumpPicker) suggest(m *Model) {
 	p.sugg = p.sugg[:0]
 	for _, t := range m.svc.JumpTargets(p.via.Key) {
 		if _, ok := core.FuzzyMatch(q, t.Label); ok {
-			p.sugg = append(p.sugg, jumpSugg{spec: t.Spec, label: t.Label, detail: "used " + ago(t.Last)})
+			d := "used " + ago(t.Last)
+			if t.Spec.Cred != "" {
+				d += " · " + m.svc.CredLabel(t.Spec.Cred)
+			}
+			p.sugg = append(p.sugg, jumpSugg{spec: t.Spec, label: t.Label, detail: d})
 		}
 	}
 	if q != "" {
@@ -199,7 +207,17 @@ func (p *jumpPicker) update(m *Model, msg tea.Msg) tea.Cmd {
 	if !ok {
 		return nil
 	}
+	if p.cp != nil {
+		return p.cp.update(k)
+	}
 	switch k.String() {
+	case "ctrl+k":
+		if p.step == 1 {
+			p.cp = newCredPicker(m, p.via.Key, p.cred, func(ref string) {
+				p.cred, p.cp = ref, nil
+			}, func() { p.cp = nil })
+		}
+		return nil
 	case "esc":
 		if p.step == 1 {
 			p.toStep(m, 0)
@@ -263,7 +281,7 @@ func (p *jumpPicker) choose(m *Model) tea.Cmd {
 			p.err = err.Error()
 			return nil
 		}
-		spec = core.JumpSpec{Via: p.via.Key, Target: t}
+		spec = core.JumpSpec{Via: p.via.Key, Target: t, Cred: p.cred}
 	}
 	return m.openJump(spec, p)
 }
@@ -305,10 +323,17 @@ func (p *jumpPicker) view(m *Model, w, h int) []string {
 			line(stWarn.Render("⚠ accept-new: new host keys are remembered without asking"))
 		}
 	}
+	width := max(40, min(w-8, 90))
+	if p.cp != nil {
+		p.cp.view(m, &b, boxPadY+boxTitleGap+lines, width)
+		return m.box(title, strings.TrimRight(b.String(), "\n"), w)
+	}
 	line("")
 	line(p.in.View())
+	if p.step == 1 {
+		line(stDim.Render("Credentials: ") + m.svc.CredLabel(p.cred) + stDim.Render("   (Ctrl+K: change)"))
+	}
 	line("")
-	width := max(40, min(w-8, 90))
 	p.listY = boxPadY + boxTitleGap + lines
 	p.rows = 0
 	rowLine := func(i int, mark, label, detail, tag string) {
@@ -368,7 +393,7 @@ func (p *jumpPicker) view(m *Model, w, h int) []string {
 	if p.step == 0 {
 		line(stDim.Render("type to search · ↑/↓ choose · Enter: next · Esc: close"))
 	} else {
-		line(stDim.Render("Enter: connect · ↑/↓ suggestions · Tab: edit the suggestion · Esc: back"))
+		line(stDim.Render("Enter: connect · ↑/↓ suggestions · Tab: edit the suggestion · Ctrl+K: credentials · Esc: back"))
 	}
 	_ = h
 	return m.box(title, strings.TrimRight(b.String(), "\n"), w)
@@ -377,6 +402,10 @@ func (p *jumpPicker) view(m *Model, w, h int) []string {
 // mouse: a click selects a row, a click on the selected row (or a double
 // click) chooses it; the wheel scrolls.
 func (p *jumpPicker) mouse(m *Model, msg tea.MouseMsg, x, y int) tea.Cmd {
+	if p.cp != nil {
+		p.cp.mouse(msg, y)
+		return nil
+	}
 	switch msg.Button {
 	case tea.MouseButtonWheelUp:
 		p.move(-1)

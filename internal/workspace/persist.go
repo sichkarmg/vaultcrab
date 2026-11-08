@@ -24,6 +24,7 @@ type JumpPane struct {
 	Via    string `json:"via"`
 	Target string `json:"target,omitempty"`
 	Item   string `json:"item,omitempty"`
+	Cred   string `json:"cred,omitempty"` // a key reference, never a secret
 }
 
 // TabState is a saved tab: its layout and panes (in tree order).

@@ -70,8 +70,9 @@ func newJumpEnv(t *testing.T, tpls []config.JumpTemplate) *jumpEnv {
 		{ID: "d1", Name: "twin", Scheme: model.SSH, Addr: "10.1.0.9"},
 		{ID: "d2", Name: "twin", Scheme: model.SSH, Addr: "10.1.0.10"},
 	}
-	src := &fakeSource{status: vault.Unlocked, snap: model.Snapshot{Hosts: hosts},
-		secrets: map[string]string{"j1": "bastion-pw", "j2": "edge-pw", "w1": "build-pw", "k1": "lab-pw"}}
+	creds := []model.Credential{{ID: "c1", Name: "workstations", User: "wsadmin"}}
+	src := &fakeSource{status: vault.Unlocked, snap: model.Snapshot{Hosts: hosts, Credentials: creds},
+		secrets: map[string]string{"j1": "bastion-pw", "j2": "edge-pw", "w1": "build-pw", "k1": "lab-pw", "c1": "ws-pw"}}
 	cfg := config.Default()
 	cfg.Path = filepath.Join(t.TempDir(), "config.yaml")
 	cfg.JumpTemplates = tpls
@@ -379,5 +380,118 @@ func TestSaveJumpTemplates(t *testing.T) {
 	}
 	if err := e.s.SaveJumpTemplates([]config.JumpTemplate{{Name: "x"}}); err == nil {
 		t.Fatal("template without jump saved")
+	}
+}
+
+// The credential of typed addresses chosen in the picker: a password typed
+// once per jump host (asked again after the target refused it), or a vault
+// item marked as a credential (its user name is the default user); the
+// choice is remembered in the history and offered again.
+func TestJumpTypedCredentials(t *testing.T) {
+	e := newJumpEnv(t, []config.JumpTemplate{{Name: "WS", Jump: "bastion", User: "", Key: "agent"}})
+	s := e.s
+	asked := 0
+	var answerMu sync.Mutex
+	stop := make(chan struct{})
+	defer close(stop)
+	go func() {
+		for {
+			select {
+			case <-stop:
+				return
+			case <-time.After(5 * time.Millisecond):
+			}
+			if p := s.Prompt(); p != nil && p.Kind == PromptPassphrase {
+				answerMu.Lock()
+				asked++
+				answerMu.Unlock()
+				if !strings.Contains(p.Title, "SSH password") || !strings.Contains(p.Text, "through WS") {
+					p.Cancel()
+					continue
+				}
+				p.AnswerSecret([]byte("same-for-all"))
+			}
+		}
+	}()
+	count := func() int {
+		answerMu.Lock()
+		defer answerMu.Unlock()
+		return asked
+	}
+
+	// plan: the chosen credential replaces the template's key
+	p, err := s.planJump(JumpSpec{Via: "t:WS", Target: "10.0.0.1", Cred: "password"})
+	if err != nil || p.targetKey.kind != jump.KeyPassword || p.targetKey.scope != "t:WS" || p.jumpKey.kind != jump.KeyVault {
+		t.Fatalf("plan %+v %v", p, err)
+	}
+	p, err = s.planJump(JumpSpec{Via: "t:WS", Target: "10.0.0.1", Cred: "vault:workstations"})
+	if err != nil || p.targetKey.item != "c1" || p.target.User != "wsadmin" {
+		t.Fatalf("vault credential: %+v %v", p, err)
+	}
+	p, _ = s.planJump(JumpSpec{Via: "t:WS", Target: "root@10.0.0.1", Cred: "vault:c1"})
+	if p.target.User != "root" {
+		t.Fatalf("typed user lost: %s", p.target.User)
+	}
+
+	// two addresses with the typed password: asked once
+	for _, ip := range []string{"10.0.0.1", "10.0.0.2"} {
+		sess, err := s.OpenJump(JumpSpec{Via: "t:WS", Target: ip, Cred: "password"}, 80, 24)
+		if err != nil {
+			t.Fatal(err)
+		}
+		waitSession(t, sess, session.Connected)
+	}
+	if count() != 1 {
+		t.Fatalf("asked %d times", count())
+	}
+	if c := s.JumpLastCred("t:WS"); c != "password" {
+		t.Fatalf("last cred %q", c)
+	}
+	if ts := s.JumpTargets("t:WS"); ts[0].Spec.Cred != "password" {
+		t.Fatalf("history %+v", ts)
+	}
+	// refused by a target: forgotten, asked again next time
+	e.mu.Lock()
+	e.fail = &connect.JumpError{Target: true, Stage: connect.StageAuth, Jump: "bastion", Addr: "10.0.0.3:22", User: "ops", Err: errors.New("denied")}
+	e.mu.Unlock()
+	f, _ := s.OpenJump(JumpSpec{Via: "t:WS", Target: "10.0.0.3", Cred: "password"}, 80, 24)
+	waitSession(t, f, session.Disconnected)
+	e.mu.Lock()
+	e.fail = nil
+	e.mu.Unlock()
+	g, _ := s.OpenJump(JumpSpec{Via: "t:WS", Target: "10.0.0.4", Cred: "password"}, 80, 24)
+	waitSession(t, g, session.Connected)
+	if count() != 2 {
+		t.Fatalf("not asked again after a refusal: %d", count())
+	}
+
+	// the picker offers the vault credential and names the choices
+	var labels []string
+	for _, c := range s.JumpCreds("t:WS") {
+		labels = append(labels, c.Label)
+	}
+	all := strings.Join(labels, "|")
+	for _, want := range []string{"Default", "Password", "ssh-agent", "Other key file…", "workstations", "bastion"} {
+		if !strings.Contains(all, want) {
+			t.Fatalf("choices %q lack %q", all, want)
+		}
+	}
+	if l := s.CredLabel("vault:c1"); l != "vault: workstations" {
+		t.Fatalf("label %q", l)
+	}
+	if l := s.CredLabel(""); l != "default" {
+		t.Fatalf("label %q", l)
+	}
+	if !strings.Contains(s.JumpCreds("t:WS")[0].Detail, "ssh-agent") {
+		t.Fatalf("default %q", s.JumpCreds("t:WS")[0].Detail)
+	}
+	// the pseudo-host keeps the choice (clone, restore)
+	h, _ := s.JumpHost(JumpSpec{Via: "t:WS", Target: "10.0.0.9", Cred: "vault:c1"})
+	if sp, _ := JumpSpecOf(h); sp.Cred != "vault:c1" {
+		t.Fatalf("spec %+v", sp)
+	}
+	b, _ := os.ReadFile(e.hist)
+	if strings.Contains(string(b), "same-for-all") || strings.Contains(string(b), "ws-pw") {
+		t.Fatalf("secret in the history: %s", b)
 	}
 }

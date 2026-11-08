@@ -11,6 +11,7 @@ import (
 	"os/exec"
 	"slices"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/sichkarmg/vaultcrab/internal/biometric"
@@ -186,6 +187,8 @@ type Service struct {
 	sessions sessions
 	widgets  *widget.Runner
 
+	connDebug atomic.Bool // ssh.debug: trace connection attempts
+
 	prompts  prompts       // questions of connections to the user
 	keys     keyFiles      // keys read from files (passphrase asked once)
 	jumpHist *jump.History // the jump hosts and targets used
@@ -237,6 +240,9 @@ func New(o Options) *Service {
 	s.initConfig()
 	if o.Config != nil {
 		s.jumpHist.Configure(o.Config.Jump.HistoryLimit, o.Config.Jump.History)
+		s.connDebug.Store(o.Config.SSH.Debug)
+	} else {
+		s.connDebug.Store(true) // the default of ssh.debug
 	}
 	s.initAutoLock()
 	s.widgets = widget.NewRunner(o.Widgets, s.emit, o.WidgetExec)

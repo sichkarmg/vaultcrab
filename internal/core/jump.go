@@ -496,17 +496,21 @@ func (s *Service) jumpDialer(spec JumpSpec) session.Dialer {
 				f()
 			}
 		}()
-		auth := func(k keySource, role string) ([]ssh.AuthMethod, error) {
-			a, done, err := s.hopAuth(ctx, k, role)
+		auth := func(k keySource, role string, h *connect.Hop) error {
+			a, done, desc, err := s.hopAuth(ctx, k, role)
 			if done != nil {
 				cleanup = append(cleanup, done)
 			}
-			return a, err
+			h.Auth, h.AuthInfo = a, desc
+			if err != nil {
+				connect.TraceOf(ctx).Add("%s: credential: %v", role, err)
+			}
+			return err
 		}
-		if p.jump.Auth, err = auth(p.jumpKey, "jump host "+p.jump.Name); err != nil {
+		if err = auth(p.jumpKey, "jump host "+p.jump.Name, &p.jump); err != nil {
 			return nil, fmt.Errorf("jump host %s: %w", p.jump.Name, err)
 		}
-		if p.target.Auth, err = auth(p.targetKey, "target "+p.target.Name); err != nil {
+		if err = auth(p.targetKey, "target "+p.target.Name, &p.target); err != nil {
 			return nil, fmt.Errorf("target %s: %w", p.target.Name, err)
 		}
 		pol := connect.HostKeyPolicy{File: s.opts.SSH.KnownHosts, Mode: p.mode, Ask: s.askHostKey(p.mode)}
@@ -546,45 +550,50 @@ func (s *Service) jumpDialer(spec JumpSpec) session.Dialer {
 
 // hopAuth returns the authentication of a hop and a function releasing
 // what it holds (a vault credential is wiped, the agent disconnected).
-func (s *Service) hopAuth(ctx context.Context, k keySource, role string) ([]ssh.AuthMethod, func(), error) {
+func (s *Service) hopAuth(ctx context.Context, k keySource, role string) ([]ssh.AuthMethod, func(), string, error) {
 	switch k.kind {
 	case jump.KeyVault:
+		name := k.item
+		if it, err := s.findItem(k.item); err == nil {
+			name = it.name
+		}
 		sec, err := s.Secret(ctx, k.item)
 		if err != nil {
-			return nil, nil, fmt.Errorf("credential: %w", err)
+			return nil, nil, "", fmt.Errorf("credential: %w", err)
 		}
+		desc := connect.DescribeSecret(&sec) + " of the vault item " + name
 		a, err := connect.AuthFromSecret(&sec)
 		if err != nil {
 			sec.Wipe()
-			return nil, nil, err
+			return nil, nil, desc, err
 		}
-		return a, sec.Wipe, nil
+		return a, sec.Wipe, desc, nil
 	case jump.KeyFile:
 		signer, err := s.keyFile(ctx, k.path, role)
 		if err != nil {
-			return nil, nil, err
+			return nil, nil, "key file " + k.path, err
 		}
-		return []ssh.AuthMethod{connect.SignerAuth(signer)}, nil, nil
+		return []ssh.AuthMethod{connect.SignerAuth(signer)}, nil, "public key " + connect.DescribeKey(signer.PublicKey()) + " from " + k.path, nil
 	case jump.KeyAgent:
 		a, done, err := connect.Agent()
 		if err != nil {
-			return nil, nil, err
+			return nil, nil, "ssh-agent", err
 		}
-		return []ssh.AuthMethod{a}, done, nil
+		return []ssh.AuthMethod{a}, done, "keys of the ssh-agent", nil
 	case jump.KeyPassword:
 		pw, err := s.typedPassword(ctx, k.scope, role)
 		if err != nil {
-			return nil, nil, err
+			return nil, nil, "typed password", err
 		}
 		sec := secret.Secret{Kind: secret.Password, Value: pw} // a copy: wiped after the handshake
 		a, err := connect.AuthFromSecret(&sec)
 		if err != nil {
 			sec.Wipe()
-			return nil, nil, err
+			return nil, nil, "typed password", err
 		}
-		return a, sec.Wipe, nil
+		return a, sec.Wipe, "password typed in Vaultcrab", nil
 	}
-	return nil, nil, errors.New("no key: set key in the template")
+	return nil, nil, "", errors.New("no key: set key in the template")
 }
 
 // keyFiles keeps the keys read from files for the run of the program, so
@@ -850,3 +859,7 @@ func CheckKeyFile(path string) (string, error) {
 	}
 	return k.Value, nil
 }
+
+// SetConnDebug turns the trace of connection attempts on or off (ssh.debug;
+// the settings save it).
+func (s *Service) SetConnDebug(on bool) { s.connDebug.Store(on) }

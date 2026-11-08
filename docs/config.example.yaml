@@ -125,6 +125,9 @@ ssh:
   keepalive: 15s           # sent as a channel request (works with MikroTik RouterOS too)
   legacy_algorithms: true  # also offer weak algorithms (dh-group1-sha1, CBC, ssh-dss) as a last resort,
                            # for old devices like MikroTik RouterOS 6; false = modern algorithms only
+  debug: true              # connection debug (like ssh -vvv): a failed connection shows its steps in the
+                           # pane (DNS, TCP, versions, host key, authentication, jump channel); y or
+                           # [Copy debug] in the status bar copies them. No secrets in it.
 
 # Quick connections through a jump host (j in the host list or prefix + j; Settings → Jump hosts
 # edits these without a restart; J on a host of the list makes a template of it). The target is

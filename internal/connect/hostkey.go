@@ -72,10 +72,17 @@ func (e *HostKeyRejectedError) Error() string {
 func (p HostKeyPolicy) callback(ctx context.Context, pause func(bool)) ssh.HostKeyCallback {
 	return func(hostname string, remote net.Addr, key ssh.PublicKey) error {
 		fp := ssh.FingerprintSHA256(key)
+		tracef(ctx, "server host key: %s %s", key.Type(), fp)
 		known, err := p.lookup(hostname, remote, key)
-		if err != nil || known {
+		switch {
+		case err != nil:
+			tracef(ctx, "host key check failed: %v", err)
 			return err
+		case known:
+			tracef(ctx, "host key found in %s", p.File)
+			return nil
 		}
+		tracef(ctx, "host key not in known_hosts (%s); mode %s", p.File, [...]string{"accept-new", "ask", "strict"}[p.Mode])
 		switch p.Mode {
 		case HostKeyStrict:
 			return &UnknownHostError{Host: hostname, Fingerprint: fp}
@@ -91,6 +98,7 @@ func (p HostKeyPolicy) callback(ctx context.Context, pause func(bool)) ssh.HostK
 			if err != nil {
 				return &HostKeyRejectedError{Host: hostname, Fingerprint: fp, Reason: err.Error()}
 			}
+			tracef(ctx, "host key answer: %s", [...]string{"reject", "accept once", "accept and remember"}[ans])
 			switch ans {
 			case HostKeyOnce:
 				return nil

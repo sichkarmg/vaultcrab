@@ -18,11 +18,14 @@ import (
 
 // Hop is one SSH connection of a chain through a jump host.
 type Hop struct {
-	Name string // shown in errors (the vault item, the template's jump)
-	Addr string // host:port
-	User string
-	Auth []ssh.AuthMethod
-	Keys HostKeyPolicy
+	// AuthInfo describes the credential for the debug trace (never the
+	// secret: "public key ssh-ed25519 SHA256:… from ~/.ssh/id", "password").
+	AuthInfo string
+	Name     string // shown in errors (the vault item, the template's jump)
+	Addr     string // host:port
+	User     string
+	Auth     []ssh.AuthMethod
+	Keys     HostKeyPolicy
 }
 
 // JumpError is a failed connection through a jump host, by stage: the jump
@@ -100,10 +103,12 @@ func DialJump(ctx context.Context, jump, target Hop, cols, rows int, o SSHOption
 		}
 		return je
 	}
+	tracef(ctx, "jump host %s (%s) as %q, %s", jump.Name, jump.Addr, jump.User, jump.AuthInfo)
 	jc, _, err := dialHop(ctx, jump.Addr, jump.User, jump.Auth, jump.Keys, o, nil)
 	if err != nil {
 		return nil, fail(false, jump, err)
 	}
+	tracef(ctx, "target %s as %q, %s", target.Addr, target.User, target.AuthInfo)
 	tc, _, err := dialHop(ctx, target.Addr, target.User, target.Auth, target.Keys, o, jc)
 	if err != nil {
 		jc.Close()
@@ -115,6 +120,7 @@ func DialJump(ctx context.Context, jump, target Hop, cols, rows int, o SSHOption
 		jc.Close()
 		return nil, fail(true, target, err)
 	}
+	tracef(ctx, "PTY %s %dx%d, shell started on the target", o.Term, cols, rows)
 	c.via = jc
 	if o.Keepalive > 0 {
 		go c.keepalive(o.Keepalive)

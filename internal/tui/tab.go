@@ -297,6 +297,10 @@ func (t *tab) key(m *Model, msg tea.KeyMsg) tea.Cmd {
 			t.enterHistory(m, true)
 		case tea.KeyCtrlD: // as EOF in a shell: close this pane (the tab if it is the last)
 			m.confirmClosePane(t)
+		case tea.KeyRunes:
+			if msg.String() == "y" {
+				m.copyDebug(s)
+			}
 		}
 		return nil
 	}
@@ -483,6 +487,30 @@ func (t *tab) closeButtonAt(m *Model, id core.PaneID, x, y int) bool {
 	return ok && t.ws.Headers() && pr.H > 1 && pr.W > bw+4 && y == pr.Y && x >= pr.X+pr.W-bw && x < pr.X+pr.W
 }
 
+// copyDebug copies the steps of the last connection attempt of s.
+func (m *Model) copyDebug(s *core.Session) {
+	d := s.Debug()
+	if d == "" {
+		m.notify(true, "no connection debug: Settings → Behavior → Connection debug (ssh.debug)")
+		return
+	}
+	m.copyText(d + "\n")
+}
+
+// debugButton is the status bar button that copies the connection debug of
+// a failed pane ("" when there is none).
+func (m *Model) debugButton() string {
+	t := m.curTab()
+	if t == nil {
+		return ""
+	}
+	s := t.focused()
+	if st, _ := s.State(); st != core.SessionDisconnected || s.Debug() == "" {
+		return ""
+	}
+	return " [Copy debug] "
+}
+
 func (t *tab) status(m *Model) string {
 	id := t.ws.Focused()
 	s := t.focused()
@@ -493,6 +521,8 @@ func (t *tab) status(m *Model) string {
 		out = s.Host.Fields["command"] + " · finished · Enter: run again · Ctrl+D: close"
 	case st == core.SessionDisconnected && s.Host.Scheme == core.SchemeLocal:
 		out += ": " + errText(err) + " · Enter: run again · Ctrl+D: close"
+	case st == core.SessionDisconnected && s.Debug() != "":
+		out += ": " + errText(err) + " · Enter: reconnect · y: copy debug · Ctrl+D: close"
 	case st == core.SessionDisconnected:
 		out += ": " + errText(err) + " · Enter: reconnect · Ctrl+D: close"
 	case st == core.SessionIdle:
@@ -550,6 +580,14 @@ func (m *Model) mouse(msg tea.MouseMsg) tea.Cmd {
 			if i := m.tabAt(msg.X); i > 0 {
 				m.confirmCloseTab(m.tabs[i-1])
 			}
+		}
+		return nil
+	}
+	if msg.Y == m.statusY() {
+		// [Copy debug] at the right end of the status bar
+		if b := m.debugButton(); b != "" && msg.Action == tea.MouseActionPress && msg.Button == tea.MouseButtonLeft &&
+			msg.X >= m.w-ansi.StringWidth(b) {
+			m.copyDebug(m.curTab().focused())
 		}
 		return nil
 	}

@@ -127,7 +127,7 @@ func New(ctx context.Context, svc *core.Service, opt Options) *Model {
 		m.opt.Appearance = core.Appearance{TabsBottom: opt.TabsBottom, IconMode: mode, SSHIcon: opt.Icons.Icon(core.IconSSH),
 			Accent: core.Accents[0].Name, Selection: core.Selections[0].Name, ShowTree: opt.ShowTree, ShowNotes: opt.ShowNotes, Widgets: opt.Widgets, ListWidth: opt.ListWidth, TabWidth: core.DefaultTabWidth, TabStatus: "icon",
 			ConfirmPaste: opt.ConfirmPaste, RestoreTabs: opt.RestoreTabs, RestoreView: opt.RestoreView, LockTimeout: "8h",
-			PINAttempts: 5, MasterAfterBoot: true, MasterEveryDays: 14}
+			PINAttempts: 5, MasterAfterBoot: true, MasterEveryDays: 14, ConnDebug: true}
 	}
 	setAccent(core.AccentColor(m.opt.Appearance.Accent))
 	setSelection(m.opt.Appearance.Selection)

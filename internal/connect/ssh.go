@@ -90,9 +90,11 @@ func DialSSH(ctx context.Context, h model.Host, sec *secret.Secret, cols, rows i
 	}
 	c, err := startShell(client, o.Term, cols, rows)
 	if err != nil {
+		tracef(ctx, "shell: %v", err)
 		client.Close()
 		return nil, err
 	}
+	tracef(ctx, "PTY %s %dx%d, shell started", o.Term, cols, rows)
 	if o.Keepalive > 0 {
 		go c.keepalive(o.Keepalive)
 	}
@@ -125,6 +127,7 @@ func dialClient(ctx context.Context, h model.Host, sec *secret.Secret, o SSHOpti
 	if o.StrictHosts {
 		mode = HostKeyStrict
 	}
+	tracef(ctx, "authentication: %s from the vault", DescribeSecret(sec))
 	c, _, err := dialHop(ctx, hostAddr(h), h.User, auth, HostKeyPolicy{File: o.KnownHosts, Mode: mode}, o, nil)
 	if err != nil {
 		var he *hopErr
@@ -183,31 +186,63 @@ func dialHop(ctx context.Context, addr, user string, auth []ssh.AuthMethod, hk H
 		cfg.MACs = append(sup.MACs, weak.MACs...)
 		cfg.HostKeyAlgorithms = append(sup.HostKeys, weak.HostKeys...)
 	}
+	if o.Legacy {
+		tracef(ctx, "legacy algorithms on: weak ones are offered last (ssh.legacy_algorithms)")
+	}
 	// Prefer the key types already pinned for this host, so that the server
 	// is not asked for another algorithm we would then report as a mismatch.
 	if algos := knownAlgorithms(hk.File, addr); algos != nil {
 		cfg.HostKeyAlgorithms = algos
+		tracef(ctx, "host key algorithms (pinned in known_hosts): %s", strings.Join(algos, ","))
 	}
+	cfg.BannerCallback = func(msg string) error {
+		for _, l := range strings.Split(strings.TrimRight(msg, "\r\n"), "\n") {
+			tracef(ctx, "server banner: %s", trunc(strings.TrimRight(l, "\r"), 160))
+		}
+		return nil
+	}
+	tracef(ctx, "local version: SSH-2.0-Go")
 
 	var conn net.Conn
 	var err error
 	if via != nil {
+		tracef(ctx, "opening a direct-tcpip channel to %s through the jump host (timeout %s)", addr, o.Timeout)
 		dctx, cancel := context.WithTimeout(ctx, o.Timeout)
 		conn, err = via.DialContext(dctx, "tcp", addr)
 		cancel()
 		if err != nil && ctx.Err() == nil && errors.Is(err, context.DeadlineExceeded) {
 			err = fmt.Errorf("no answer within %s (ssh.timeout)", o.Timeout)
 		}
+		if err == nil {
+			tracef(ctx, "channel to %s open", addr)
+		}
 	} else {
+		if h, _, e := net.SplitHostPort(addr); e == nil && net.ParseIP(h) == nil {
+			rctx, cancel := context.WithTimeout(ctx, o.Timeout)
+			ips, rerr := net.DefaultResolver.LookupHost(rctx, h)
+			cancel()
+			if rerr != nil {
+				tracef(ctx, "resolving %s: %v", h, rerr)
+			} else {
+				tracef(ctx, "%s resolves to %s", h, strings.Join(ips, ", "))
+			}
+		}
+		tracef(ctx, "connecting to %s (timeout %s)", addr, o.Timeout)
 		d := net.Dialer{Timeout: o.Timeout, KeepAlive: 30 * time.Second}
 		conn, err = d.DialContext(ctx, "tcp", addr)
+		if err == nil {
+			tracef(ctx, "connection established: %s -> %s", conn.LocalAddr(), conn.RemoteAddr())
+		}
 	}
 	if err != nil {
+		tracef(ctx, "connect failed: %v", plainDialErr(err))
 		if ctx.Err() != nil {
 			return nil, nil, ctx.Err()
 		}
 		return nil, nil, &hopErr{StageConnect, err}
 	}
+	conn = &versionConn{Conn: conn, ctx: ctx}
+	tracef(ctx, "SSH handshake (timeout %s), user %q, %d authentication method(s)", o.Handshake, user, len(auth))
 	// Bound the handshake by ctx and the timeout; the timer pauses while
 	// the user is asked about the host key.
 	var timedOut atomic.Bool
@@ -225,6 +260,7 @@ func dialHop(ctx context.Context, addr, user string, auth []ssh.AuthMethod, hk H
 	timer.Stop()
 	stop()
 	if err != nil {
+		tracef(ctx, "handshake failed: %v", err)
 		conn.Close()
 		var hkErr *HostKeyError
 		var unk *UnknownHostError
@@ -241,6 +277,7 @@ func dialHop(ctx context.Context, addr, user string, auth []ssh.AuthMethod, hk H
 		}
 		return nil, nil, &hopErr{StageHandshake, err}
 	}
+	tracef(ctx, "authenticated as %q; server %s", user, cc.ServerVersion())
 	return ssh.NewClient(cc, chans, reqs), conn, nil
 }
 

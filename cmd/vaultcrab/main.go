@@ -41,7 +41,7 @@ import (
 // version is the release version (SemVer, no "v"). A release PR updates it
 // together with CHANGELOG.md; builds from git override it with -ldflags
 // (`git describe` for make, the tag for the release workflow).
-var version = "0.3.0"
+var version = "0.4.0"
 
 func main() {
 	if spawn.Main() { // helper mode (see internal/spawn)

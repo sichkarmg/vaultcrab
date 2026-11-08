@@ -27,6 +27,7 @@ import (
 	"github.com/sichkarmg/vaultcrab/internal/connect"
 	"github.com/sichkarmg/vaultcrab/internal/core"
 	"github.com/sichkarmg/vaultcrab/internal/hostlist"
+	"github.com/sichkarmg/vaultcrab/internal/jump"
 	"github.com/sichkarmg/vaultcrab/internal/keystore"
 	"github.com/sichkarmg/vaultcrab/internal/quickunlock"
 	"github.com/sichkarmg/vaultcrab/internal/screenlock"
@@ -51,7 +52,7 @@ func main() {
 	cfgPath := flag.String("config", "", "config file (default: <user config dir>/vaultcrab/config.yaml)")
 	ascii := flag.Bool("ascii", false, "use ASCII icons")
 	flag.Usage = func() {
-		fmt.Fprintf(flag.CommandLine.Output(), "usage: vaultcrab [flags]\n       vaultcrab forget   delete the PIN, Touch ID data and master passwords kept for the quick unlock\n\nflags:\n")
+		fmt.Fprintf(flag.CommandLine.Output(), "usage: vaultcrab [flags]\n       vaultcrab forget          delete the PIN, Touch ID data and master passwords kept for the quick unlock\n       vaultcrab history clear   delete the history of the connections through jump hosts\n\nflags:\n")
 		flag.PrintDefaults()
 	}
 	flag.Parse()
@@ -62,6 +63,9 @@ func main() {
 	harden() // no core dumps (the master password is in memory while unlocking)
 	if flag.Arg(0) == "forget" {
 		os.Exit(forget(*cfgPath))
+	}
+	if flag.Arg(0) == "history" {
+		os.Exit(historyCmd(flag.Args()[1:]))
 	}
 	if *cfgPath == "" {
 		offerMigration()
@@ -173,9 +177,10 @@ func run(cfg config.Config, load func(string) (config.Config, error)) error {
 			StrictHosts: cfg.SSH.StrictHostKeys,
 			Legacy:      cfg.SSH.LegacyAlgorithms,
 		},
-		Scrollback: cfg.Terminal.Scrollback,
-		Local:      connect.LocalOptions{Command: cfg.Local.Shell.ForOS(), Dir: cfg.Local.Dir, Term: cfg.Terminal.Term},
-		Filters:    cfg.CompiledFilters(),
+		JumpHistory: jump.NewHistory(jumpHistoryPath(cacheDir), cfg.Jump.HistoryLimit, cfg.Jump.History),
+		Scrollback:  cfg.Terminal.Scrollback,
+		Local:       connect.LocalOptions{Command: cfg.Local.Shell.ForOS(), Dir: cfg.Local.Dir, Term: cfg.Terminal.Term},
+		Filters:     cfg.CompiledFilters(),
 		Visibility: hostlist.Visibility{
 			Orgs:         cfg.Vault.Orgs,
 			Collections:  cfg.Vault.Collections,
@@ -386,6 +391,7 @@ func about(cfg config.Config, cacheDir, workspacePath, helper string) []tui.Info
 		{Label: "Saved tabs", Value: exists(workspacePath)},
 		{Label: "known_hosts", Value: exists(cfg.SSH.KnownHosts)},
 		{Label: "Cache", Value: exists(cacheDir)},
+		{Label: "Jump history", Value: exists(jumpHistoryPath(cacheDir))},
 		{Label: "Bitwarden CLI", Value: bw},
 		{Label: "bw data dir", Value: data},
 	}
@@ -414,6 +420,35 @@ func (s spawner) Start(argv, env []string) (vault.Process, error) {
 // launcher returns the external-program launcher configured for this OS.
 func launcher(cfg config.Config) *connect.Launcher {
 	return &connect.Launcher{Specs: core.LaunchSpecs(cfg), Fallbacks: connect.DefaultFallbacks()}
+}
+
+// jumpHistoryPath is the history of the connections through jump hosts,
+// next to the metadata cache (names and addresses only).
+func jumpHistoryPath(cacheDir string) string { return filepath.Join(cacheDir, "jump-history.json") }
+
+// historyCmd runs `vaultcrab history clear`.
+func historyCmd(args []string) int {
+	if len(args) != 1 || args[0] != "clear" {
+		fmt.Fprintln(os.Stderr, "usage: vaultcrab history clear")
+		return 2
+	}
+	dir, err := cache.DefaultDir()
+	if err != nil {
+		fmt.Fprintln(os.Stderr, "vaultcrab history:", err)
+		return 1
+	}
+	path := jumpHistoryPath(dir)
+	had, err := jump.ClearHistory(path)
+	switch {
+	case err != nil:
+		fmt.Fprintln(os.Stderr, "vaultcrab history:", err)
+		return 1
+	case had:
+		fmt.Println("Deleted the history of the jump connections:", path)
+	default:
+		fmt.Println("No history of the jump connections:", path)
+	}
+	return 0
 }
 
 // forget deletes the PIN and every stored master password (vaultcrab

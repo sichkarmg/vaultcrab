@@ -19,6 +19,7 @@ import (
 	"github.com/sichkarmg/vaultcrab/internal/connect"
 	"github.com/sichkarmg/vaultcrab/internal/filter"
 	"github.com/sichkarmg/vaultcrab/internal/hostlist"
+	"github.com/sichkarmg/vaultcrab/internal/jump"
 	"github.com/sichkarmg/vaultcrab/internal/keystore"
 	"github.com/sichkarmg/vaultcrab/internal/launchers"
 	"github.com/sichkarmg/vaultcrab/internal/model"
@@ -116,6 +117,11 @@ type Options struct {
 	RestartWait time.Duration
 	// SSH configures the built-in SSH client.
 	SSH connect.SSHOptions
+	// JumpHistory keeps the connections through jump hosts (nil: none).
+	JumpHistory *jump.History
+	// JumpDial connects through a jump host (connect.DialJump; tests
+	// replace it).
+	JumpDial func(ctx context.Context, jump, target connect.Hop, cols, rows int, o connect.SSHOptions) (session.Remote, error)
 	// Start runs a detached program (external-mode scripts); secret fetches
 	// the host credential if the program reads it from stdin. Optional.
 	Start func(ctx context.Context, argv []string, pwStdin bool, secret func(context.Context) (secret.Secret, error)) error
@@ -180,6 +186,10 @@ type Service struct {
 	sessions sessions
 	widgets  *widget.Runner
 
+	prompts  prompts       // questions of connections to the user
+	keys     keyFiles      // keys read from files (passphrase asked once)
+	jumpHist *jump.History // the jump hosts and targets used
+
 	conf    configState      // guarded by mu
 	scripts []scripts.Script // guarded by mu: replaced on a config reload
 
@@ -219,8 +229,15 @@ func New(o Options) *Service {
 			s.vaults = append(s.vaults, newVaultConn(s, vo))
 		}
 	}
+	s.jumpHist = o.JumpHistory
+	if s.jumpHist == nil {
+		s.jumpHist = jump.NewHistory("", 0, false)
+	}
 	s.sessions.init(s)
 	s.initConfig()
+	if o.Config != nil {
+		s.jumpHist.Configure(o.Config.Jump.HistoryLimit, o.Config.Jump.History)
+	}
 	s.initAutoLock()
 	s.widgets = widget.NewRunner(o.Widgets, s.emit, o.WidgetExec)
 	return s

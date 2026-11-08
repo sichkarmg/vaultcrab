@@ -17,6 +17,10 @@
 #   VAULTCRAB_E2E_LINUX_ENV        KEY=VALUE pairs (space-separated) for bw on the
 #   VAULTCRAB_E2E_WIN_ENV          VMs, e.g. BITWARDENCLI_APPDATA_DIR=...,
 #                                  NODE_EXTRA_CA_CERTS=..., VAULTCRAB_IT_BW_PATH=...
+#   VAULTCRAB_E2E_JUMP             optional: a jump host chain for the tests of the
+#   VAULTCRAB_E2E_JUMP_TARGET      connections through a jump host (user@host[:port]
+#   VAULTCRAB_E2E_JUMP_KEY         each) and a local TEST private key accepted by
+#                                  both; the key is copied to the VMs
 # bw must be logged in to the test account on the VMs (scripts/seed-vault.sh
 # fills it). The password goes to the VMs over ssh stdin, never through argv.
 set -uo pipefail
@@ -109,6 +113,11 @@ for t in $targets; do
 	if [ "$t" = linux ]; then cp "$stage/run.sh" "$dir/"; else cp "$stage/run.ps1" "$dir/"; fi
 	# shellcheck disable=SC2086 # one KEY=VALUE per word
 	[ -z "$envs" ] || printf '%s\n' $envs >"$dir/env"
+	if [ -n "${VAULTCRAB_E2E_JUMP_KEY:-}" ]; then
+		cp "$VAULTCRAB_E2E_JUMP_KEY" "$dir/jumpkey" && chmod 600 "$dir/jumpkey"
+		printf '%s\n' "VAULTCRAB_IT_JUMP=${VAULTCRAB_E2E_JUMP:-}" "VAULTCRAB_IT_JUMP_TARGET=${VAULTCRAB_E2E_JUMP_TARGET:-}" \
+			"VAULTCRAB_IT_JUMP_KEY=jumpkey" >>"$dir/env"
+	fi
 	if ! vm_upload "$host" "$dir"; then result[$t]="FAIL (upload to $host)"; continue; fi
 	echo "-- version"
 	vm_version "$host" "$version" || { result[$t]="FAIL (--version)"; continue; }

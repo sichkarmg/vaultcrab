@@ -140,6 +140,7 @@ func (s *Service) ReloadConfig() error {
 	if err == nil {
 		s.reconcileVaults(cfg.Vaults)
 		s.SetLockPolicy(cfg.Unlock)
+		s.jumpHist.Configure(cfg.Jump.HistoryLimit, cfg.Jump.History)
 		if lerr := applyLog(cfg); lerr != nil {
 			logf("config: log: %v", lerr)
 		}

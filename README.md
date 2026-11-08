@@ -47,6 +47,8 @@ the vault only at the moment of connecting and never written to disk.
 - **Built-in SSH** (`golang.org/x/crypto/ssh`): password, keyboard-interactive, keys; own
   `known_hosts` with trust on first use; keepalives; legacy algorithms as a last resort for old
   devices (e.g. MikroTik RouterOS 6).
+- **Through a jump host** (`j`): pick a jump host or template, type the IP of the target — no vault
+  item per machine behind a bastion; host keys of both hops checked, a history of the targets used.
 - **Tabs and panes.** Each session is a terminal emulator (16/256/true colour, Unicode, `htop`,
   `mc`, `vim`, mouse in remote apps). Split panes horizontally and vertically, resize with keys or
   by dragging borders. Dropped sessions are marked `✗` (or, with `ui.tab_status: color`, by the
@@ -185,6 +187,46 @@ host card shows which vault, account and server an item belongs to, the status b
 of each vault, and the unlock dialog names the vault it unlocks. Items can be edited in their vault
 (not moved between vaults). See `vaults:` in [`docs/config.example.yaml`](docs/config.example.yaml).
 
+## Jump hosts
+
+For machines reachable only through a jump host (bastion), e.g. dozens of workstations with one SSH
+key whose IP addresses keep changing, there is no need for a vault item per machine:
+
+- **`j`** in the host list (prefix `j` anywhere) opens a two-step picker. **Step 1**: the jump host:
+  a template or any SSH host of the list (the ones used most and most recently first, the rest
+  searched by typing, fuzzy). **Step 2**: the target: type an IP or `[user@]host[:port]`, or pick a
+  target used before through this jump host (most used and most recent first) or a host of the list
+  (it then connects with its own user and credential). `Enter` connects, `Esc` goes back; mouse: a
+  click selects, a click on the selected row chooses it.
+- **Templates** (`jump_templates:` in the config, or Settings → Jump hosts, applied without a
+  restart; `J` on a host of the list makes one of it): the jump host (a vault item or
+  `[user@]host[:port]`), the user and port of the targets, the key of the targets (`~/.ssh/id_ed25519`,
+  `agent` or `vault:<item>`), the key of the jump host (`jump_key`, by default the credential of its
+  vault item, else `key`), and the host key check. See [`docs/config.example.yaml`](docs/config.example.yaml).
+- The connection is the built-in SSH client: it logs in to the jump host, opens a TCP channel from it
+  to the target and runs the second SSH session over that channel (like `ssh -J`). **The agent is
+  never forwarded.** The session is an ordinary tab (`↪ jump → target`): split, clone, rename
+  (prefix `R`), reconnect (both hops again), saved with the open tabs.
+- **Keys**: a key file with a passphrase is asked for once per run of Vaultcrab and kept in memory
+  only (never written to disk); `agent` uses `SSH_AUTH_SOCK` (Windows: the OpenSSH agent); a vault item
+  is fetched for each connection and wiped after the handshake, like any credential.
+- **Host keys of both hops** are checked against Vaultcrab's `known_hosts`. `host_key_check: ask`
+  (default) shows a new key with its fingerprint: accept and remember, accept once (useful for
+  targets whose address will belong to another machine tomorrow), or reject. `accept-new` remembers
+  new keys silently (Settings warns about it); `strict` refuses unknown hosts. **A key that changed
+  for a known address is always refused** with a warning naming the line of `known_hosts` to remove;
+  it is never replaced silently.
+- **Errors say which stage failed**: the jump host unreachable, the target unreachable from the jump
+  host, the authentication on the jump host or on the target, a host key.
+- **History** (`jump.history`, on by default): which jump host, target and user were used, when and how
+  often — names and addresses only — in `jump-history.json` of the cache directory (not in the vault),
+  at most `jump.history_limit` entries (200). Settings → Jump hosts turns it off (`H`) or clears it
+  (`c` twice); so does `vaultcrab history clear`.
+
+The key `j` replaces "move down" in the host list (arrows still move); `ui.keys.jump` picks another
+key. Chains of several jump hosts and VNC/SMB through such a template are not supported yet (a VNC item
+can name a jump host in its `jump` field).
+
 ## Offline, sleep and a crashed bw serve
 
 - **Server unreachable** (no network, VPN down): the status bar says *Offline: server unreachable,
@@ -300,11 +342,12 @@ rotated at 1 MiB). Passwords, typed keys and terminal output are never logged. W
 button in the tab bar (or prefix `g`) shows the log. `VAULTCRAB_DEBUG_LOG=/path/file` additionally
 logs mouse events and window sizes for debugging.
 
-Keys: `Enter` connect, `/` search, `x` scripts, `t` local shell, `a`/`e`/`C`/`D` add/edit/copy/delete,
-`p` copy password, `?` help. Session commands use the prefix `Ctrl+B` (configurable): `|` and `-`
-split (the host of the current pane is offered first, so `Enter` clones it), `c` clone the session
-into a new tab, arrows move focus, `z` zoom, `[` scrollback, `x` close pane, `&` close the tab with
-all its panes. In a split tab each pane header has a `✕` button that closes just that pane; `Ctrl+D`
+Keys: `Enter` connect, `/` search, `x` scripts, `t` local shell, `j` through a jump host,
+`a`/`e`/`C`/`D` add/edit/copy/delete, `p` copy password, `?` help. Session commands use the prefix
+`Ctrl+B` (configurable): `|` and `-` split (the host of the current pane is offered first, so `Enter`
+clones it), `c` clone the session into a new tab, `R` rename the tab, `j` jump host picker, arrows
+move focus, `z` zoom, `[` scrollback, `x` close pane, `&` close the tab with all its panes. In a split
+tab each pane header has a `✕` button that closes just that pane; `Ctrl+D`
 closes a broken or finished pane (`Enter` reconnects it).
 
 ## External clients (VNC, SMB, SFTP, …)

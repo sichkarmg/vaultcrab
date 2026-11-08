@@ -309,6 +309,14 @@ func (u *unlockModal) what() string {
 	return "the vault"
 }
 
+// jumpKey is the key of the jump picker (ui.keys.jump).
+func jumpKey(m *Model) string {
+	if k := m.keyOf(core.ActJump); k != "" {
+		return k
+	}
+	return "-"
+}
+
 // --- confirm ---
 
 // confirmModal asks yes/no with two buttons (keys or mouse); the yes button
@@ -449,6 +457,8 @@ func (h *helpModal) view(m *Model, w, hh int) []string {
 		{"Right/Left Space", "expand / collapse"},
 		{"| / -", "open in a new pane (right / below) of the last session tab"},
 		{"t", "local terminal in a new tab (anywhere: " + m.opt.Prefix + " t)"},
+		{jumpKey(m), "connect through a jump host: 1. the jump host or template, 2. the target IP (anywhere: " + m.opt.Prefix + " " + jumpKey(m) + ")"},
+		{"J", "make a jump template of the SSH host (Settings → Jump hosts)"},
 		{"x", "run a script for the item (scripts: in the config; ping by default)"},
 		{"e / a / C / D", "edit the item / add a new one / copy / delete it (to the trash; vault online only)"},
 		{"w", "show / hide the widget column (widgets: in the config)"},

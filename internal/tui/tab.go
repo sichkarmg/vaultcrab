@@ -24,6 +24,8 @@ type tab struct {
 	sel     *selDrag             // mouse selection in progress
 	ksel    map[core.PaneID]*kbSel
 
+	name string // set by the user (rename_tab); "" = the host of the focused pane
+
 	seen      uint64    // output of the tab's sessions when it was last shown
 	resizedAt time.Time // shells redraw after a resize: not activity
 }
@@ -34,12 +36,24 @@ func newTab(s *core.Session) *tab {
 
 func (t *tab) focused() *core.Session { return t.ws.FocusedSession() }
 
-func (t *tab) title() string {
-	title := t.focused().Host.Name
+func (t *tab) title(g glyphs) string {
+	if t.name != "" {
+		return t.name
+	}
+	title := sessionTitle(t.focused(), g)
 	if n := t.ws.Len(); n > 1 {
 		title += fmt.Sprintf(" +%d", n-1)
 	}
 	return title
+}
+
+// sessionTitle names a session: its host, "↪ jump → target" through a
+// jump host.
+func sessionTitle(s *core.Session, g glyphs) string {
+	if core.IsJump(s.Host) {
+		return g.jump + " " + s.Host.Fields[core.FieldVia] + " " + g.arrow + " " + s.Host.Name
+	}
+	return s.Host.Name
 }
 
 func (t *tab) zoomed() bool { return t.ws.Zoomed() }
@@ -433,7 +447,7 @@ func (t *tab) paneLines(m *Model, id core.PaneID, pr core.Rect, focused bool) []
 	out := make([]string, 0, pr.H)
 	if t.ws.Headers() && pr.H > 1 {
 		st, err := s.State()
-		title := " " + s.Host.Name + " "
+		title := " " + sessionTitle(s, m.g) + " "
 		info := s.Host.Target()
 		if err != nil && st == core.SessionDisconnected {
 			info = err.Error()

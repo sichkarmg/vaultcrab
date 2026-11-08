@@ -85,14 +85,19 @@ func (s *Service) newSSHSession(h model.Host, cols, rows int, vncSpec *connect.L
 		return nil, ErrNotSSH
 	}
 	hostID := h.ID
+	sec := func(ctx context.Context) (secret.Secret, error) {
+		return s.Secret(ctx, hostID)
+	}
+	if spec, ok := JumpSpecOf(h); ok {
+		// through a jump host: the dialer gets the keys of both hops
+		dial, sec = s.jumpDialer(spec), nil
+	}
 	sess := session.New(h, session.Options{
 		Cols: cols, Rows: rows,
 		Scrollback: s.opts.Scrollback,
-		Secret: func(ctx context.Context) (secret.Secret, error) {
-			return s.Secret(ctx, hostID)
-		},
-		Dial:   dial,
-		Notify: s.emit,
+		Secret:     sec,
+		Dial:       dial,
+		Notify:     s.emit,
 	})
 	s.sessions.mu.Lock()
 	s.sessions.list = append(s.sessions.list, sess)

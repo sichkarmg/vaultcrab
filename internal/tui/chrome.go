@@ -243,7 +243,9 @@ func (m *Model) vaultStatus() string {
 			s := v.Label()
 			switch {
 			case v.State == core.Online && v.SyncErr != nil:
-				s = ic.Get(core.IconCached) + " " + s + " (local copy)"
+				s = ic.Get(core.IconCached) + " " + s + " (server unreachable, local copy)"
+			case v.State == core.Crashed:
+				s = ic.Get(core.IconSyncing) + " " + s + " restarting bw serve…"
 			case v.State == core.Online:
 				s = ic.Get(core.IconOnline) + " " + s
 			case v.State == core.Locked:
@@ -267,10 +269,13 @@ func (m *Model) vaultStatus() string {
 		s = ic.Get(core.IconSyncing) + " starting bw…"
 	case st.State == core.Syncing:
 		s = ic.Get(core.IconSyncing) + " syncing…"
+	case st.State == core.Crashed:
+		s = ic.Get(core.IconSyncing) + " bw serve stopped, restarting…"
 	case st.State == core.Online && st.SyncErr != nil:
-		// Unlocked, but the server is unreachable: bw's local copy is used
-		// (passwords included), sync is retried every minute.
-		s = ic.Get(core.IconCached) + " Local bw copy (server unreachable)"
+		// Unlocked, but the server is unreachable (no network, VPN down):
+		// bw's local copy is used (passwords included); the server is
+		// checked again with a growing delay (s: now).
+		s = ic.Get(core.IconCached) + " Offline: server unreachable, local copy"
 		if !st.SyncedAt.IsZero() {
 			s += ", synced " + st.SyncedAt.Format("02.01 15:04")
 		}
@@ -284,7 +289,7 @@ func (m *Model) vaultStatus() string {
 	case st.State == core.NeedLogin:
 		s = ic.Get(core.IconOffline) + " bw not logged in (L: login)"
 	case st.State == core.Offline:
-		s = ic.Get(core.IconOffline) + " Offline"
+		s = ic.Get(core.IconOffline) + " bw serve unreachable (s: retry)"
 	}
 	if st.FromCache && st.State != core.Online {
 		s += " · cache"

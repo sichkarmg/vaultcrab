@@ -7,6 +7,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+- After a sleep of a few hours with the VPN still down, the vault no longer asks for the master
+  password. bw serve exits when it cannot refresh its expired access token (the first sync after
+  the sleep); Vaultcrab now checks that the server is reachable before a sync and skips it while it
+  is not, and restarts a crashed `bw serve` with the session key of the old one, so the vault stays
+  unlocked. `s` no longer restarts a running `bw serve` (which locked the vault).
+
+### Changed
+- Separate states and messages: *Offline: server unreachable, local copy* (passwords still work),
+  *bw serve stopped, restarting…*, *bw serve unreachable*, *Locked* (with the reason when bw or a
+  restart locked it). A connection attempt during a restart waits for it.
+- No periodic checks any more: the vault is synced every `bw.sync_interval`, and while the server or
+  `bw serve` is unreachable it is checked again after 15 s, 30 s, 1 min, … up to 5 min. The event log
+  records why (the crash line of bw, the failed server check).
+
 ## [0.3.0] - 2026-11-02
 
 ### Added

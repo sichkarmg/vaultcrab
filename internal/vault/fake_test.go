@@ -59,6 +59,12 @@ func (f *fakeServe) handler(t *testing.T) http.Handler {
 		f.status = Unlocked
 		reply(w, `{"object":"message","title":"Your vault is now unlocked!","raw":"SESSIONKEY"}`)
 	})
+	mux.HandleFunc("POST /lock", func(w http.ResponseWriter, r *http.Request) {
+		f.mu.Lock()
+		defer f.mu.Unlock()
+		f.status = Locked
+		reply(w, `{"object":"message","title":"Your vault is locked."}`)
+	})
 	mux.HandleFunc("POST /sync", func(w http.ResponseWriter, r *http.Request) {
 		if locked(w) {
 			return

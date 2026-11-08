@@ -12,7 +12,9 @@
 //
 // The helper exits, killing what it started, when the pipe from vaultcrab
 // closes — also when vaultcrab is killed with SIGKILL. Requests carry command
-// lines and non-secret environment only; never passwords.
+// lines and environment over a private pipe; never passwords. The one secret
+// is the BW_SESSION of a bw serve restarted after a crash (vault/session.go),
+// which the helper does not keep or log.
 package spawn
 
 import (
@@ -350,7 +352,7 @@ func (p *Proc) Kill() {
 }
 
 // Start starts argv in the helper with env added to the helper's
-// environment (never secrets).
+// environment (no secrets except a bw session key, see the package doc).
 func (c *Client) Start(argv, env []string) (*Proc, error) {
 	p := &Proc{c: c, done: make(chan struct{})}
 	ch := make(chan response, 1)

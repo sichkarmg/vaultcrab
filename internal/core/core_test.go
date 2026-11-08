@@ -6,6 +6,7 @@ import (
 	"context"
 	"errors"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -170,20 +171,17 @@ type dyingSource struct {
 
 func (d dyingSource) Done() <-chan struct{} { return d.done }
 
-func TestSourceDiesGoesOffline(t *testing.T) {
-	src := dyingSource{&fakeSource{status: vault.Unlocked}, make(chan struct{})}
-	s := New(Options{Connect: func(context.Context) (Source, func(), error) { return src, nil, nil }})
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-	s.Start(ctx)
-	waitState(t, s, Online)
-	close(src.done)
-	waitState(t, s, Offline)
+func (d dyingSource) ExitReason() string {
+	return "FetchError: request to https://vw.test/identity/connect/token failed"
 }
 
-func TestHealthRecovers(t *testing.T) {
+// A bw serve that does not answer (but did not exit) is checked again with
+// a growing delay, and the vault comes back without a restart.
+func TestUnreachableServeRecovers(t *testing.T) {
 	src := &fakeSource{status: vault.Unlocked}
-	s := New(Options{Connect: func(context.Context) (Source, func(), error) { return src, nil, nil }, HealthInterval: 20 * time.Millisecond})
+	var connects atomic.Int32
+	s := New(Options{Connect: func(context.Context) (Source, func(), error) { connects.Add(1); return src, nil, nil },
+		RetryInterval: 20 * time.Millisecond, SyncInterval: 20 * time.Millisecond})
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	s.Start(ctx)
@@ -196,6 +194,9 @@ func TestHealthRecovers(t *testing.T) {
 	src.down = false
 	src.mu.Unlock()
 	waitState(t, s, Online)
+	if n := connects.Load(); n != 1 {
+		t.Fatalf("bw serve restarted %d times; it was alive", n-1)
+	}
 }
 
 // With the server unreachable bw still unlocks and serves its local copy:

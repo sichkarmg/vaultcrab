@@ -101,6 +101,10 @@ func (s *testServer) serve(c net.Conn, cfg *ssh.ServerConfig) {
 		}
 	}()
 	for nc := range chans {
+		if nc.ChannelType() == "direct-tcpip" {
+			go s.forward(nc)
+			continue
+		}
 		ch, creqs, _ := nc.Accept()
 		go func() {
 			for r := range creqs {
@@ -138,6 +142,34 @@ func (s *testServer) serve(c net.Conn, cfg *ssh.ServerConfig) {
 			}
 		}()
 	}
+}
+
+// forward serves a direct-tcpip channel (the server as a jump host).
+func (s *testServer) forward(nc ssh.NewChannel) {
+	var p struct {
+		Host     string
+		Port     uint32
+		OrigHost string
+		OrigPort uint32
+	}
+	if err := ssh.Unmarshal(nc.ExtraData(), &p); err != nil {
+		nc.Reject(ssh.ConnectionFailed, "bad payload")
+		return
+	}
+	s.addReq(fmt.Sprintf("direct-tcpip:%s:%d", p.Host, p.Port))
+	c, err := net.DialTimeout("tcp", net.JoinHostPort(p.Host, strconv.Itoa(int(p.Port))), 2*time.Second)
+	if err != nil {
+		nc.Reject(ssh.ConnectionFailed, "connect failed (Connection refused)")
+		return
+	}
+	ch, reqs, err := nc.Accept()
+	if err != nil {
+		c.Close()
+		return
+	}
+	go ssh.DiscardRequests(reqs)
+	go func() { io.Copy(ch, c); ch.CloseWrite(); ch.Close() }()
+	go func() { io.Copy(c, ch); c.Close() }()
 }
 
 func (s *testServer) addSize(cols, rows uint32) {

@@ -7,6 +7,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- Connections through a jump host (`j` in the host list, prefix `j` anywhere): a two-step picker,
+  first the jump host (a template or any SSH host; used ones first, fuzzy search), then the target
+  (an IP or `[user@]host[:port]` typed, a target used before, or a host of the list). Built-in SSH
+  over a channel of the jump host, the agent is never forwarded; tabs show `↪ jump → target` and
+  reconnect through both hops.
+- Jump templates (`jump_templates:`, Settings → Jump hosts, `J` on a host): the jump host, user, port,
+  keys (a file with the passphrase asked once and kept in memory, the ssh-agent, or a vault item) and
+  the host key check (`ask` by default, `accept-new`, `strict`); a changed host key of a known address
+  is always refused, on both hops.
+- A local history of the jump connections (names and addresses only, frecency order, limit 200,
+  `jump.history` turns it off, `vaultcrab history clear` deletes it).
+- Rename a tab (prefix `R`); the name is kept with the saved tabs.
+- Errors of connections through a jump host name the stage: the jump host unreachable, the target
+  unreachable from it, the authentication on either, a host key.
+
+### Changed
+- `j` in the host list opens the jump picker instead of moving down (arrows move; `ui.keys.jump`
+  picks another key).
+
 ## [0.4.0] - 2026-11-08
 
 ### Added

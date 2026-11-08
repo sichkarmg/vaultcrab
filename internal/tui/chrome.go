@@ -57,7 +57,7 @@ func (m *Model) tabLabels() []string {
 		labels = append(labels, stTabInactive.Render(hosts))
 	}
 	for i, t := range m.tabs {
-		title := []rune(t.title())
+		title := []rune(t.title(m.g))
 		if tw := m.tabWidth(); ansi.StringWidth(string(title)) > tw {
 			title = []rune(ansi.Truncate(string(title), tw, m.g.ell))
 		}

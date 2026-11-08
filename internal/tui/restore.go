@@ -30,7 +30,7 @@ func (m *Model) restoreWorkspace() {
 	needHosts := false
 	for _, ts := range st.Tabs {
 		for _, ps := range ts.Panes {
-			needHosts = needHosts || ps.HostID != localPaneID
+			needHosts = needHosts || ps.HostID != localPaneID || ps.Jump != nil
 		}
 	}
 	if needHosts && len(m.svc.Snapshot().Hosts) == 0 {
@@ -43,7 +43,13 @@ func (m *Model) restoreWorkspace() {
 	r := m.bodyRect()
 	open := func(ps core.PaneState) *core.Session {
 		h := m.svc.LocalHost()
-		if ps.HostID != localPaneID {
+		switch {
+		case ps.Jump != nil:
+			var err error
+			if h, err = m.svc.JumpHost(core.JumpSpec{Via: ps.Jump.Via, Target: ps.Jump.Target, Item: ps.Jump.Item}); err != nil {
+				return nil // the template or host is gone
+			}
+		case ps.HostID != localPaneID:
 			var ok bool
 			if h, ok = m.svc.Host(ps.HostID); !ok {
 				return nil
@@ -61,7 +67,7 @@ func (m *Model) restoreWorkspace() {
 		if ws == nil {
 			continue
 		}
-		m.tabs = append(m.tabs, &tab{ws: ws, history: map[core.PaneID]bool{}, ksel: map[core.PaneID]*kbSel{}})
+		m.tabs = append(m.tabs, &tab{ws: ws, name: ts.Title, history: map[core.PaneID]bool{}, ksel: map[core.PaneID]*kbSel{}})
 		if i+1 == st.Active {
 			active = len(m.tabs)
 		}
@@ -87,6 +93,9 @@ func (m *Model) SaveWorkspace() error {
 		return core.SaveWorkspace(m.opt.WorkspacePath, st) // nothing to reopen
 	}
 	pane := func(s *core.Session) (core.PaneState, bool) {
+		if sp, ok := core.JumpSpecOf(s.Host); ok {
+			return core.PaneState{HostID: s.Host.ID, Jump: &core.JumpPane{Via: sp.Via, Target: sp.Target, Item: sp.Item}}, true
+		}
 		switch {
 		case s.Host.Scheme == core.SchemeSSH, s.Host.Scheme == core.SchemeVNC:
 			return core.PaneState{HostID: s.Host.ID}, true
@@ -100,6 +109,7 @@ func (m *Model) SaveWorkspace() error {
 		if !ok {
 			continue
 		}
+		ts.Title = t.name
 		st.Tabs = append(st.Tabs, ts)
 		if i+1 == m.active {
 			st.Active = len(st.Tabs)

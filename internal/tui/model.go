@@ -169,6 +169,7 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	if c := m.maybeFetchNotes(); c != nil {
 		cmd = tea.Batch(cmd, c)
 	}
+	m.checkPrompt() // a connection asks for a passphrase or a host key
 	if c := m.startTouch(); c != nil {
 		cmd = tea.Batch(cmd, c)
 	}
@@ -370,12 +371,28 @@ func (m *Model) prefixed(msg tea.KeyMsg) tea.Cmd {
 		m.modal = newLogView(m)
 	case core.ActLocal:
 		return m.openHost(m.svc.LocalHost())
+	case core.ActJump:
+		m.openJumpPicker()
+	case core.ActRenameTab:
+		if t := m.curTab(); t != nil {
+			m.modal = newRename(m, t)
+		}
 	default:
 		if t := m.curTab(); t != nil {
 			return t.paneAction(m, m.keymap[k], msg)
 		}
 	}
 	return nil
+}
+
+// keyOf returns the key of a prefix action (ui.keys), "" if none.
+func (m *Model) keyOf(action string) string {
+	for k, a := range m.keymap {
+		if a == action {
+			return k
+		}
+	}
+	return ""
 }
 
 func (m *Model) curTab() *tab {
@@ -447,7 +464,7 @@ func (m *Model) confirmCloseTab(t *tab) {
 		m.closeTab(t)
 		return
 	}
-	m.modal = newConfirm(fmt.Sprintf("Close %q?", t.title()), func(m *Model) tea.Cmd {
+	m.modal = newConfirm(fmt.Sprintf("Close %q?", t.title(m.g)), func(m *Model) tea.Cmd {
 		m.closeTab(t)
 		return nil
 	})

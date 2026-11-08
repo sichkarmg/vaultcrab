@@ -211,6 +211,7 @@ type settingsModal struct {
 
 	prog *programsPage // the External programs page
 	vp   vaultsPage    // the Vaults page
+	jp   jumpPage      // the Jump hosts page
 
 	forget bool // F pressed once on the Security page
 }
@@ -221,10 +222,11 @@ const (
 	pageSecurity
 	pagePrograms
 	pageVaults
+	pageJump
 	pageAbout
 )
 
-var settingsPages = []string{"Appearance", "Behavior", "Security", "External programs", "Vaults", "About"}
+var settingsPages = []string{"Appearance", "Behavior", "Security", "External programs", "Vaults", "Jump hosts", "About"}
 
 // newSettings opens the settings; the External programs page keeps its
 // draft between openings.
@@ -232,7 +234,7 @@ func newSettings(m *Model) *settingsModal {
 	if m.programs == nil {
 		m.programs = &programsPage{}
 	}
-	return &settingsModal{prog: m.programs, page: m.settingsPage}
+	return &settingsModal{prog: m.programs, page: m.settingsPage, jp: jumpPage{remove: -1}}
 }
 
 // setting is a row of the Appearance or Behavior page: a choice among
@@ -285,7 +287,7 @@ func onOff(v bool) int {
 func (s *settingsModal) settings(m *Model) []setting {
 	a := m.opt.Appearance
 	switch s.page {
-	case pageAbout, pagePrograms, pageVaults:
+	case pageAbout, pagePrograms, pageVaults, pageJump:
 		return nil
 	case pageSecurity:
 		var labels []string
@@ -481,6 +483,11 @@ func (s *settingsModal) update(m *Model, msg tea.Msg) tea.Cmd {
 			return cmd
 		}
 	}
+	if s.page == pageJump {
+		if cmd, handled := s.jp.update(m, k); handled {
+			return cmd
+		}
+	}
 	rows := s.settings(m)
 	n := len(rows)
 	if s.page == pageSecurity {
@@ -538,6 +545,8 @@ func (s *settingsModal) mouse(m *Model, msg tea.MouseMsg, x, y int) tea.Cmd {
 		return s.prog.mouse(m, x, y)
 	case pageVaults:
 		return s.vp.mouse(m, x, y)
+	case pageJump:
+		return s.jp.mouse(m, x, y)
 	}
 	for r, ry := range s.rowY {
 		if y == ry {
@@ -573,6 +582,8 @@ func (s *settingsModal) view(m *Model, w, h int) []string {
 		b.WriteString(s.prog.view(m, max(40, w-4-2*boxPadX), line))
 	case pageVaults:
 		b.WriteString(s.vp.view(m, max(40, w-4-2*boxPadX), line))
+	case pageJump:
+		b.WriteString(s.jp.view(m, max(40, w-4-2*boxPadX), line))
 	case pageAppearance, pageBehavior, pageSecurity:
 		rows := s.settings(m)
 		s.rowY, s.optSpans = s.rowY[:0], s.optSpans[:0]

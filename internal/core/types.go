@@ -54,6 +54,8 @@ type (
 	HostEdit       = vault.HostEdit
 	TabState       = workspace.TabState
 	PaneState      = workspace.PaneState
+	JumpPane       = workspace.JumpPane
+	Remote         = session.Remote
 	WorkspaceState = workspace.State
 	ViewState      = workspace.ViewState
 	WidgetOutput   = widget.Output
@@ -256,4 +258,6 @@ const (
 	ActHelp       = config.ActHelp
 	ActLocal      = config.ActLocal
 	ActSettings   = config.ActSettings
+	ActJump       = config.ActJump
+	ActRenameTab  = config.ActRenameTab
 )

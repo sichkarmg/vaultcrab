@@ -11,11 +11,10 @@ import (
 	"fmt"
 	"io"
 	"net"
-	"os"
-	"path/filepath"
 	"strconv"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"golang.org/x/crypto/ssh"
@@ -68,6 +67,7 @@ func (e *UnknownHostError) Error() string {
 // Conn is an interactive SSH shell with a PTY.
 type Conn struct {
 	client *ssh.Client
+	via    *ssh.Client // the jump host, closed with the connection
 	sess   *ssh.Session
 	stdin  io.WriteCloser
 	stdout io.Reader
@@ -121,16 +121,60 @@ func dialClient(ctx context.Context, h model.Host, sec *secret.Secret, o SSHOpti
 	if err != nil {
 		return nil, err
 	}
+	mode := HostKeyAcceptNew
+	if o.StrictHosts {
+		mode = HostKeyStrict
+	}
+	c, _, err := dialHop(ctx, hostAddr(h), h.User, auth, HostKeyPolicy{File: o.KnownHosts, Mode: mode}, o, nil)
+	if err != nil {
+		var he *hopErr
+		if errors.As(err, &he) {
+			if he.stage == StageAuth {
+				return nil, errors.New("authentication failed")
+			}
+			return nil, he.err
+		}
+		return nil, err
+	}
+	return c, nil
+}
+
+func hostAddr(h model.Host) string {
 	port := h.Port
 	if port == 0 {
 		port = 22
 	}
-	addr := net.JoinHostPort(h.Addr, strconv.Itoa(port))
+	return net.JoinHostPort(h.Addr, strconv.Itoa(port))
+}
+
+// Stage names the step of a connection that failed.
+type Stage int
+
+const (
+	StageConnect   Stage = iota // the TCP connection (or the channel from the jump host)
+	StageHostKey                // the host key was not accepted
+	StageAuth                   // authentication was refused
+	StageHandshake              // another SSH error (algorithms, timeout)
+)
+
+// hopErr is a failed hop, classified by stage (dialHop).
+type hopErr struct {
+	stage Stage
+	err   error
+}
+
+func (e *hopErr) Error() string { return e.err.Error() }
+func (e *hopErr) Unwrap() error { return e.err }
+
+// dialHop connects to addr (through via, an established SSH client, if not
+// nil), checks the host key with hk and authenticates as user. The
+// handshake is bounded by o.Handshake, except while the user is asked
+// about the host key.
+func dialHop(ctx context.Context, addr, user string, auth []ssh.AuthMethod, hk HostKeyPolicy, o SSHOptions, via *ssh.Client) (*ssh.Client, net.Conn, error) {
 	cfg := &ssh.ClientConfig{
-		User:            h.User,
-		Auth:            auth,
-		HostKeyCallback: hostKeyCallback(o.KnownHosts, o.StrictHosts),
-		Timeout:         o.Timeout,
+		User:    user,
+		Auth:    auth,
+		Timeout: o.Timeout,
 	}
 	if o.Legacy {
 		sup, weak := ssh.SupportedAlgorithms(), ssh.InsecureAlgorithms()
@@ -141,33 +185,80 @@ func dialClient(ctx context.Context, h model.Host, sec *secret.Secret, o SSHOpti
 	}
 	// Prefer the key types already pinned for this host, so that the server
 	// is not asked for another algorithm we would then report as a mismatch.
-	if algos := knownAlgorithms(o.KnownHosts, addr); algos != nil {
+	if algos := knownAlgorithms(hk.File, addr); algos != nil {
 		cfg.HostKeyAlgorithms = algos
 	}
 
-	d := net.Dialer{Timeout: o.Timeout, KeepAlive: 30 * time.Second}
-	tcp, err := d.DialContext(ctx, "tcp", addr)
-	if err != nil {
-		return nil, err
+	var conn net.Conn
+	var err error
+	if via != nil {
+		dctx, cancel := context.WithTimeout(ctx, o.Timeout)
+		conn, err = via.DialContext(dctx, "tcp", addr)
+		cancel()
+		if err != nil && ctx.Err() == nil && errors.Is(err, context.DeadlineExceeded) {
+			err = fmt.Errorf("no answer within %s (ssh.timeout)", o.Timeout)
+		}
+	} else {
+		d := net.Dialer{Timeout: o.Timeout, KeepAlive: 30 * time.Second}
+		conn, err = d.DialContext(ctx, "tcp", addr)
 	}
-	// Bound the handshake by ctx and the timeout.
-	stop := context.AfterFunc(ctx, func() { tcp.Close() })
-	_ = tcp.SetDeadline(time.Now().Add(o.Handshake))
-	cc, chans, reqs, err := ssh.NewClientConn(tcp, addr, cfg)
+	if err != nil {
+		if ctx.Err() != nil {
+			return nil, nil, ctx.Err()
+		}
+		return nil, nil, &hopErr{StageConnect, err}
+	}
+	// Bound the handshake by ctx and the timeout; the timer pauses while
+	// the user is asked about the host key.
+	var timedOut atomic.Bool
+	timer := time.AfterFunc(o.Handshake, func() { timedOut.Store(true); conn.Close() })
+	stop := context.AfterFunc(ctx, func() { conn.Close() })
+	pause := func(p bool) {
+		if p {
+			timer.Stop()
+		} else {
+			timer.Reset(o.Handshake)
+		}
+	}
+	cfg.HostKeyCallback = hk.callback(ctx, pause)
+	cc, chans, reqs, err := ssh.NewClientConn(conn, addr, cfg)
+	timer.Stop()
 	stop()
 	if err != nil {
-		tcp.Close()
-		if ctx.Err() != nil {
-			return nil, ctx.Err()
+		conn.Close()
+		var hkErr *HostKeyError
+		var unk *UnknownHostError
+		var rej *HostKeyRejectedError
+		switch {
+		case ctx.Err() != nil:
+			return nil, nil, ctx.Err()
+		case errors.As(err, &hkErr), errors.As(err, &unk), errors.As(err, &rej):
+			return nil, nil, &hopErr{StageHostKey, unwrapHostKey(err)}
+		case timedOut.Load():
+			return nil, nil, &hopErr{StageHandshake, fmt.Errorf("ssh handshake timed out after %s (ssh.handshake_timeout)", o.Handshake)}
+		case strings.Contains(err.Error(), "unable to authenticate"):
+			return nil, nil, &hopErr{StageAuth, err}
 		}
-		var ne net.Error
-		if errors.As(err, &ne) && ne.Timeout() {
-			return nil, fmt.Errorf("ssh handshake timed out after %s (ssh.handshake_timeout)", o.Handshake)
-		}
-		return nil, cleanAuthErr(err)
+		return nil, nil, &hopErr{StageHandshake, err}
 	}
-	_ = tcp.SetDeadline(time.Time{})
-	return ssh.NewClient(cc, chans, reqs), nil
+	return ssh.NewClient(cc, chans, reqs), conn, nil
+}
+
+// unwrapHostKey returns the host key error itself, without the "ssh:
+// handshake failed:" prefix.
+func unwrapHostKey(err error) error {
+	var hkErr *HostKeyError
+	var unk *UnknownHostError
+	var rej *HostKeyRejectedError
+	switch {
+	case errors.As(err, &hkErr):
+		return hkErr
+	case errors.As(err, &unk):
+		return unk
+	case errors.As(err, &rej):
+		return rej
+	}
+	return err
 }
 
 // Tunnel is an SSH connection to a jump host that opens TCP connections
@@ -244,6 +335,9 @@ func (c *Conn) finish(err error) {
 	c.once.Do(func() {
 		c.err = err
 		c.client.Close()
+		if c.via != nil {
+			c.via.Close() // the jump host
+		}
 		close(c.done)
 	})
 }
@@ -318,6 +412,11 @@ func (c *Conn) Close() error {
 	return nil
 }
 
+// AuthFromSecret builds the authentication of a vault credential (a
+// password or a private key). The methods refer to sec: wipe it only after
+// the connection is established.
+func AuthFromSecret(sec *secret.Secret) ([]ssh.AuthMethod, error) { return authMethods(sec) }
+
 // authMethods builds auth from the secret. The password is converted to a
 // string only inside the callbacks, during the handshake.
 func authMethods(sec *secret.Secret) ([]ssh.AuthMethod, error) {
@@ -355,50 +454,6 @@ func cleanAuthErr(err error) error {
 		return errors.New("authentication failed")
 	}
 	return err
-}
-
-// hostKeyCallback implements trust-on-first-use with our own known_hosts.
-func hostKeyCallback(file string, strict bool) ssh.HostKeyCallback {
-	return func(hostname string, remote net.Addr, key ssh.PublicKey) error {
-		if file == "" {
-			if strict {
-				return &UnknownHostError{Host: hostname, Fingerprint: ssh.FingerprintSHA256(key)}
-			}
-			return nil
-		}
-		khMu.Lock()
-		defer khMu.Unlock()
-		if err := os.MkdirAll(filepath.Dir(file), 0o700); err != nil {
-			return err
-		}
-		f, err := os.OpenFile(file, os.O_CREATE|os.O_RDONLY, 0o600)
-		if err != nil {
-			return err
-		}
-		f.Close()
-		cb, err := knownhosts.New(file)
-		if err != nil {
-			return fmt.Errorf("known_hosts: %w", err)
-		}
-		err = cb(hostname, remote, key)
-		var ke *knownhosts.KeyError
-		if err == nil || !errors.As(err, &ke) {
-			return err
-		}
-		if len(ke.Want) > 0 {
-			return &HostKeyError{Host: hostname, Fingerprint: ssh.FingerprintSHA256(key), File: file, Line: ke.Want[0].Line}
-		}
-		if strict {
-			return &UnknownHostError{Host: hostname, Fingerprint: ssh.FingerprintSHA256(key)}
-		}
-		af, err := os.OpenFile(file, os.O_APPEND|os.O_WRONLY, 0o600)
-		if err != nil {
-			return err
-		}
-		defer af.Close()
-		_, err = fmt.Fprintln(af, knownhosts.Line([]string{knownhosts.Normalize(hostname)}, key))
-		return err
-	}
 }
 
 // knownAlgorithms returns host key algorithms for keys pinned for addr.

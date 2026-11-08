@@ -99,10 +99,14 @@ func TestSettings(t *testing.T) {
 	}
 	keys(m, "left")
 
-	// Vaults, then About (after External programs)
+	// Vaults, Jump hosts, then About (after External programs)
 	keys(m, "tab", "tab")
 	if v := ansi.Strip(m.View()); !strings.Contains(v, "Add vault") || !strings.Contains(v, "Online") && !strings.Contains(v, "online") {
 		t.Fatalf("vaults:\n%s", v)
+	}
+	keys(m, "tab")
+	if v := ansi.Strip(m.View()); !strings.Contains(v, "No templates yet") {
+		t.Fatalf("jump hosts:\n%s", v)
 	}
 	keys(m, "tab")
 	if v := ansi.Strip(m.View()); !strings.Contains(v, "Config file") || !strings.Contains(v, m.opt.ConfigPath[:20]) {

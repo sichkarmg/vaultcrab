@@ -194,7 +194,7 @@ func TestProgramsPage(t *testing.T) {
 	if m.modal != nil || len(m.tabs) != 1 || m.programs != p || !p.dirty() {
 		t.Fatalf("VNC test: modal %T tabs %d dirty %v err %q", m.modal, len(m.tabs), p.dirty(), p.err)
 	}
-	if got := m.tabs[0].title(); !strings.Contains(got, "vnc-box") {
+	if got := m.tabs[0].title(m.g); !strings.Contains(got, "vnc-box") {
 		t.Errorf("tab %q", got)
 	}
 

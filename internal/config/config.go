@@ -42,6 +42,10 @@ type Config struct {
 	// Vaults are further Bitwarden/Vaultwarden vaults (accounts or servers),
 	// next to the one of bw:.
 	Vaults []VaultSpec `yaml:"vaults"`
+	// JumpTemplates are quick connections through a jump host to an
+	// address typed when connecting; Jump configures their history.
+	JumpTemplates []JumpTemplate `yaml:"jump_templates"`
+	Jump          JumpSettings   `yaml:"jump"`
 
 	// Path is where the config was loaded from (not serialized).
 	Path string `yaml:"-"`
@@ -332,6 +336,10 @@ const (
 	ActHelp       = "help"
 	ActLocal      = "local_shell"
 	ActSettings   = "settings"
+	// ActJump opens the jump host picker: after the prefix, and as a key of
+	// the host list itself.
+	ActJump      = "jump"
+	ActRenameTab = "rename_tab"
 )
 
 // Default returns the built-in configuration.
@@ -346,10 +354,12 @@ func Default() Config {
 				ActZoom: "z", ActFocusLeft: "left", ActFocusRight: "right", ActFocusUp: "up",
 				ActFocusDown: "down", ActGrowLeft: "H", ActGrowRight: "L", ActGrowUp: "K",
 				ActGrowDown: "J", ActBreakPane: "!", ActReconnect: "r", ActQuit: "q", ActHelp: "?", ActLocal: "t", ActSettings: ",", ActShowLog: "g",
+				ActJump: "j", ActRenameTab: "R",
 			},
 		},
 		Icons:  Icons{Mode: "auto"},
 		Unlock: DefaultUnlock(),
+		Jump:   JumpSettings{History: true, HistoryLimit: 200},
 		Terminal: Terminal{Scrollback: 10000, Term: "xterm-256color", ForwardMouse: true, CloseOnExit: true,
 			CopyOSC52: true, CopySystem: true, ConfirmPaste: true},
 		SSH: SSH{Timeout: 15 * time.Second, Handshake: 60 * time.Second, Keepalive: 15 * time.Second, LegacyAlgorithms: true},
@@ -463,6 +473,9 @@ func (c *Config) finish() error {
 		return err
 	}
 	if err := c.Unlock.finish(); err != nil {
+		return err
+	}
+	if err := c.finishJump(); err != nil {
 		return err
 	}
 	switch c.UI.TabsPosition {

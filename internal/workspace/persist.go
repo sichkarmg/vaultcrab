@@ -15,6 +15,15 @@ import (
 // for the local shell). Never a secret or the terminal contents.
 type PaneState struct {
 	HostID string `json:"host"`
+	// Jump: the pane connects through a jump host (names and addresses).
+	Jump *JumpPane `json:"jump,omitempty"`
+}
+
+// JumpPane is how a pane connects through a jump host (core.JumpSpec).
+type JumpPane struct {
+	Via    string `json:"via"`
+	Target string `json:"target,omitempty"`
+	Item   string `json:"item,omitempty"`
 }
 
 // TabState is a saved tab: its layout and panes (in tree order).
@@ -23,6 +32,7 @@ type TabState struct {
 	Panes   []PaneState   `json:"panes"`
 	Focused int           `json:"focused"` // index into Panes
 	Zoomed  bool          `json:"zoomed,omitempty"`
+	Title   string        `json:"title,omitempty"` // set by the user (rename)
 }
 
 // State is the saved set of tabs.

@@ -36,6 +36,10 @@ func (s State) String() string {
 	return [...]string{"idle", "connecting", "connected", "disconnected", "closed"}[s]
 }
 
+// FieldVia is the field of a host reached through a jump host: the name of
+// the jump host (shown while connecting).
+const FieldVia = "via"
+
 // SecretFunc returns the credential for one connection attempt (nil: no
 // credential, e.g. a local shell).
 type SecretFunc func(ctx context.Context) (secret.Secret, error)
@@ -177,6 +181,10 @@ func (s *Session) Connect() {
 		s.status("starting %s…", s.Host.Fields["command"])
 	case s.Host.Scheme == model.VNC:
 		s.status("opening %s…", s.Host.Target())
+	case s.Host.Fields[FieldVia] != "" && reconnect:
+		s.status("reconnecting to %s through %s…", s.Host.Target(), s.Host.Fields[FieldVia])
+	case s.Host.Fields[FieldVia] != "":
+		s.status("connecting to %s through %s…", s.Host.Target(), s.Host.Fields[FieldVia])
 	case reconnect:
 		s.status("reconnecting to %s…", s.Host.Target())
 	default:

@@ -178,6 +178,11 @@ func (l *hostList) key(msg tea.KeyMsg) tea.Cmd {
 		}
 	}
 	m := l.m
+	if k := m.keyOf(core.ActJump); k != "" && msg.String() == k {
+		// the jump picker (j by default: then j does not move down)
+		m.openJumpPicker()
+		return nil
+	}
 	switch msg.String() {
 	case "up", "k":
 		l.move(-1)
@@ -269,6 +274,11 @@ func (l *hostList) key(msg tea.KeyMsg) tea.Cmd {
 	case "x":
 		if r := l.current(); r != nil && r.Kind == core.HostRow {
 			m.modal = newScriptMenu(m, *r.Host)
+		}
+	case "J":
+		// make a jump template of this host
+		if r := l.current(); r != nil && r.Kind == core.HostRow {
+			m.newJumpTemplateFrom(*r.Host)
 		}
 	case "e", "a", "C", "D":
 		return l.editAction(msg.String())

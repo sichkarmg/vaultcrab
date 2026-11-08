@@ -63,6 +63,9 @@ ui:
     quit: q
     help: "?"
     local_shell: t         # new tab with a local shell (also "t" in the host list)
+    jump: j                # connect through a jump host: 1. the jump host, 2. the target (also "j" in
+                           # the host list; then j does not move down there - use another key to keep it)
+    rename_tab: R          # name the current tab (kept with the saved tabs)
 
 icons:
   mode: auto               # auto | unicode | ascii (auto: ASCII in legacy Windows console / non-UTF-8)
@@ -122,6 +125,27 @@ ssh:
   keepalive: 15s           # sent as a channel request (works with MikroTik RouterOS too)
   legacy_algorithms: true  # also offer weak algorithms (dh-group1-sha1, CBC, ssh-dss) as a last resort,
                            # for old devices like MikroTik RouterOS 6; false = modern algorithms only
+
+# Quick connections through a jump host (j in the host list or prefix + j; Settings → Jump hosts
+# edits these without a restart; J on a host of the list makes a template of it). The target is
+# typed when connecting: an IP or [user@]host[:port]. No secrets here: keys are files, the agent
+# or vault items. The agent is never forwarded.
+jump_templates: []
+  # - name: Workstations
+  #   jump: lab-jump               # a vault item (name or ID) or [user@]host[:port]
+  #   user: admin                  # on the targets (empty: typed as user@ip, else the jump user)
+  #   port: 22                     # of the targets
+  #   key: ~/.ssh/id_ed25519       # of the targets: a file (passphrase asked once per run, kept in
+  #                                # memory only) | agent | vault:<item name or ID>;
+  #                                # empty: as the jump host
+  #   jump_key: agent              # of the jump host; empty: the credential of its vault item, else key
+  #   host_key_check: ask          # a new host key: ask (default) | accept-new (remembered without
+  #                                # asking) | strict (only keys already in known_hosts). A key that
+  #                                # changed for a known address is always refused.
+jump:
+  history: true            # remember the jump hosts and targets used (names and addresses only, in
+                           # jump-history.json of the cache directory); `vaultcrab history clear`
+  history_limit: 200       # entries kept (the least used and oldest go first)
 
 vault:
   orgs: []                 # show only these organizations (names or IDs); empty = all

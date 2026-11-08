@@ -487,6 +487,37 @@ func (t *tab) closeButtonAt(m *Model, id core.PaneID, x, y int) bool {
 	return ok && t.ws.Headers() && pr.H > 1 && pr.W > bw+4 && y == pr.Y && x >= pr.X+pr.W-bw && x < pr.X+pr.W
 }
 
+// clickTab acts on a left click at x (relative) in a tab bar entry: the
+// close button closes the tab; the state icon or number closes it when
+// ui.tab_status_close is on (the active tab after a confirmation); a group
+// opens or closes; otherwise the tab is shown.
+func (m *Model) clickTab(it barItem, x int) {
+	in := func(r [2]int) bool { return r != [2]int{} && x >= r[0] && x < r[1] }
+	switch {
+	case it.tab == 0:
+		m.switchTab(0)
+	case it.header || it.members != nil && !in(it.close):
+		if m.openGroups == nil {
+			m.openGroups = map[string]bool{}
+		}
+		m.openGroups[it.group] = !m.openGroups[it.group]
+	case in(it.close):
+		m.confirmCloseTab(m.tabs[it.tab-1])
+	case in(it.status) && m.opt.Appearance.TabStatusClose:
+		t := m.tabs[it.tab-1]
+		if it.tab == m.active {
+			m.modal = newConfirm(fmt.Sprintf("Close the active tab %q?", t.title(m.g)), func(m *Model) tea.Cmd {
+				m.closeTab(t)
+				return nil
+			})
+			return
+		}
+		m.confirmCloseTab(t)
+	default:
+		m.switchTab(it.tab)
+	}
+}
+
 // copyDebug copies the steps of the last connection attempt of s.
 func (m *Model) copyDebug(s *core.Session) {
 	d := s.Debug()
@@ -572,13 +603,13 @@ func (m *Model) mouse(msg tea.MouseMsg) tea.Cmd {
 			return nil
 		}
 		if msg.Action == tea.MouseActionPress && msg.Button == tea.MouseButtonLeft {
-			if i := m.tabAt(msg.X); i >= 0 {
-				m.switchTab(i)
+			if it, x, ok := m.itemAt(msg.X); ok {
+				m.clickTab(it, x)
 			}
 		}
 		if msg.Action == tea.MouseActionPress && msg.Button == tea.MouseButtonMiddle {
-			if i := m.tabAt(msg.X); i > 0 {
-				m.confirmCloseTab(m.tabs[i-1])
+			if it, _, ok := m.itemAt(msg.X); ok && it.tab > 0 && !it.header && it.members == nil {
+				m.confirmCloseTab(m.tabs[it.tab-1])
 			}
 		}
 		return nil

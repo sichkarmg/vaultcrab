@@ -93,7 +93,8 @@ type Model struct {
 	lastClick     time.Time
 	lastClickKey  string
 	unlockOffered bool
-	lastInput     time.Time // the last key or mouse event (wall clock)
+	openGroups    map[string]bool // groups of tabs shown open (by host)
+	lastInput     time.Time       // the last key or mouse event (wall clock)
 	quitting      bool
 	discardTabs   bool // quit without saving the open tabs
 

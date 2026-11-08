@@ -146,14 +146,21 @@ type UI struct {
 	Prefix       string            `yaml:"prefix"` // prefix key for window commands, e.g. ctrl+b
 	Keys         map[string]string `yaml:"keys"`   // action -> key after prefix
 	ListWidth    int               `yaml:"list_width"`
-	TabWidth     int               `yaml:"tab_width"`       // longest tab title (columns), cut with … beyond
-	TabStatus    string            `yaml:"tab_status"`      // session state in a tab: icon (before the number) | color (of the number)
-	RestoreTabs  bool              `yaml:"restore_tabs"`    // reopen the tabs of the last run (not connected)
-	RestoreView  bool              `yaml:"restore_filters"` // keep the type filter, org, collection, grouping, search
-	ShowTree     bool              `yaml:"show_tree"`
-	ShowNotes    bool              `yaml:"show_notes"`      // notes of the selected item in its card (read from the vault)
-	Accent       string            `yaml:"accent"`          // accent color: cyan | blue | green | magenta | yellow | red
-	Selection    string            `yaml:"selection_color"` // selected item: reverse | cyan | blue | green | magenta | yellow | red | gray
+	TabWidth     int               `yaml:"tab_width"`  // longest tab title (columns), cut with … beyond
+	TabStatus    string            `yaml:"tab_status"` // session state in a tab: icon (before the number) | color (of the number)
+	// TabCloseButton shows ✕ on the active tab (closes it, connected or not).
+	TabCloseButton bool `yaml:"tab_close_button"`
+	// TabStatusClose: a click on the state icon or number of a tab closes it
+	// (the active tab after a confirmation).
+	TabStatusClose bool `yaml:"tab_status_close"`
+	// GroupTabs shows the tabs of one host as one entry that opens on a click.
+	GroupTabs   bool   `yaml:"group_tabs"`
+	RestoreTabs bool   `yaml:"restore_tabs"`    // reopen the tabs of the last run (not connected)
+	RestoreView bool   `yaml:"restore_filters"` // keep the type filter, org, collection, grouping, search
+	ShowTree    bool   `yaml:"show_tree"`
+	ShowNotes   bool   `yaml:"show_notes"`      // notes of the selected item in its card (read from the vault)
+	Accent      string `yaml:"accent"`          // accent color: cyan | blue | green | magenta | yellow | red
+	Selection   string `yaml:"selection_color"` // selected item: reverse | cyan | blue | green | magenta | yellow | red | gray
 }
 
 // Icons settings: mode and per-icon overrides.
@@ -350,7 +357,7 @@ func Default() Config {
 	return Config{
 		BW: BW{Path: "bw", SyncInterval: 10 * time.Minute},
 		UI: UI{
-			TabsPosition: "top", Accent: "cyan", Selection: "reverse", Mouse: true, Prefix: "ctrl+b", ListWidth: 0, TabWidth: DefaultTabWidth, TabStatus: "icon", ShowTree: true, ShowNotes: true, RestoreTabs: true, RestoreView: true,
+			TabsPosition: "top", Accent: "cyan", Selection: "reverse", Mouse: true, Prefix: "ctrl+b", ListWidth: 0, TabWidth: DefaultTabWidth, TabStatus: "icon", TabCloseButton: true, GroupTabs: true, ShowTree: true, ShowNotes: true, RestoreTabs: true, RestoreView: true,
 			Keys: map[string]string{
 				ActNextTab: "n", ActPrevTab: "p", ActCloseTab: "&", ActCloneTab: "c", ActList: "l",
 				ActHistory: "[", ActSplitRight: "|", ActSplitDown: "-", ActClosePane: "x",

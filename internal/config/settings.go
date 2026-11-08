@@ -30,6 +30,9 @@ type Appearance struct {
 	ListWidth  int    // 0 = automatic
 	TabWidth   int    // the longest tab title
 	TabStatus  string // icon | color: how a tab shows the state of its sessions
+	// TabCloseButton, TabStatusClose, GroupTabs: ui.tab_close_button,
+	// ui.tab_status_close, ui.group_tabs
+	TabCloseButton, TabStatusClose, GroupTabs bool
 
 	ConfirmPaste bool // ask before pasting several lines into a session
 	ConnDebug    bool // ssh.debug: the steps of a failed connection in its pane
@@ -121,6 +124,10 @@ func (c *Config) Appearance() Appearance {
 		TabWidth:   c.UI.TabWidth,
 		TabStatus:  c.UI.TabStatus,
 
+		TabCloseButton: c.UI.TabCloseButton,
+		TabStatusClose: c.UI.TabStatusClose,
+		GroupTabs:      c.UI.GroupTabs,
+
 		ConfirmPaste: c.Terminal.ConfirmPaste,
 		ConnDebug:    c.SSH.Debug,
 		Log:          c.Log.Enabled,
@@ -191,6 +198,15 @@ func setAppearance(root *yaml.Node, old, a Appearance) {
 	}
 	if a.TabStatus != old.TabStatus {
 		setPath(root, []string{"ui", "tab_status"}, str(a.TabStatus))
+	}
+	if a.TabCloseButton != old.TabCloseButton {
+		setPath(root, []string{"ui", "tab_close_button"}, boolean(a.TabCloseButton))
+	}
+	if a.TabStatusClose != old.TabStatusClose {
+		setPath(root, []string{"ui", "tab_status_close"}, boolean(a.TabStatusClose))
+	}
+	if a.GroupTabs != old.GroupTabs {
+		setPath(root, []string{"ui", "group_tabs"}, boolean(a.GroupTabs))
 	}
 	if a.ConfirmPaste != old.ConfirmPaste {
 		setPath(root, []string{"terminal", "confirm_paste"}, boolean(a.ConfirmPaste))

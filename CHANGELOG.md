@@ -17,6 +17,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   keys (a file with the passphrase asked once and kept in memory, the ssh-agent, or a vault item) and
   the host key check (`ask` by default, `accept-new`, `strict`); a changed host key of a known address
   is always refused, on both hops.
+- Credentials of addresses typed through a jump host (`Ctrl+K` in step 2): a password typed once
+  per jump host (kept in memory until exit), the ssh-agent, a key file, or a vault item (an SSH host,
+  or a Login item marked with the field `credential` = `true`); the choice is remembered per jump host.
+  `key: password` in a template does the same.
 - A local history of the jump connections (names and addresses only, frecency order, limit 200,
   `jump.history` turns it off, `vaultcrab history clear` deletes it).
 - Rename a tab (prefix `R`); the name is kept with the saved tabs.

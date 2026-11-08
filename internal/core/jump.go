@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"os"
 	osuser "os/user"
+	"path/filepath"
 	"slices"
 	"strings"
 	"sync"
@@ -39,6 +40,7 @@ const (
 	fieldJumpVia    = "jump_via"       // JumpSpec.Via
 	fieldJumpTarget = "jump_target"    // JumpSpec.Target
 	fieldJumpItem   = "jump_item"      // JumpSpec.Item
+	fieldJumpCred   = "jump_cred"      // JumpSpec.Cred
 )
 
 // JumpSpec says how a jump session connects.
@@ -51,6 +53,10 @@ type JumpSpec struct {
 	// Item, instead of Target: a vault host as the target (its own address,
 	// user and credential).
 	Item string
+	// Cred is the credential of a typed target, chosen in the picker: a key
+	// reference ("password", "agent", a key file, "vault:<item id>"); ""
+	// = the template's key (or the jump host's credential).
+	Cred string
 }
 
 // JumpSpecOf returns the spec of the pseudo-host of a jump session.
@@ -59,7 +65,7 @@ func JumpSpecOf(h model.Host) (JumpSpec, bool) {
 	if via == "" {
 		return JumpSpec{}, false
 	}
-	return JumpSpec{Via: via, Target: h.Fields[fieldJumpTarget], Item: h.Fields[fieldJumpItem]}, true
+	return JumpSpec{Via: via, Target: h.Fields[fieldJumpTarget], Item: h.Fields[fieldJumpItem], Cred: h.Fields[fieldJumpCred]}, true
 }
 
 // IsJump reports whether h is the pseudo-host of a jump session.
@@ -127,7 +133,7 @@ type JumpSuggestion struct {
 func (s *Service) JumpTargets(via string) []JumpSuggestion {
 	var out []JumpSuggestion
 	for _, e := range s.jumpHist.Targets(via, s.now()) {
-		sp := JumpSpec{Via: via, Target: e.Target, Item: e.Item}
+		sp := JumpSpec{Via: via, Target: e.Target, Item: e.Item, Cred: e.Cred}
 		label := e.Target
 		if e.User != "" {
 			label = e.User + "@" + e.Target
@@ -208,15 +214,20 @@ func (s *Service) JumpHost(spec JumpSpec) (model.Host, error) {
 		h.Fields[fieldJumpItem] = spec.Item
 	} else {
 		h.Fields[fieldJumpTarget] = spec.Target
+		if spec.Cred != "" {
+			h.Fields[fieldJumpCred] = spec.Cred
+		}
 	}
 	return h, nil
 }
 
 // keySource is where the key of a hop comes from.
 type keySource struct {
-	kind jump.KeyKind
-	path string // KeyFile
-	item string // KeyVault: the item ID
+	kind  jump.KeyKind
+	path  string // KeyFile
+	item  string // KeyVault: the item ID
+	scope string // KeyPassword: whose typed password (the jump host or template)
+	user  string // KeyVault: the user name of the item ("" if none)
 }
 
 // jumpPlan is a resolved spec (without credentials).
@@ -230,6 +241,39 @@ type jumpPlan struct {
 	mode       connect.HostKeyMode
 	histTarget string // host[:port] as remembered
 	histUser   string
+}
+
+// itemRef is a vault item usable as a credential: a host or a Credential.
+type itemRef struct{ id, name, user string }
+
+// findItem returns the host or credential item with ID ref, or the only one
+// named ref.
+func (s *Service) findItem(ref string) (itemRef, error) {
+	ref = strings.TrimSpace(ref)
+	snap := s.Snapshot()
+	var all []itemRef
+	for _, h := range snap.Hosts {
+		all = append(all, itemRef{h.ID, h.Name, h.User})
+	}
+	for _, c := range snap.Credentials {
+		all = append(all, itemRef{c.ID, c.Name, c.User})
+	}
+	var named []itemRef
+	for _, it := range all {
+		if it.id == ref {
+			return it, nil
+		}
+		if strings.EqualFold(it.name, ref) {
+			named = append(named, it)
+		}
+	}
+	switch len(named) {
+	case 1:
+		return named[0], nil
+	case 0:
+		return itemRef{}, fmt.Errorf("%w %q", errNoItem, ref)
+	}
+	return itemRef{}, fmt.Errorf("%d vault items are named %q: use the item ID", len(named), ref)
 }
 
 func localUser() string {
@@ -272,23 +316,26 @@ func (s *Service) findHost(ref string, sshOnly bool) (model.Host, error) {
 	return model.Host{}, fmt.Errorf("%d vault items are named %q: use the item ID", len(named), ref)
 }
 
-// keyOf resolves a key reference of a template.
-func (s *Service) keyOf(k jump.Key) (keySource, error) {
+// keyOf resolves a key reference; scope names whose typed password a
+// "password" reference is (the template or jump host).
+func (s *Service) keyOf(k jump.Key, scope string) (keySource, error) {
 	switch k.Kind {
 	case jump.KeyFile:
 		return keySource{kind: jump.KeyFile, path: k.Value}, nil
 	case jump.KeyAgent:
 		return keySource{kind: jump.KeyAgent}, nil
+	case jump.KeyPassword:
+		return keySource{kind: jump.KeyPassword, scope: scope}, nil
 	case jump.KeyVault:
-		h, err := s.findHost(k.Value, false)
+		it, err := s.findItem(k.Value)
 		if err != nil {
-			// any item by its ID, also one that is not a host
-			if len(k.Value) >= 32 && !strings.ContainsAny(k.Value, " /") {
+			// any item by its ID, also one that is neither a host nor marked
+			if errors.Is(err, errNoItem) && len(k.Value) >= 32 && !strings.ContainsAny(k.Value, " ") {
 				return keySource{kind: jump.KeyVault, item: k.Value}, nil
 			}
 			return keySource{}, err
 		}
-		return keySource{kind: jump.KeyVault, item: h.ID}, nil
+		return keySource{kind: jump.KeyVault, item: it.id, user: it.user}, nil
 	}
 	return keySource{}, nil
 }
@@ -348,13 +395,13 @@ func (s *Service) planJump(spec JumpSpec) (*jumpPlan, error) {
 		key, _ := jump.ParseKey(tpl.Key) // checked when the config was loaded
 		jk, _ := jump.ParseKey(tpl.JumpKey)
 		if jk.Kind != jump.KeyNone {
-			ks, err := s.keyOf(jk)
+			ks, err := s.keyOf(jk, spec.Via+"#jump")
 			if err != nil {
 				return nil, fmt.Errorf("template %s: jump_key: %w", tpl.Name, err)
 			}
 			p.jumpKey = ks
 		} else if p.jumpKey.kind != jump.KeyVault && key.Kind != jump.KeyNone {
-			ks, err := s.keyOf(key)
+			ks, err := s.keyOf(key, spec.Via)
 			if err != nil {
 				return nil, fmt.Errorf("template %s: key: %w", tpl.Name, err)
 			}
@@ -362,7 +409,7 @@ func (s *Service) planJump(spec JumpSpec) (*jumpPlan, error) {
 		}
 		p.targetKey = p.jumpKey
 		if key.Kind != jump.KeyNone {
-			ks, err := s.keyOf(key)
+			ks, err := s.keyOf(key, spec.Via)
 			if err != nil {
 				return nil, fmt.Errorf("template %s: key: %w", tpl.Name, err)
 			}
@@ -397,6 +444,16 @@ func (s *Service) planJump(spec JumpSpec) (*jumpPlan, error) {
 		p.histTarget = sshAddr(h)
 		return p, nil
 	}
+	if spec.Cred != "" {
+		// chosen in the picker for this address
+		k, err := jump.ParseKey(spec.Cred)
+		if err != nil {
+			return nil, fmt.Errorf("credential: %w", err)
+		}
+		if p.targetKey, err = s.keyOf(k, spec.Via); err != nil {
+			return nil, fmt.Errorf("credential: %w", err)
+		}
+	}
 	port := typed.Port
 	if port == 0 && tpl != nil {
 		port = tpl.Port
@@ -408,6 +465,9 @@ func (s *Service) planJump(spec JumpSpec) (*jumpPlan, error) {
 	user := typed.User
 	if user == "" && tpl != nil {
 		user = tpl.User
+	}
+	if user == "" && p.targetKey.kind == jump.KeyVault && p.targetKey.item != p.jumpKey.item {
+		user = p.targetKey.user // the user name of a credential item
 	}
 	if user == "" {
 		user = p.jump.User
@@ -464,9 +524,20 @@ func (s *Service) jumpDialer(spec JumpSpec) session.Dialer {
 		}
 		c, err := dial(ctx, p.jump, p.target, cols, rows, s.opts.SSH)
 		if err != nil {
+			// a typed password that was refused is asked again next time
+			var je *connect.JumpError
+			if errors.As(err, &je) && je.Stage == connect.StageAuth {
+				k := p.jumpKey
+				if je.Target {
+					k = p.targetKey
+				}
+				if k.kind == jump.KeyPassword {
+					s.forgetPassword(k.scope)
+				}
+			}
 			return nil, err
 		}
-		if err := s.jumpHist.Add(spec.Via, p.histTarget, p.histUser, spec.Item, s.now()); err != nil {
+		if err := s.jumpHist.Add(spec.Via, p.histTarget, p.histUser, spec.Item, spec.Cred, s.now()); err != nil {
 			logf("jump: history: %v", err)
 		}
 		return c, nil
@@ -500,6 +571,18 @@ func (s *Service) hopAuth(ctx context.Context, k keySource, role string) ([]ssh.
 			return nil, nil, err
 		}
 		return []ssh.AuthMethod{a}, done, nil
+	case jump.KeyPassword:
+		pw, err := s.typedPassword(ctx, k.scope, role)
+		if err != nil {
+			return nil, nil, err
+		}
+		sec := secret.Secret{Kind: secret.Password, Value: pw} // a copy: wiped after the handshake
+		a, err := connect.AuthFromSecret(&sec)
+		if err != nil {
+			sec.Wipe()
+			return nil, nil, err
+		}
+		return a, sec.Wipe, nil
 	}
 	return nil, nil, errors.New("no key: set key in the template")
 }
@@ -509,6 +592,48 @@ func (s *Service) hopAuth(ctx context.Context, k keySource, role string) ([]ssh.
 type keyFiles struct {
 	mu sync.Mutex
 	m  map[string]keyFile
+	pw map[string][]byte // typed passwords by scope (KeyPassword)
+}
+
+// typedPassword returns a copy of the password typed for scope, asking for
+// it the first time; it is kept in memory until Vaultcrab exits (or bw
+// refuses it, see forgetPassword).
+func (s *Service) typedPassword(ctx context.Context, scope, role string) ([]byte, error) {
+	s.keys.mu.Lock()
+	pw, ok := s.keys.pw[scope]
+	s.keys.mu.Unlock()
+	if ok {
+		return slices.Clone(pw), nil
+	}
+	via := scope
+	if c, ok := s.JumpChoice(strings.TrimSuffix(scope, "#jump")); ok {
+		via = c.Label
+	}
+	r, err := s.ask(ctx, &Prompt{Kind: PromptPassphrase, Title: "SSH password",
+		Text: fmt.Sprintf("The password for the %s.\nKept in memory until Vaultcrab exits for every address typed through %s; never written to disk.", role, via)})
+	if err != nil {
+		return nil, err
+	}
+	if len(r.secret) == 0 {
+		return nil, errors.New("no password typed")
+	}
+	s.keys.mu.Lock()
+	if s.keys.pw == nil {
+		s.keys.pw = map[string][]byte{}
+	}
+	s.keys.pw[scope] = r.secret
+	s.keys.mu.Unlock()
+	return slices.Clone(r.secret), nil
+}
+
+// forgetPassword wipes the typed password of scope (it was refused).
+func (s *Service) forgetPassword(scope string) {
+	s.keys.mu.Lock()
+	defer s.keys.mu.Unlock()
+	if pw, ok := s.keys.pw[scope]; ok {
+		secret.Zero(pw)
+		delete(s.keys.pw, scope)
+	}
 }
 
 type keyFile struct {
@@ -614,4 +739,114 @@ func NormalizeTarget(s string) (string, error) {
 		return "", err
 	}
 	return t.String(), nil
+}
+
+// CredChoice is a credential the picker offers for a typed target.
+type CredChoice struct {
+	Ref    string // JumpSpec.Cred ("" = the default)
+	Label  string
+	Detail string
+	// AskPath: the user types the path of a key file (Ref is then the path).
+	AskPath bool
+}
+
+// JumpLastCred returns the credential chosen last for an address typed
+// through via (offered again), "" if none.
+func (s *Service) JumpLastCred(via string) string { return s.jumpHist.LastCred(via) }
+
+// JumpCreds returns the credentials the picker offers for a target typed
+// through via: the default (the template's key or the jump host's
+// credential), a password typed once, the ssh-agent, the usual key files,
+// another key file, and the vault items marked as credentials and the SSH
+// hosts (their credential).
+func (s *Service) JumpCreds(via string) []CredChoice {
+	out := []CredChoice{{Ref: "", Label: "Default", Detail: s.defaultCred(via)}}
+	pw := "typed once, kept in memory until Vaultcrab exits"
+	s.keys.mu.Lock()
+	if _, ok := s.keys.pw[via]; ok {
+		pw = "typed already (in memory)"
+	}
+	s.keys.mu.Unlock()
+	out = append(out, CredChoice{Ref: "password", Label: "Password", Detail: pw},
+		CredChoice{Ref: "agent", Label: "ssh-agent", Detail: "keys of the agent (SSH_AUTH_SOCK)"})
+	if home, err := os.UserHomeDir(); err == nil {
+		for _, n := range []string{"id_ed25519", "id_ecdsa", "id_rsa"} {
+			p := filepath.Join(home, ".ssh", n)
+			if _, err := os.Stat(p); err == nil {
+				out = append(out, CredChoice{Ref: p, Label: "Key file " + n, Detail: p})
+			}
+		}
+	}
+	out = append(out, CredChoice{Label: "Other key file…", Detail: "type the path", AskPath: true})
+	snap := s.Snapshot()
+	for _, c := range snap.Credentials {
+		d := "vault credential"
+		if c.User != "" {
+			d += ", user " + c.User
+		}
+		out = append(out, CredChoice{Ref: "vault:" + c.ID, Label: c.Name, Detail: d})
+	}
+	for _, h := range snap.Hosts {
+		if h.Scheme == model.SSH {
+			out = append(out, CredChoice{Ref: "vault:" + h.ID, Label: h.Name, Detail: "credential of the SSH item " + h.Target()})
+		}
+	}
+	return out
+}
+
+// defaultCred describes the credential of a typed target when none is
+// chosen.
+func (s *Service) defaultCred(via string) string {
+	if name, ok := strings.CutPrefix(via, "t:"); ok {
+		for _, t := range s.Config().JumpTemplates {
+			if t.Name == name {
+				if t.Key != "" {
+					return "the template's key: " + s.CredLabel(t.Key)
+				}
+				break
+			}
+		}
+	}
+	return "the credential of the jump host"
+}
+
+// CredLabel names a credential reference for the UI.
+func (s *Service) CredLabel(ref string) string {
+	k, err := jump.ParseKey(ref)
+	if err != nil {
+		return ref
+	}
+	switch k.Kind {
+	case jump.KeyNone:
+		return "default"
+	case jump.KeyPassword:
+		return "password (typed)"
+	case jump.KeyAgent:
+		return "ssh-agent"
+	case jump.KeyFile:
+		return "key " + k.Value
+	case jump.KeyVault:
+		if it, err := s.findItem(k.Value); err == nil {
+			return "vault: " + it.name
+		}
+		return "vault: " + k.Value + " (not found)"
+	}
+	return ref
+}
+
+// CheckKeyFile checks that path (~ allowed) is a readable file and returns
+// the reference to store.
+func CheckKeyFile(path string) (string, error) {
+	k, err := jump.ParseKey(path)
+	if err != nil || k.Kind != jump.KeyFile {
+		return "", errors.New("type the path of a private key file")
+	}
+	st, err := os.Stat(k.Value)
+	if err != nil {
+		return "", err
+	}
+	if st.IsDir() {
+		return "", fmt.Errorf("%s is a directory", k.Value)
+	}
+	return k.Value, nil
 }

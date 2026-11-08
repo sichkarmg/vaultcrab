@@ -46,7 +46,7 @@ func (m *Model) restoreWorkspace() {
 		switch {
 		case ps.Jump != nil:
 			var err error
-			if h, err = m.svc.JumpHost(core.JumpSpec{Via: ps.Jump.Via, Target: ps.Jump.Target, Item: ps.Jump.Item}); err != nil {
+			if h, err = m.svc.JumpHost(core.JumpSpec{Via: ps.Jump.Via, Target: ps.Jump.Target, Item: ps.Jump.Item, Cred: ps.Jump.Cred}); err != nil {
 				return nil // the template or host is gone
 			}
 		case ps.HostID != localPaneID:
@@ -94,7 +94,7 @@ func (m *Model) SaveWorkspace() error {
 	}
 	pane := func(s *core.Session) (core.PaneState, bool) {
 		if sp, ok := core.JumpSpecOf(s.Host); ok {
-			return core.PaneState{HostID: s.Host.ID, Jump: &core.JumpPane{Via: sp.Via, Target: sp.Target, Item: sp.Item}}, true
+			return core.PaneState{HostID: s.Host.ID, Jump: &core.JumpPane{Via: sp.Via, Target: sp.Target, Item: sp.Item, Cred: sp.Cred}}, true
 		}
 		switch {
 		case s.Host.Scheme == core.SchemeSSH, s.Host.Scheme == core.SchemeVNC:

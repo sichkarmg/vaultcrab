@@ -445,3 +445,80 @@ func TestJumpSettingsPage(t *testing.T) {
 		t.Fatal("history still off")
 	}
 }
+
+// Step 2: Ctrl+K picks the credential of typed addresses. A password is
+// asked once for all addresses through the jump host; the choice is shown
+// and offered again next time; a key file can be typed.
+func TestJumpPickerCredentials(t *testing.T) {
+	jt := newJumpTest(t, "")
+	m := jt.m
+	keys(m, "j", "enter") // Workstations
+	p := m.modal.(*jumpPicker)
+	if v := ansi.Strip(m.View()); !strings.Contains(v, "Credentials: default") || !strings.Contains(v, "Ctrl+K") {
+		t.Fatalf("no credentials line:\n%s", v)
+	}
+	m.Update(tea.KeyMsg{Type: tea.KeyCtrlK})
+	if p.cp == nil {
+		t.Fatal("no credential chooser")
+	}
+	typeKeys(m, "passw")
+	keys(m, "enter")
+	if p.cp != nil || p.cred != "password" {
+		t.Fatalf("cred %q", p.cred)
+	}
+	if v := ansi.Strip(m.View()); !strings.Contains(v, "Credentials: password (typed)") {
+		t.Fatalf("label:\n%s", v)
+	}
+	typeKeys(m, "10.7.7.1")
+	keys(m, "enter")
+	pm := waitPrompt(t, m)
+	if pm.p.Title != "SSH password" {
+		t.Fatalf("title %q", pm.p.Title)
+	}
+	typeKeys(m, "secret-for-all")
+	keys(m, "enter")
+	waitConnected(t, m, m.tabs[0].focused())
+
+	// the next address: the same credential offered, no question
+	m.switchTab(0)
+	keys(m, "j", "enter")
+	p = m.modal.(*jumpPicker)
+	if p.cred != "password" {
+		t.Fatalf("not remembered: %q", p.cred)
+	}
+	typeKeys(m, "10.7.7.2")
+	keys(m, "enter")
+	waitConnected(t, m, m.tabs[1].focused())
+	if _, ok := m.modal.(*promptModal); ok {
+		t.Fatal("asked again")
+	}
+
+	// another key file, typed
+	key := filepath.Join(t.TempDir(), "id_test")
+	os.WriteFile(key, []byte("x"), 0o600)
+	m.switchTab(0)
+	keys(m, "j", "enter")
+	p = m.modal.(*jumpPicker)
+	m.Update(tea.KeyMsg{Type: tea.KeyCtrlK})
+	typeKeys(m, "other")
+	keys(m, "enter")
+	if !p.cp.path {
+		t.Fatal("no path input")
+	}
+	p.cp.in.SetValue(filepath.Join(t.TempDir(), "missing"))
+	keys(m, "enter")
+	if p.cp == nil || p.cp.err == "" {
+		t.Fatal("a missing file accepted")
+	}
+	p.cp.in.SetValue(key)
+	keys(m, "enter")
+	if p.cp != nil || p.cred != key {
+		t.Fatalf("cred %q", p.cred)
+	}
+	// Esc leaves the chooser without changing the choice
+	m.Update(tea.KeyMsg{Type: tea.KeyCtrlK})
+	keys(m, "esc")
+	if p.cp != nil || p.cred != key || p.step != 1 {
+		t.Fatalf("esc: %q step %d", p.cred, p.step)
+	}
+}

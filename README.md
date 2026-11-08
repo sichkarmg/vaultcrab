@@ -175,7 +175,9 @@ A host is a Login item in one of these forms:
 
 The password or private key goes into the `password` field. Optional fields: `port`, `tags`, any
 others (`env`, …) for filters; `script` (the script `Enter` runs); `jump` (VNC through an SSH
-host). Hidden fields and notes never become metadata.
+host). Hidden fields and notes never become metadata. A Login item without an address but with a
+field `credential` = `true` is not a host: it is a credential offered for addresses typed through a
+jump host (see [Jump hosts](#jump-hosts)).
 
 ## Several vaults
 
@@ -198,10 +200,17 @@ key whose IP addresses keep changing, there is no need for a vault item per mach
   target used before through this jump host (most used and most recent first) or a host of the list
   (it then connects with its own user and credential). `Enter` connects, `Esc` goes back; mouse: a
   click selects, a click on the selected row chooses it.
+- **Credentials of typed addresses** (`Ctrl+K` in step 2), for thousands of machines with one
+  password or key: the default (the template's key, else the jump host's credential), a **password
+  typed once** (kept in memory until Vaultcrab exits, for every address through this jump host; asked
+  again if a target refuses it), the ssh-agent, a key file, or a **vault item**: any SSH host, or a
+  Login item marked with a custom field `credential` = `true` (its password field holds the password
+  or the private key, its username is the default user). The choice is remembered per jump host (in
+  the history: the reference, never the secret) and offered again for the next address.
 - **Templates** (`jump_templates:` in the config, or Settings → Jump hosts, applied without a
   restart; `J` on a host of the list makes one of it): the jump host (a vault item or
   `[user@]host[:port]`), the user and port of the targets, the key of the targets (`~/.ssh/id_ed25519`,
-  `agent` or `vault:<item>`), the key of the jump host (`jump_key`, by default the credential of its
+  `agent`, `password` or `vault:<item>`), the key of the jump host (`jump_key`, by default the credential of its
   vault item, else `key`), and the host key check. See [`docs/config.example.yaml`](docs/config.example.yaml).
 - The connection is the built-in SSH client: it logs in to the jump host, opens a TCP channel from it
   to the target and runs the second SSH session over that channel (like `ssh -J`). **The agent is

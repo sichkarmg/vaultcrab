@@ -22,7 +22,7 @@ func (s *Service) remerge() {
 	d := s.vaults[0].snap
 	out := model.Snapshot{Account: d.Account, SyncedAt: d.SyncedAt,
 		Hosts: slices.Clone(d.Hosts), Folders: slices.Clone(d.Folders),
-		Orgs: slices.Clone(d.Orgs), Collections: slices.Clone(d.Collections)}
+		Orgs: slices.Clone(d.Orgs), Collections: slices.Clone(d.Collections), Credentials: slices.Clone(d.Credentials)}
 	for _, v := range s.vaults[1:] {
 		p := v.opts.ID + "/"
 		name := v.info().Label()
@@ -57,6 +57,10 @@ func (s *Service) remerge() {
 				h.CollectionIDs = ids
 			}
 			out.Hosts = append(out.Hosts, h)
+		}
+		for _, c := range v.snap.Credentials {
+			c.ID = p + c.ID
+			out.Credentials = append(out.Credentials, c)
 		}
 		if v.snap.SyncedAt.After(out.SyncedAt) {
 			out.SyncedAt = v.snap.SyncedAt

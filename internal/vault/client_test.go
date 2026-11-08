@@ -66,6 +66,10 @@ func TestSnapshot(t *testing.T) {
 	if c := s.Collection("c2"); c == nil || !reflect.DeepEqual(c.Path, []string{"dev", "backend"}) || c.OrgID != "o1" {
 		t.Errorf("collection: %+v", c)
 	}
+	// Login items marked credential = true (not hidden) are credentials.
+	if want := []model.Credential{{ID: "i10", Name: "workstations", User: "wsadmin", FolderID: "f3"}}; !reflect.DeepEqual(s.Credentials, want) {
+		t.Errorf("credentials %+v", s.Credentials)
+	}
 	// No secrets in the snapshot, whatever the serialization.
 	b, _ := json.Marshal(s)
 	if leak := hasSubstr(b, "TOPSECRET", "api-token"); leak != "" {

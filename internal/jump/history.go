@@ -29,7 +29,11 @@ type Entry struct {
 	User   string `json:"user,omitempty"`
 	// Item is the vault item ID of a target picked from the host list (it
 	// connects with its own credential); empty for a typed address.
-	Item  string    `json:"item,omitempty"`
+	Item string `json:"item,omitempty"`
+	// Cred is the credential chosen for the target (a key reference:
+	// "password", "agent", a key file, "vault:<item id>"; "" = the
+	// template's). Never the secret itself.
+	Cred  string    `json:"cred,omitempty"`
 	Last  time.Time `json:"last"`
 	Count int       `json:"count"`
 }
@@ -102,7 +106,7 @@ func (h *History) load() {
 }
 
 // Add records a connection at now and saves the file.
-func (h *History) Add(jump, target, user, item string, now time.Time) error {
+func (h *History) Add(jump, target, user, item, cred string, now time.Time) error {
 	h.mu.Lock()
 	defer h.mu.Unlock()
 	if h.off || jump == "" || target == "" {
@@ -116,6 +120,7 @@ func (h *History) Add(jump, target, user, item string, now time.Time) error {
 		h.entries = append(h.entries, Entry{Jump: jump, Target: target, User: user, Item: item})
 		i = len(h.entries) - 1
 	}
+	h.entries[i].Cred = cred // the last choice for this target
 	h.entries[i].Count++
 	h.entries[i].Last = now
 	if len(h.entries) > h.limit {
@@ -155,6 +160,21 @@ func (h *History) Targets(jump string, now time.Time) []Entry {
 	}
 	sortEntries(out, now)
 	return out
+}
+
+// LastCred returns the credential chosen most recently for a typed target
+// through jump ("" if none): it is offered again for the next address.
+func (h *History) LastCred(jump string) string {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	h.load()
+	var last Entry
+	for _, e := range h.entries {
+		if e.Jump == jump && e.Item == "" && e.Last.After(last.Last) {
+			last = e
+		}
+	}
+	return last.Cred
 }
 
 // Jumps returns the jump hosts used, best first (the sum of the scores of

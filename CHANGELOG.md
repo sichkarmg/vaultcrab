@@ -38,6 +38,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   unreachable from it, the authentication on either, a host key.
 
 ### Changed
+- The jump picker stays with the host list like the settings and the item form: the other tabs can
+  be switched to while it is open (tab 0 shows `0:Hosts ↪`), and it is there again with the step and
+  the typed address on the return; prefix `j` on a session tab opens it on the host list.
 - `j` in the host list opens the jump picker instead of moving down (arrows move; `ui.keys.jump`
   picks another key).
 

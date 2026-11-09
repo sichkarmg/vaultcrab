@@ -522,3 +522,70 @@ func TestJumpPickerCredentials(t *testing.T) {
 		t.Fatalf("esc: %q step %d", p.cred, p.step)
 	}
 }
+
+// The picker stays with the host list: the other tabs can be switched to
+// while it is open (prefix + digit, a click in the tab bar), and j from a
+// session tab (or the Hosts tab) shows the same picker again, with the jump
+// host and the typed address kept.
+func TestJumpPickerDocked(t *testing.T) {
+	jt := newJumpTest(t, "")
+	m := jt.m
+	keys(m, "j", "enter")
+	typeKeys(m, "10.20.0.5")
+	keys(m, "enter")
+	if len(m.tabs) != 1 || m.active != 1 {
+		t.Fatalf("tabs %d active %d", len(m.tabs), m.active)
+	}
+	waitConnected(t, m, m.tabs[0].focused())
+
+	// prefix j on the session tab: the picker opens on the host list
+	keys(m, "ctrl+b", "j")
+	p, ok := m.modal.(*jumpPicker)
+	if !ok || m.active != 0 {
+		t.Fatalf("prefix j: active %d modal %T", m.active, m.modal)
+	}
+	keys(m, "enter")
+	typeKeys(m, "10.20.0.6")
+
+	// prefix 1: the session tab, the picker waits
+	keys(m, "ctrl+b", "1")
+	if m.active != 1 || m.modal != nil || m.parked != p {
+		t.Fatalf("switch: active %d modal %T parked %T", m.active, m.modal, m.parked)
+	}
+	if v := ansi.Strip(m.View()); strings.Contains(v, "Step 2 of 2") {
+		t.Error("the picker is shown over the session tab")
+	}
+	if bar := ansi.Strip(m.tabBar()); !strings.Contains(bar, "0:Hosts ↪") {
+		t.Errorf("no mark of the waiting picker: %q", bar)
+	}
+	// typing goes to the session, not to the picker
+	typeKeys(m, "x")
+	if p.in.Value() != "10.20.0.6" {
+		t.Fatalf("input %q", p.in.Value())
+	}
+
+	// prefix j again: the same picker, step 2 with the typed address
+	keys(m, "ctrl+b", "j")
+	if m.active != 0 || m.modal != p || m.parked != nil {
+		t.Fatalf("back: active %d modal %T parked %T", m.active, m.modal, m.parked)
+	}
+	if p.step != 1 || p.in.Value() != "10.20.0.6" {
+		t.Fatalf("step %d input %q", p.step, p.in.Value())
+	}
+
+	// a click on tab 1 parks it, a click on the Hosts tab shows it
+	_, starts, _ := m.tabSpans()
+	m.Update(tea.MouseMsg{X: starts[1] + 4, Y: m.tabBarY(), Action: tea.MouseActionPress, Button: tea.MouseButtonLeft})
+	if m.active != 1 || m.parked != p {
+		t.Fatalf("click: active %d parked %T", m.active, m.parked)
+	}
+	m.Update(tea.MouseMsg{X: 2, Y: m.tabBarY(), Action: tea.MouseActionPress, Button: tea.MouseButtonLeft})
+	if m.active != 0 || m.modal != p {
+		t.Fatalf("click back: active %d modal %T", m.active, m.modal)
+	}
+	keys(m, "enter")
+	if m.modal != nil || len(m.tabs) != 2 || m.active != 2 {
+		t.Fatalf("connect: modal %T tabs %d active %d", m.modal, len(m.tabs), m.active)
+	}
+	waitConnected(t, m, m.tabs[1].focused())
+}

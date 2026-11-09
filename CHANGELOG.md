@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+- An open group of tabs takes less room: the name of the host once, then each tab by its state icon
+  and number (`▾ web-01 ●4 ●5 ✗6`; the active one highlighted, with its `✕`), instead of a header and
+  every tab with the full name.
+
 ### Fixed
 - The mouse works again after `bw login` (`L`) had the terminal: Bubble Tea restored the screen but
   not the mouse reports.

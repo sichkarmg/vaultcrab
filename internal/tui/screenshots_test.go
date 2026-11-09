@@ -244,7 +244,12 @@ func TestScreenshots(t *testing.T) {
 	}
 	settle()
 
-	// 1. the host list
+	// 1. the host list, the group of the two tabs of one target open
+	if m.openGroups == nil {
+		m.openGroups = map[string]bool{}
+	}
+	m.openGroups[m.tabs[1].groupKey()] = true
+	m.active = 0
 	keys(m, "down", "down")
 	shot("hosts")
 

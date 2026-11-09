@@ -114,11 +114,12 @@ func TestTabGroups(t *testing.T) {
 	}
 	clickItem(m, 1, 6) // opens
 	bar = ansi.Strip(m.tabBar())
-	if !strings.Contains(bar, "▾ alpha ×3") || !strings.Contains(bar, "1:alpha") || !strings.Contains(bar, "3:alpha") {
+	// the name once, the tabs by state and number
+	if !strings.Contains(bar, "▾ alpha ✗1 ✗2") || !strings.Contains(bar, "✗3 │") || strings.Contains(bar, "1:alpha") || strings.Contains(bar, "×3") {
 		t.Fatalf("open: %q", bar)
 	}
 	items = m.tabItems()
-	clickItem(m, 4, items[4].status[1]+1) // tab 3
+	clickItem(m, 4, 1) // tab 3
 	if m.active != 3 {
 		t.Fatalf("active %d", m.active)
 	}

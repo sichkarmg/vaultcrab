@@ -46,6 +46,10 @@ type Config struct {
 	// address typed when connecting; Jump configures their history.
 	JumpTemplates []JumpTemplate `yaml:"jump_templates"`
 	Jump          JumpSettings   `yaml:"jump"`
+	// Tunnels are saved port forwardings through jump hosts; Tunnel
+	// configures them all.
+	Tunnels []Tunnel       `yaml:"tunnels"`
+	Tunnel  TunnelSettings `yaml:"tunnel"`
 
 	// Path is where the config was loaded from (not serialized).
 	Path string `yaml:"-"`
@@ -350,6 +354,8 @@ const (
 	// the host list itself.
 	ActJump      = "jump"
 	ActRenameTab = "rename_tab"
+	// ActTunnels opens the list of the tunnels.
+	ActTunnels = "tunnels"
 )
 
 // Default returns the built-in configuration.
@@ -364,12 +370,13 @@ func Default() Config {
 				ActZoom: "z", ActFocusLeft: "left", ActFocusRight: "right", ActFocusUp: "up",
 				ActFocusDown: "down", ActGrowLeft: "H", ActGrowRight: "L", ActGrowUp: "K",
 				ActGrowDown: "J", ActBreakPane: "!", ActReconnect: "r", ActQuit: "q", ActHelp: "?", ActLocal: "t", ActSettings: ",", ActShowLog: "g",
-				ActJump: "j", ActRenameTab: "R",
+				ActJump: "j", ActRenameTab: "R", ActTunnels: "T",
 			},
 		},
 		Icons:  Icons{Mode: "auto"},
 		Unlock: DefaultUnlock(),
 		Jump:   JumpSettings{History: true, HistoryLimit: 200},
+		Tunnel: TunnelSettings{Attempts: DefaultTunnelAttempts},
 		Terminal: Terminal{Scrollback: 10000, Term: "xterm-256color", ForwardMouse: true, CloseOnExit: true,
 			CopyOSC52: true, CopySystem: true, ConfirmPaste: true},
 		SSH: SSH{Timeout: 15 * time.Second, Handshake: 60 * time.Second, Keepalive: 15 * time.Second, LegacyAlgorithms: true, Debug: true},
@@ -486,6 +493,9 @@ func (c *Config) finish() error {
 		return err
 	}
 	if err := c.finishJump(); err != nil {
+		return err
+	}
+	if err := c.finishTunnels(); err != nil {
 		return err
 	}
 	switch c.UI.TabsPosition {

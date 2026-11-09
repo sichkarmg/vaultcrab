@@ -275,6 +275,13 @@ func (l *hostList) key(msg tea.KeyMsg) tea.Cmd {
 		if r := l.current(); r != nil && r.Kind == core.HostRow {
 			m.modal = newScriptMenu(m, *r.Host)
 		}
+	case "T":
+		// a tunnel through this SSH host (the Tunnels dialog elsewhere)
+		if r := l.current(); r != nil && r.Kind == core.HostRow && r.Host.Scheme == core.SchemeSSH {
+			m.tunnelFromHost(*r.Host)
+		} else {
+			m.openTunnels(nil)
+		}
 	case "J":
 		// make a jump template of this host
 		if r := l.current(); r != nil && r.Kind == core.HostRow {

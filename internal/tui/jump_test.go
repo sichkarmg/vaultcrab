@@ -8,6 +8,7 @@ import (
 	"crypto/rand"
 	"encoding/pem"
 	"errors"
+	"net"
 	"os"
 	"path/filepath"
 	"strings"
@@ -57,6 +58,30 @@ type jumpTest struct {
 	mu    sync.Mutex
 	dials []string // "jump user@addr -> user@addr"
 	ask   bool     // the dialer asks about a host key of the target
+	jumps []*fakeJumpConn
+	urls  []string // opened in the browser
+}
+
+// fakeJumpConn is a connection to a jump host that dials directly.
+type fakeJumpConn struct {
+	done chan struct{}
+	once sync.Once
+}
+
+func (f *fakeJumpConn) DialContext(ctx context.Context, network, addr string) (net.Conn, error) {
+	var d net.Dialer
+	return d.DialContext(ctx, network, addr)
+}
+func (f *fakeJumpConn) Done() <-chan struct{} { return f.done }
+func (f *fakeJumpConn) Close() error {
+	f.once.Do(func() { close(f.done) })
+	return nil
+}
+
+func (jt *jumpTest) jumpConns() []*fakeJumpConn {
+	jt.mu.Lock()
+	defer jt.mu.Unlock()
+	return append([]*fakeJumpConn(nil), jt.jumps...)
 }
 
 func newJumpTest(t *testing.T, ws string, extra ...config.JumpTemplate) *jumpTest {
@@ -70,6 +95,20 @@ func newJumpTest(t *testing.T, ws string, extra ...config.JumpTemplate) *jumpTes
 		Config:      &cfg,
 		ConfigPoll:  -1,
 		JumpHistory: jump.NewHistory(filepath.Join(t.TempDir(), "jump-history.json"), 0, true),
+		JumpConnect: func(context.Context, connect.Hop, connect.SSHOptions) (core.JumpConn, error) {
+			c := &fakeJumpConn{done: make(chan struct{})}
+			jt.mu.Lock()
+			jt.jumps = append(jt.jumps, c)
+			jt.mu.Unlock()
+			return c, nil
+		},
+		OpenURL: func(u string) error {
+			jt.mu.Lock()
+			jt.urls = append(jt.urls, u)
+			jt.mu.Unlock()
+			return nil
+		},
+		TunnelBackoff: 10 * time.Millisecond,
 		JumpDial: func(ctx context.Context, j, tg connect.Hop, cols, rows int, o connect.SSHOptions) (core.Remote, error) {
 			jt.mu.Lock()
 			jt.dials = append(jt.dials, j.Name+" "+j.User+"@"+j.Addr+" -> "+tg.User+"@"+tg.Addr)

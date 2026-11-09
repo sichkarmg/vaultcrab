@@ -99,7 +99,7 @@ func TestSettings(t *testing.T) {
 	}
 	keys(m, "left")
 
-	// Vaults, Jump hosts, then About (after External programs)
+	// Vaults, Jump hosts, Tunnels, then About (after External programs)
 	keys(m, "tab", "tab")
 	if v := ansi.Strip(m.View()); !strings.Contains(v, "Add vault") || !strings.Contains(v, "Online") && !strings.Contains(v, "online") {
 		t.Fatalf("vaults:\n%s", v)
@@ -107,6 +107,10 @@ func TestSettings(t *testing.T) {
 	keys(m, "tab")
 	if v := ansi.Strip(m.View()); !strings.Contains(v, "No templates yet") {
 		t.Fatalf("jump hosts:\n%s", v)
+	}
+	keys(m, "tab")
+	if v := ansi.Strip(m.View()); !strings.Contains(v, "No tunnels yet") || !strings.Contains(v, "reconnection attempts: 8") {
+		t.Fatalf("tunnels:\n%s", v)
 	}
 	keys(m, "tab")
 	if v := ansi.Strip(m.View()); !strings.Contains(v, "Config file") || !strings.Contains(v, m.opt.ConfigPath[:20]) {

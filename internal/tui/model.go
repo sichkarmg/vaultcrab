@@ -69,6 +69,8 @@ type Model struct {
 	modal  modal
 	parked modal // a docked dialog of the host list while another tab is active
 
+	tunState map[int]tunnelMark // the tunnels as last seen (notices)
+
 	toast      string
 	toastErr   bool
 	toastUntil time.Time
@@ -279,6 +281,7 @@ func (m *Model) onEvent() {
 	if m.opt.CloseOnExit {
 		m.closeExited()
 	}
+	m.tunnelNotices()
 	st := m.svc.Status()
 	if st.State == core.Locked && !m.unlockOffered && m.modal == nil {
 		m.unlockOffered = true
@@ -374,6 +377,8 @@ func (m *Model) prefixed(msg tea.KeyMsg) tea.Cmd {
 		return m.openHost(m.svc.LocalHost())
 	case core.ActJump:
 		m.openJumpPicker()
+	case core.ActTunnels:
+		m.openTunnels(nil)
 	case core.ActRenameTab:
 		if t := m.curTab(); t != nil {
 			m.modal = newRename(m, t)

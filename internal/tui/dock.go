@@ -8,7 +8,7 @@ import (
 	"github.com/sichkarmg/vaultcrab/internal/core"
 )
 
-// The settings, the item form and the jump picker belong to the host list (tab 0): while
+// The settings, the item form, the jump picker and the tunnels belong to the host list (tab 0): while
 // one is open the other tabs can still be switched to (prefix + digit,
 // next/previous tab, a click in the tab bar). The dialog is parked then and
 // shown again on the return to the host list.

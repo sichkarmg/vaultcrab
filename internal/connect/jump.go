@@ -6,9 +6,12 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
 	"net"
 	"os"
 	"runtime"
+	"sync"
+	"time"
 
 	"golang.org/x/crypto/ssh"
 	"golang.org/x/crypto/ssh/agent"
@@ -77,56 +80,159 @@ func plainDialErr(err error) error {
 // DialJump connects to the jump host, opens a TCP channel from it to the
 // target, runs the second SSH session over that channel and starts a login
 // shell with a cols×rows PTY there. The agent is never forwarded. Errors
-// are *JumpError.
+// are *JumpError. The jump host is closed with the connection.
 func DialJump(ctx context.Context, jump, target Hop, cols, rows int, o SSHOptions) (*Conn, error) {
-	o = o.withDefaults()
-	if jump.Keys.Role == "" {
-		jump.Keys.Role = "jump host"
-	}
-	if jump.Keys.Name == "" {
-		jump.Keys.Name = jump.Name
-	}
-	if target.Keys.Role == "" {
-		target.Keys.Role = "target"
-	}
-	if target.Keys.Name == "" {
-		target.Keys.Name = target.Addr
-	}
-	fail := func(isTarget bool, h Hop, err error) error {
-		if ctx.Err() != nil {
-			return ctx.Err()
-		}
-		je := &JumpError{Target: isTarget, Jump: jump.Name, Addr: h.Addr, User: h.User, Err: err, Stage: StageHandshake}
-		var he *hopErr
-		if errors.As(err, &he) {
-			je.Stage, je.Err = he.stage, he.err
-		}
-		return je
-	}
-	tracef(ctx, "jump host %s (%s) as %q, %s", jump.Name, jump.Addr, jump.User, jump.AuthInfo)
-	jc, _, err := dialHop(ctx, jump.Addr, jump.User, jump.Auth, jump.Keys, o, nil)
+	jc, err := DialJumpHost(ctx, jump, o)
 	if err != nil {
-		return nil, fail(false, jump, err)
+		return nil, err
 	}
-	tracef(ctx, "target %s as %q, %s", target.Addr, target.User, target.AuthInfo)
-	tc, _, err := dialHop(ctx, target.Addr, target.User, target.Auth, target.Keys, o, jc)
+	c, err := DialVia(ctx, jc, jump.Name, target, cols, rows, o)
 	if err != nil {
 		jc.Close()
-		return nil, fail(true, target, err)
+		return nil, err
+	}
+	c.via = jc
+	return c, nil
+}
+
+func (h *Hop) defaults(role, name string) {
+	if h.Keys.Role == "" {
+		h.Keys.Role = role
+	}
+	if h.Keys.Name == "" {
+		h.Keys.Name = name
+	}
+}
+
+// hopFail classifies the error of a hop as a *JumpError.
+func hopFail(ctx context.Context, isTarget bool, jumpName string, h Hop, err error) error {
+	if ctx.Err() != nil {
+		return ctx.Err()
+	}
+	je := &JumpError{Target: isTarget, Jump: jumpName, Addr: h.Addr, User: h.User, Err: err, Stage: StageHandshake}
+	var he *hopErr
+	if errors.As(err, &he) {
+		je.Stage, je.Err = he.stage, he.err
+	}
+	return je
+}
+
+// JumpClient is an authenticated SSH connection to a jump host: it opens
+// TCP connections from there (shells to targets, tunnels) and can be shared
+// by several of them. Done is closed when the connection is lost (or
+// closed); keepalives notice a dead one.
+type JumpClient struct {
+	c    *ssh.Client
+	done chan struct{}
+	once sync.Once
+}
+
+// DialJumpHost connects and authenticates to the jump host. Errors are
+// *JumpError. ctx bounds the connection only: the client outlives it.
+func DialJumpHost(ctx context.Context, jump Hop, o SSHOptions) (*JumpClient, error) {
+	o = o.withDefaults()
+	jump.defaults("jump host", jump.Name)
+	tracef(ctx, "jump host %s (%s) as %q, %s", jump.Name, jump.Addr, jump.User, jump.AuthInfo)
+	c, _, err := dialHop(ctx, jump.Addr, jump.User, jump.Auth, jump.Keys, o, nil)
+	if err != nil {
+		return nil, hopFail(ctx, false, jump.Name, jump, err)
+	}
+	j := &JumpClient{c: c, done: make(chan struct{})}
+	go func() {
+		_ = c.Wait()
+		j.finish()
+	}()
+	if o.Keepalive > 0 {
+		go j.keepalive(o.Keepalive)
+	}
+	return j, nil
+}
+
+// DialContext opens a TCP connection to addr from the jump host.
+func (j *JumpClient) DialContext(ctx context.Context, network, addr string) (net.Conn, error) {
+	return j.c.DialContext(ctx, network, addr)
+}
+
+// Done is closed when the connection is lost or closed.
+func (j *JumpClient) Done() <-chan struct{} { return j.done }
+
+// Close ends the connection and every connection through it.
+func (j *JumpClient) Close() error {
+	err := j.c.Close()
+	j.finish()
+	return err
+}
+
+func (j *JumpClient) finish() {
+	j.once.Do(func() {
+		j.c.Close()
+		close(j.done)
+	})
+}
+
+// keepalive probes the jump host while the connection lasts, on a session
+// channel of its own (see Conn.keepalive: a global request breaks some
+// servers). A server that refuses the channel is not probed (TCP
+// keepalives still end a dead connection, later).
+func (j *JumpClient) keepalive(every time.Duration) {
+	sess, err := j.c.NewSession()
+	if err != nil {
+		return
+	}
+	defer sess.Close()
+	t := time.NewTicker(every)
+	defer t.Stop()
+	for {
+		select {
+		case <-j.done:
+			return
+		case <-t.C:
+			res := make(chan error, 1)
+			go func() {
+				_, err := sess.SendRequest("keepalive@openssh.com", true, nil)
+				res <- err
+			}()
+			select {
+			case err := <-res:
+				if err != nil {
+					j.finish()
+					return
+				}
+			case <-time.After(3 * every):
+				j.finish()
+				return
+			case <-j.done:
+				return
+			}
+		}
+	}
+}
+
+// DialVia opens a TCP channel from via (the jump host jumpName) to the
+// target, runs the SSH session of the target over it and starts a login
+// shell with a cols×rows PTY. Errors are *JumpError. via is not closed.
+func DialVia(ctx context.Context, via Dialer, jumpName string, target Hop, cols, rows int, o SSHOptions) (*Conn, error) {
+	o = o.withDefaults()
+	target.defaults("target", target.Addr)
+	tracef(ctx, "target %s as %q, %s", target.Addr, target.User, target.AuthInfo)
+	tc, _, err := dialHop(ctx, target.Addr, target.User, target.Auth, target.Keys, o, via)
+	if err != nil {
+		return nil, hopFail(ctx, true, jumpName, target, err)
 	}
 	c, err := startShell(tc, o.Term, cols, rows)
 	if err != nil {
 		tc.Close()
-		jc.Close()
-		return nil, fail(true, target, err)
+		return nil, hopFail(ctx, true, jumpName, target, err)
 	}
 	tracef(ctx, "PTY %s %dx%d, shell started on the target", o.Term, cols, rows)
-	c.via = jc
 	if o.Keepalive > 0 {
 		go c.keepalive(o.Keepalive)
 	}
 	return c, nil
 }
+
+// SetVia makes c close v (a lease of a shared jump host) when it ends.
+func (c *Conn) SetVia(v io.Closer) { c.via = v }
 
 // ErrPassphrase: the passphrase of a key file is wrong.
 var ErrPassphrase = errors.New("wrong passphrase")

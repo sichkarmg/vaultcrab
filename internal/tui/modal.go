@@ -459,6 +459,7 @@ func (h *helpModal) view(m *Model, w, hh int) []string {
 		{"t", "local terminal in a new tab (anywhere: " + m.opt.Prefix + " t)"},
 		{jumpKey(m), "connect through a jump host: 1. the jump host or template, 2. the target IP (anywhere: " + m.opt.Prefix + " " + jumpKey(m) + ")"},
 		{"J", "make a jump template of the SSH host (Settings → Jump hosts)"},
+		{"T", "a tunnel (port forwarding) through the SSH host; the Tunnels list (anywhere: " + m.opt.Prefix + " T, the ⇄ button)"},
 		{"x", "run a script for the item (scripts: in the config; ping by default)"},
 		{"e / a / C / D", "edit the item / add a new one / copy / delete it (to the trash; vault online only)"},
 		{"w", "show / hide the widget column (widgets: in the config)"},

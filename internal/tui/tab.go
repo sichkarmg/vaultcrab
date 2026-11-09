@@ -593,6 +593,8 @@ func (m *Model) mouse(msg tea.MouseMsg) tea.Cmd {
 	if msg.Y == m.tabBarY() {
 		if msg.Action == tea.MouseActionPress && msg.Button == tea.MouseButtonLeft && msg.X >= m.tabsWidth() {
 			switch m.buttonAt(msg.X) {
+			case "tunnels":
+				m.openTunnels(nil)
 			case "log":
 				m.modal = newLogView(m)
 			case "settings":

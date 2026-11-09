@@ -67,7 +67,7 @@ func (e *UnknownHostError) Error() string {
 // Conn is an interactive SSH shell with a PTY.
 type Conn struct {
 	client *ssh.Client
-	via    *ssh.Client // the jump host, closed with the connection
+	via    io.Closer // the jump host (or its lease), closed with the connection
 	sess   *ssh.Session
 	stdin  io.WriteCloser
 	stdout io.Reader
@@ -173,7 +173,7 @@ func (e *hopErr) Unwrap() error { return e.err }
 // nil), checks the host key with hk and authenticates as user. The
 // handshake is bounded by o.Handshake, except while the user is asked
 // about the host key.
-func dialHop(ctx context.Context, addr, user string, auth []ssh.AuthMethod, hk HostKeyPolicy, o SSHOptions, via *ssh.Client) (*ssh.Client, net.Conn, error) {
+func dialHop(ctx context.Context, addr, user string, auth []ssh.AuthMethod, hk HostKeyPolicy, o SSHOptions, via Dialer) (*ssh.Client, net.Conn, error) {
 	cfg := &ssh.ClientConfig{
 		User:    user,
 		Auth:    auth,
@@ -296,6 +296,12 @@ func unwrapHostKey(err error) error {
 		return rej
 	}
 	return err
+}
+
+// Dialer opens TCP connections from the far side of an SSH connection (an
+// *ssh.Client, a JumpClient).
+type Dialer interface {
+	DialContext(ctx context.Context, network, addr string) (net.Conn, error)
 }
 
 // Tunnel is an SSH connection to a jump host that opens TCP connections

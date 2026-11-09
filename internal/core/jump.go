@@ -353,7 +353,6 @@ func hostKeyMode(check string) connect.HostKeyMode {
 // planJump resolves spec: the jump host, the target, users, ports, where
 // the keys come from and the host key check.
 func (s *Service) planJump(spec JumpSpec) (*jumpPlan, error) {
-	p := &jumpPlan{mode: connect.HostKeyAsk}
 	var typed jump.Target
 	if spec.Item == "" {
 		var err error
@@ -361,8 +360,19 @@ func (s *Service) planJump(spec JumpSpec) (*jumpPlan, error) {
 			return nil, err
 		}
 	}
+	p, tpl, err := s.planVia(spec.Via)
+	if err != nil {
+		return nil, err
+	}
+	return s.planTarget(p, tpl, spec, typed)
+}
+
+// planVia resolves the jump host of via (JumpSpec.Via): where it is, its
+// key, the key of the targets and the host key check.
+func (s *Service) planVia(via string) (*jumpPlan, *JumpTemplate, error) {
+	p := &jumpPlan{mode: connect.HostKeyAsk}
 	var tpl *JumpTemplate
-	kind, ref, _ := strings.Cut(spec.Via, ":")
+	kind, ref, _ := strings.Cut(via, ":")
 	switch kind {
 	case "t":
 		for _, t := range s.Config().JumpTemplates {
@@ -372,7 +382,7 @@ func (s *Service) planJump(spec JumpSpec) (*jumpPlan, error) {
 			}
 		}
 		if tpl == nil {
-			return nil, fmt.Errorf("jump template %q no longer exists", ref)
+			return nil, nil, fmt.Errorf("jump template %q no longer exists", ref)
 		}
 		p.viaName = tpl.Name
 		p.mode = hostKeyMode(tpl.HostKeys())
@@ -380,11 +390,11 @@ func (s *Service) planJump(spec JumpSpec) (*jumpPlan, error) {
 			p.jump = connect.Hop{Name: h.Name, Addr: sshAddr(h), User: h.User}
 			p.jumpKey = keySource{kind: jump.KeyVault, item: h.ID}
 		} else if !errors.Is(err, errNoItem) {
-			return nil, fmt.Errorf("template %s: jump: %w", tpl.Name, err) // several items with the name
+			return nil, nil, fmt.Errorf("template %s: jump: %w", tpl.Name, err) // several items with the name
 		} else {
 			jt, perr := jump.ParseTarget(tpl.Jump)
 			if perr != nil {
-				return nil, fmt.Errorf("template %s: jump %q: neither an SSH vault item (%v) nor [user@]host[:port] (%v)", tpl.Name, tpl.Jump, err, perr)
+				return nil, nil, fmt.Errorf("template %s: jump %q: neither an SSH vault item (%v) nor [user@]host[:port] (%v)", tpl.Name, tpl.Jump, err, perr)
 			}
 			p.jump = connect.Hop{Name: jt.HostPort(), Addr: jt.Addr(22), User: jt.User}
 			p.jumpKey = keySource{kind: jump.KeyAgent}
@@ -395,41 +405,47 @@ func (s *Service) planJump(spec JumpSpec) (*jumpPlan, error) {
 		key, _ := jump.ParseKey(tpl.Key) // checked when the config was loaded
 		jk, _ := jump.ParseKey(tpl.JumpKey)
 		if jk.Kind != jump.KeyNone {
-			ks, err := s.keyOf(jk, spec.Via+"#jump")
+			ks, err := s.keyOf(jk, via+"#jump")
 			if err != nil {
-				return nil, fmt.Errorf("template %s: jump_key: %w", tpl.Name, err)
+				return nil, nil, fmt.Errorf("template %s: jump_key: %w", tpl.Name, err)
 			}
 			p.jumpKey = ks
 		} else if p.jumpKey.kind != jump.KeyVault && key.Kind != jump.KeyNone {
-			ks, err := s.keyOf(key, spec.Via)
+			ks, err := s.keyOf(key, via)
 			if err != nil {
-				return nil, fmt.Errorf("template %s: key: %w", tpl.Name, err)
+				return nil, nil, fmt.Errorf("template %s: key: %w", tpl.Name, err)
 			}
 			p.jumpKey = ks
 		}
 		p.targetKey = p.jumpKey
 		if key.Kind != jump.KeyNone {
-			ks, err := s.keyOf(key, spec.Via)
+			ks, err := s.keyOf(key, via)
 			if err != nil {
-				return nil, fmt.Errorf("template %s: key: %w", tpl.Name, err)
+				return nil, nil, fmt.Errorf("template %s: key: %w", tpl.Name, err)
 			}
 			p.targetKey = ks
 		}
 	case "h":
 		h, ok := s.Host(ref)
 		if !ok || h.Scheme != model.SSH {
-			return nil, errors.New("the jump host is no longer in the vault")
+			return nil, nil, errors.New("the jump host is no longer in the vault")
 		}
 		p.viaName = h.Name
 		p.jump = connect.Hop{Name: h.Name, Addr: sshAddr(h), User: h.User}
 		p.jumpKey = keySource{kind: jump.KeyVault, item: h.ID}
 		p.targetKey = p.jumpKey
 	default:
-		return nil, fmt.Errorf("unknown jump host %q", spec.Via)
+		return nil, nil, fmt.Errorf("unknown jump host %q", via)
 	}
 	if p.jump.User == "" {
 		p.jump.User = localUser()
 	}
+	return p, tpl, nil
+}
+
+// planTarget completes p with the target of spec (typed: the parsed
+// Target).
+func (s *Service) planTarget(p *jumpPlan, tpl *JumpTemplate, spec JumpSpec, typed jump.Target) (*jumpPlan, error) {
 	if spec.Item != "" {
 		h, ok := s.Host(spec.Item)
 		if !ok {
@@ -483,7 +499,9 @@ func (s *Service) planJump(spec JumpSpec) (*jumpPlan, error) {
 	return p, nil
 }
 
-// jumpDialer connects a jump session: both hops anew on every (re)connect.
+// jumpDialer connects a jump session: the shared connection to the jump
+// host (connected if there is none), then the target through it, anew on
+// every (re)connect.
 func (s *Service) jumpDialer(spec JumpSpec) session.Dialer {
 	return func(ctx context.Context, _ model.Host, _ *secret.Secret, cols, rows int) (session.Remote, error) {
 		p, err := s.planJump(spec)
@@ -507,26 +525,36 @@ func (s *Service) jumpDialer(spec JumpSpec) session.Dialer {
 			}
 			return err
 		}
-		if err = auth(p.jumpKey, "jump host "+p.jump.Name, &p.jump); err != nil {
-			return nil, fmt.Errorf("jump host %s: %w", p.jump.Name, err)
-		}
-		if err = auth(p.targetKey, "target "+p.target.Name, &p.target); err != nil {
-			return nil, fmt.Errorf("target %s: %w", p.target.Name, err)
-		}
 		pol := connect.HostKeyPolicy{File: s.opts.SSH.KnownHosts, Mode: p.mode, Ask: s.askHostKey(p.mode)}
 		p.jump.Keys, p.target.Keys = pol, pol
 		logf("jump: %s → %s@%s", p.jump.Name, p.target.User, p.target.Addr)
-		dial := s.opts.JumpDial
-		if dial == nil {
-			dial = func(ctx context.Context, j, t connect.Hop, cols, rows int, o connect.SSHOptions) (session.Remote, error) {
-				c, err := connect.DialJump(ctx, j, t, cols, rows, o)
-				if err != nil {
-					return nil, err // not a nil *Conn in an interface
-				}
-				return c, nil
+		var c session.Remote
+		if s.opts.JumpDial != nil { // tests: both hops at once
+			if err = auth(p.jumpKey, "jump host "+p.jump.Name, &p.jump); err != nil {
+				return nil, fmt.Errorf("jump host %s: %w", p.jump.Name, err)
+			}
+			if err = auth(p.targetKey, "target "+p.target.Name, &p.target); err != nil {
+				return nil, fmt.Errorf("target %s: %w", p.target.Name, err)
+			}
+			c, err = s.opts.JumpDial(ctx, p.jump, p.target, cols, rows, s.opts.SSH)
+		} else {
+			var jc JumpConn
+			var release func()
+			if jc, release, err = s.leaseJump(ctx, p); err != nil {
+				return nil, err
+			}
+			if err = auth(p.targetKey, "target "+p.target.Name, &p.target); err != nil {
+				release()
+				return nil, fmt.Errorf("target %s: %w", p.target.Name, err)
+			}
+			var conn *connect.Conn
+			if conn, err = connect.DialVia(ctx, jc, p.jump.Name, p.target, cols, rows, s.opts.SSH); err != nil {
+				release()
+			} else {
+				conn.SetVia(closerFunc(release)) // the jump host is given back with the shell
+				c = conn
 			}
 		}
-		c, err := dial(ctx, p.jump, p.target, cols, rows, s.opts.SSH)
 		if err != nil {
 			// a typed password that was refused is asked again next time
 			var je *connect.JumpError
@@ -748,6 +776,19 @@ func NormalizeTarget(s string) (string, error) {
 		return "", err
 	}
 	return t.String(), nil
+}
+
+// TargetHost returns the host of a target ([user@]host[:port]), an IPv6
+// address in brackets (ready for ":port").
+func TargetHost(s string) string {
+	t, err := jump.ParseTarget(s)
+	if err != nil {
+		return s
+	}
+	if strings.Contains(t.Host, ":") {
+		return "[" + t.Host + "]"
+	}
+	return t.Host
 }
 
 // CredChoice is a credential the picker offers for a typed target.

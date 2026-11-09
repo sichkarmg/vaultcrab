@@ -18,6 +18,9 @@ import (
 
 // Options configures the UI (built from the config by main).
 type Options struct {
+	// Mouse: the program reports the mouse (ui.mouse); it is turned on
+	// again after a program had the terminal (bw login).
+	Mouse        bool
 	TabsBottom   bool
 	ForwardMouse bool
 	CloseOnExit  bool
@@ -227,7 +230,7 @@ func (m *Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.notify(true, "bw login: %v", msg.err)
 		}
 		m.svc.ReconnectVault(m.ctx, msg.id)
-		return m, nil
+		return m, m.mouseBack()
 	case scriptResultMsg:
 		m.scriptResult(msg)
 		return m, nil
@@ -291,7 +294,11 @@ func (m *Model) onEvent() {
 	st := m.svc.Status()
 	if st.State == core.Locked && !m.unlockOffered && m.modal == nil {
 		m.unlockOffered = true
-		m.modal = newUnlock(m)
+		u := newUnlock(m)
+		// opened by itself (a lock): Touch ID waits for Enter, whoever is
+		// at the computer
+		u.touchPending = false
+		m.modal = u
 	}
 	if st.State == core.Online {
 		m.unlockOffered = false

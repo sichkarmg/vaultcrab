@@ -31,8 +31,9 @@ func (f *fakeTouch) Authenticate(context.Context, string) error {
 
 var errTouchCanceled = errors.New("Touch ID was canceled")
 
-// The unlock dialog asks for Touch ID at once; canceled, it falls back to
-// the PIN; accepted, the vault is unlocked.
+// The unlock dialog that opens after a lock waits for Enter (also with
+// the user at the computer) and then asks for Touch ID; canceled, it falls
+// back to the PIN; accepted, the vault is unlocked. u asks at once.
 func TestUnlockTouchIDThenPIN(t *testing.T) {
 	m, svc, ft, ctx := touchModel(t)
 
@@ -41,16 +42,20 @@ func TestUnlockTouchIDThenPIN(t *testing.T) {
 	svc.LockAll(ctx, nil)
 	m.onEvent()
 	runUpdate(m, nil)
+	if _, ok := m.modal.(*unlockModal); !ok || ft.asked != 0 {
+		t.Fatalf("asked before Enter: modal %T asked %d", m.modal, ft.asked)
+	}
+	runUpdate(m, tea.KeyMsg{Type: tea.KeyEnter})
 	u, ok := m.modal.(*unlockModal)
 	if !ok || u.touch || !u.pin || !strings.Contains(u.err, "canceled") {
 		t.Fatalf("after cancel: modal %T pin %v err %q", m.modal, ok && u.pin, u.err)
 	}
 	m.modal, m.unlockOffered = nil, false
 
-	// accepted
+	// accepted, asked at once by u
 	ft.answer = nil
-	m.onEvent()
-	runUpdate(m, nil)
+	m.unlockOffered = true
+	runUpdate(m, tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("u")})
 	if m.modal != nil || svc.Status().State == core.Locked {
 		t.Fatalf("not unlocked: %T %v", m.modal, svc.Status().State)
 	}
@@ -65,7 +70,7 @@ func TestUnlockTouchIDRetry(t *testing.T) {
 			ft.answer = core.ErrTouchTimeout
 			svc.LockAll(ctx, nil)
 			m.onEvent()
-			runUpdate(m, nil)
+			runUpdate(m, tea.KeyMsg{Type: tea.KeyEnter})
 			u, ok := m.modal.(*unlockModal)
 			if !ok || ft.asked != 1 || !strings.Contains(u.err, "timed out") || !u.touchOK {
 				t.Fatalf("after the timeout: modal %T asked %d err %q", m.modal, ft.asked, u.err)

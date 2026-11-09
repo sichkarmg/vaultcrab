@@ -206,6 +206,7 @@ func run(cfg config.Config, load func(string) (config.Config, error)) error {
 	defer svc.Shutdown()
 
 	m := tui.New(ctx, svc, tui.Options{
+		Mouse:        cfg.UI.Mouse,
 		TabsBottom:   cfg.UI.TabsPosition == "bottom",
 		ForwardMouse: cfg.Terminal.ForwardMouse,
 		CloseOnExit:  cfg.Terminal.CloseOnExit,

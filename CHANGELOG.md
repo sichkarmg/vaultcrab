@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+- The mouse works again after `bw login` (`L`) had the terminal: Bubble Tea restored the screen but
+  not the mouse reports.
+- macOS: an unlock dialog that opens by itself after a lock waits for Enter before it asks for
+  Touch ID, also when you are at the computer (`u` still asks at once).
+
 ## [0.7.0] - 2026-11-09
 
 ### Added

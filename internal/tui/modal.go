@@ -74,10 +74,11 @@ type unlockModal struct {
 	touchOK      bool // Touch ID can unlock this vault (Enter on an empty input, Ctrl+T)
 }
 
-// touchAwayAfter: a dialog that opens on its own (the auto-lock fired, bw
-// locked the vault) this long after the last key or mouse event does not
-// ask for Touch ID at once: nobody may be at the Mac (it may be asleep), and
-// the prompt would time out. Enter or Ctrl+T asks for it then.
+// touchAwayAfter: an unlock dialog opened by a key this long after the
+// previous key or mouse event does not ask for Touch ID at once: nobody may
+// be at the Mac (it may be asleep), and the prompt would time out. Enter or
+// Ctrl+T asks for it then. A dialog that opens on its own (a lock) always
+// waits for Enter.
 const touchAwayAfter = 30 * time.Second
 
 // present reports whether the user gave input recently (wall clock: a sleep
@@ -430,7 +431,17 @@ func (m *Model) afterLogin(l loginDoneMsg) tea.Cmd {
 	}
 	m.unlockOffered = false
 	m.svc.Reconnect(m.ctx)
-	return nil
+	return m.mouseBack()
+}
+
+// mouseBack turns the mouse reports on again after a program had the
+// terminal: Bubble Tea restores the alternate screen, the bracketed paste
+// and the focus reports, but not the mouse.
+func (m *Model) mouseBack() tea.Cmd {
+	if !m.opt.Mouse {
+		return nil
+	}
+	return tea.EnableMouseCellMotion
 }
 
 // --- help ---

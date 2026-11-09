@@ -56,6 +56,7 @@ type barItem struct {
 	members []int  // the tabs of a group
 	status  [2]int // the x range (relative) of the state icon and number
 	close   [2]int // the x range (relative) of the close button ([0 0] = none)
+	joined  bool   // no separator after it (the header and the tabs of an open group)
 }
 
 // groupKey groups tabs: the host of the focused pane.
@@ -100,11 +101,18 @@ func (m *Model) tabItems() []barItem {
 			}
 		}
 		if m.openGroups[k] {
+			// the name once, then each tab of the group by its state and
+			// number: ▾ web-01  ●4  ●5  ✗6
 			title := ansi.Truncate(sessionTitle(t.focused(), m.g), m.tabWidth(), m.g.ell)
-			h := stTabBar.Render(fmt.Sprintf(" %s %s ×%d ", m.ascii("▾"), title, len(members)))
-			items = append(items, barItem{label: h, tab: members[0], group: k, header: true, members: members})
-			for _, n := range members {
-				items = append(items, m.tabItem(n, ""))
+			h := stTabBar.Render(fmt.Sprintf(" %s %s", m.ascii("▾"), title))
+			items = append(items, barItem{label: h, tab: members[0], group: k, header: true, members: members, joined: true})
+			for i, n := range members {
+				it := m.tabChip(n)
+				it.joined = i < len(members)-1
+				if !it.joined {
+					it.label += " "
+				}
+				items = append(items, it)
 			}
 			continue
 		}
@@ -157,6 +165,42 @@ func (m *Model) tabItem(n int, more string) barItem {
 		btn := m.ascii("✕")
 		label += stQuit.Render(btn) + " "
 		it.close = [2]int{x, x + ansi.StringWidth(btn) + 1}
+	}
+	it.label = label
+	return it
+}
+
+// tabChip is a tab of an open group: its state and number only (the name
+// is in the group header); the active one highlighted, with its ✕.
+func (m *Model) tabChip(n int) barItem {
+	t := m.tabs[n-1]
+	active := n == m.active
+	base := stTabInactive
+	if active {
+		base = stTabActive
+	}
+	num := strconv.Itoa(n)
+	it := barItem{tab: n}
+	var head string
+	if m.opt.Appearance.TabStatus == "color" {
+		ns := base
+		if c, ok := t.stateColor(active); ok {
+			ns = base.Foreground(c)
+		}
+		head = base.Render(" ") + ns.Render(num)
+	} else {
+		head = " " + t.icon(m, active) + base.Render(num)
+	}
+	it.status = [2]int{0, ansi.StringWidth(head)}
+	label := head
+	if active {
+		label += base.Render(" ")
+		if m.opt.Appearance.TabCloseButton {
+			x := ansi.StringWidth(label)
+			btn := m.ascii("✕")
+			label += stQuit.Render(btn)
+			it.close = [2]int{x, x + ansi.StringWidth(btn) + 1}
+		}
 	}
 	it.label = label
 	return it
@@ -249,7 +293,10 @@ func (m *Model) tabSpans() (labels []string, starts []int, first int) {
 	}
 	widths := make([]int, len(labels))
 	for i, l := range labels {
-		widths[i] = ansi.StringWidth(l) + 1 // separator
+		widths[i] = ansi.StringWidth(l)
+		if !items[i].joined {
+			widths[i]++ // separator
+		}
 	}
 	more := ansi.StringWidth(m.g.more)
 	// Scroll so the active tab fits.
@@ -286,6 +333,7 @@ func (m *Model) tabSpans() (labels []string, starts []int, first int) {
 
 func (m *Model) tabBar() string {
 	labels, starts, first := m.tabSpans()
+	items := m.tabItems()
 	var b strings.Builder
 	for i, l := range labels {
 		if starts[i] < 0 {
@@ -298,7 +346,9 @@ func (m *Model) tabBar() string {
 			b.WriteString(m.g.more)
 		}
 		b.WriteString(l)
-		b.WriteString(stTabBar.Render(m.g.v))
+		if !items[i].joined {
+			b.WriteString(stTabBar.Render(m.g.v))
+		}
 	}
 	sep := stTabBar.Render(m.g.v)
 	logBtn := ""

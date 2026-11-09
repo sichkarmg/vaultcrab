@@ -33,7 +33,8 @@ ui:
   tab_close_button: true   # ✕ on the active tab closes it (connected or not; asks if a session is live)
   tab_status_close: false  # a click on the state icon or number of a tab closes it (the active tab
                            # after a confirmation)
-  group_tabs: true         # the tabs of one host are one entry "N:host ×3 ▸"; a click opens the group
+  group_tabs: true         # the tabs of one host are one entry "N:host ×3 ▸"; a click opens the group:
+                           # "▾ host ●4 ●5 ✗6" (the name once, the tabs by state and number)
   accent: cyan             # cyan | blue | green | magenta | yellow | red (keys, focused borders, folders)
   selection_color: reverse # selection and active items (list cursor, active tab, filter, status bar,
                            # buttons): reverse | cyan | blue | green |

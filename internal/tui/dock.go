@@ -8,7 +8,7 @@ import (
 	"github.com/sichkarmg/vaultcrab/internal/core"
 )
 
-// The settings and the item form belong to the host list (tab 0): while
+// The settings, the item form and the jump picker belong to the host list (tab 0): while
 // one is open the other tabs can still be switched to (prefix + digit,
 // next/previous tab, a click in the tab bar). The dialog is parked then and
 // shown again on the return to the host list.
@@ -18,6 +18,7 @@ type docked interface{ docked() }
 
 func (*settingsModal) docked() {}
 func (*hostForm) docked()      {}
+func (*jumpPicker) docked()    {}
 
 func isDocked(d modal) bool { _, ok := d.(docked); return ok }
 

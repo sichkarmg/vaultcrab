@@ -65,7 +65,11 @@ func (t *tab) groupKey() string { return t.focused().Host.ID }
 func (m *Model) tabItems() []barItem {
 	hosts := fmt.Sprintf(" 0:%s ", "Hosts")
 	if m.parked != nil {
-		hosts = " 0:Hosts " + m.ascii("✎") + " " // a dialog waits there
+		mark := m.ascii("✎") // a dialog waits there
+		if _, ok := m.parked.(*jumpPicker); ok {
+			mark = m.g.jump
+		}
+		hosts = " 0:Hosts " + mark + " "
 	}
 	st := stTabInactive
 	if m.active == 0 {

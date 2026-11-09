@@ -58,9 +58,21 @@ func newJumpPicker(m *Model) *jumpPicker {
 	return p
 }
 
-// openJumpPicker opens the picker (the hosts must be known).
+// openJumpPicker opens the picker over the host list (the hosts must be
+// known). It stays there while other tabs are switched to; a picker (or
+// another dialog of the host list) left waiting is shown again instead of
+// a new one.
 func (m *Model) openJumpPicker() {
-	m.modal = newJumpPicker(m)
+	if m.parked != nil {
+		m.switchTab(0)
+		return
+	}
+	if m.active != 0 && m.modal == nil {
+		m.setActive(0)
+	}
+	if m.modal == nil {
+		m.modal = newJumpPicker(m)
+	}
 }
 
 func (p *jumpPicker) toStep(m *Model, step int) {

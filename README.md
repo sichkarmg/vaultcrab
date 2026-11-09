@@ -202,6 +202,10 @@ key whose IP addresses keep changing, there is no need for a vault item per mach
   target used before through this jump host (most used and most recent first) or a host of the list
   (it then connects with its own user and credential). `Enter` connects, `Esc` goes back; mouse: a
   click selects, a click on the selected row chooses it.
+  The picker belongs to the host list (tab 0): while it is open the other tabs can be switched to
+  (prefix + digit, `n`/`p`/`l`, `Ctrl+PgDn`/`PgUp`, a click on a tab); tab 0 shows `0:Hosts ↪`
+  (ASCII: `~>`), and the picker is there again with the step and the typed address on the return
+  (prefix `j` from any tab returns to it too).
 - **Credentials of typed addresses** (`Ctrl+K` in step 2), for thousands of machines with one
   password or key: the default (the template's key, else the jump host's credential), a **password
   typed once** (kept in memory until Vaultcrab exits, for every address through this jump host; asked

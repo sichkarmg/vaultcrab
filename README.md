@@ -445,7 +445,8 @@ closes a broken or finished pane (`Enter` reconnects it).
 (`ui.tab_close_button`, on); a click on the state icon or number of a tab closes it, the active tab
 after a confirmation (`ui.tab_status_close`, off); the tabs of one host are grouped into one entry
 `N:host ×3 ▸` — a click opens the group (the name once, then each tab by its state and number:
-`▾ host ●4 ●5 ✗6`; a click on a number switches to that tab), a click on the
+`▾ host ●4 ●5 ✗6`; a click on a number switches to that tab, also with `ui.tab_status_close`,
+where only the state icon of a grouped tab closes it), a click on the
 header folds it again (`ui.group_tabs`, on). Tab numbers and keys still address every tab.
 
 ## External clients (VNC, SMB, SFTP, …)

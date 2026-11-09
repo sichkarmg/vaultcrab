@@ -17,6 +17,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   not the mouse reports.
 - macOS: an unlock dialog that opens by itself after a lock waits for Enter before it asks for
   Touch ID, also when you are at the computer (`u` still asks at once).
+- With "Click on status closes" (`ui.tab_status_close`) an open group of tabs works with the mouse
+  again: a click on the number of a tab shows it, only its state icon closes it.
 
 ## [0.7.0] - 2026-11-09
 

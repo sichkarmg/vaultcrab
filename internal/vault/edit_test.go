@@ -267,3 +267,34 @@ func TestCreateHostWithoutUser(t *testing.T) {
 		t.Fatalf("update: %+v\n%s", h, f.item)
 	}
 }
+
+// Knock sets, replaces and removes the knock field; nil keeps it.
+func TestUpdateHostKnock(t *testing.T) {
+	f := &fakeEditServer{item: storedItem}
+	srv := httptest.NewServer(f)
+	defer srv.Close()
+	c := NewClient(srv.URL)
+	k := "7000,8000/udp"
+	e := HostEdit{Name: "old", Scheme: model.SSH, User: "root", Addr: "old", Port: 2222, Knock: &k}
+	if err := c.UpdateHost(context.Background(), "i1", e); err != nil {
+		t.Fatal(err)
+	}
+	if _, h := decodeItem(t, f.item); h.Fields["knock"] != k || h.Fields["env"] != "prod" {
+		t.Fatalf("set: %v", h.Fields)
+	}
+	e.Knock = nil
+	if err := c.UpdateHost(context.Background(), "i1", e); err != nil {
+		t.Fatal(err)
+	}
+	if _, h := decodeItem(t, f.item); h.Fields["knock"] != k {
+		t.Fatalf("nil did not keep it: %v", h.Fields)
+	}
+	empty := ""
+	e.Knock = &empty
+	if err := c.UpdateHost(context.Background(), "i1", e); err != nil {
+		t.Fatal(err)
+	}
+	if _, h := decodeItem(t, f.item); h.Fields["knock"] != "" || strings.Count(f.item, "knock") != 0 {
+		t.Fatalf("not removed: %s", f.item)
+	}
+}

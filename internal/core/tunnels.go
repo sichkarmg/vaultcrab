@@ -17,6 +17,7 @@ import (
 
 	"github.com/sichkarmg/vaultcrab/internal/config"
 	"github.com/sichkarmg/vaultcrab/internal/connect"
+	"github.com/sichkarmg/vaultcrab/internal/knock"
 	"github.com/sichkarmg/vaultcrab/internal/model"
 	"github.com/sichkarmg/vaultcrab/internal/tunnel"
 )
@@ -436,3 +437,12 @@ const (
 	TunnelLocal = config.TunnelLocal
 	TunnelSOCKS = config.TunnelSOCKS
 )
+
+// FieldKnock is the item field of the port knocking sequence.
+const FieldKnock = connect.FieldKnock
+
+// CheckKnock checks a port knocking sequence ("" = none).
+func CheckKnock(seq string) error {
+	_, err := knock.Parse(seq, "")
+	return err
+}

@@ -11,6 +11,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Port knocking before a connection: the custom fields `knock` (`7000,8000/udp,9000`) and
   `knock_delay` (`200ms`) of an item; for a jump host also `knock:` / `knock_delay:` of a jump
   template (Settings → Jump hosts → Knock). The knocks appear in the connection debug.
+- Every dialog has a `✕` in its top border: a click closes it (like Esc until it is gone).
+- Mouse buttons in each row of the Tunnels list: `[open] [edit] [del] [x]` on a running tunnel,
+  `[start] [edit] [del]` on a stopped one (`del` asks with a second click).
+- The Knock field in the item form (SSH hosts): the port knocking sequence, saved in the field
+  `knock` of the item.
 - `scripts/screenshots.sh` renders the README screenshots from scenes with a demo vault; new
   screenshots of the tunnels, the jump picker and the connection debug.
 
@@ -19,7 +24,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   be folded during it); clearing it brings the folds of the list back.
 - The event log stays with the host list like the settings: the other tabs can be used while it is
   open, and it is read again on the return.
-- The Tunnels dialog has a `✕` in its title row: it closes the form, then the dialog.
+- `D` twice (and `[del]`) in the Tunnels list also stops the removed tunnel.
 
 ## [0.6.0] - 2026-11-09
 

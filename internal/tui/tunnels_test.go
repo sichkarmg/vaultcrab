@@ -91,7 +91,8 @@ func TestTunnelFromPicker(t *testing.T) {
 		t.Fatalf("got %q", got)
 	}
 	v := ansi.Strip(m.View())
-	if !strings.Contains(v, "● active") || !strings.Contains(v, "→ Workstations → 127.0.0.1:"+port) || !strings.Contains(v, "⇄1") {
+	if !strings.Contains(v, "● active") || !strings.Contains(v, "→ Workstations →") || !strings.Contains(v, "⇄1") ||
+		!strings.Contains(v, "[open] [edit] [del] [x]") {
 		t.Fatalf("view:\n%s", v)
 	}
 
@@ -150,9 +151,9 @@ func TestTunnelFromPicker(t *testing.T) {
 		t.Fatalf("tab bar button: %T", m.modal)
 	}
 
-	// D D: removed from the config, still running
+	// D D: removed from the config and stopped
 	keys(m, "D", "D")
-	if len(svc.SavedTunnels()) != 0 || len(svc.Tunnels()) != 1 {
+	if len(svc.SavedTunnels()) != 0 || len(svc.Tunnels()) != 0 {
 		t.Fatalf("saved %d running %d", len(svc.SavedTunnels()), len(svc.Tunnels()))
 	}
 }
@@ -254,27 +255,60 @@ func TestTunnelsDocked(t *testing.T) {
 	}
 }
 
-// The ✕ in the title row closes the form first, then the dialog.
+// The ✕ of the dialog closes it, also with the form open.
 func TestTunnelsCloseButton(t *testing.T) {
 	jt := newJumpTest(t, "")
 	m := jt.m
 	m.openTunnels(nil)
-	tm := m.modal.(*tunnelsModal)
 	keys(m, "a")
-	v := ansi.Strip(m.View())
-	if !strings.Contains(v, "Tunnels") || !strings.Contains(v, "✕") {
-		t.Fatalf("no close button:\n%s", v)
-	}
-	click := func() {
-		x := m.dlgX + boxPadX + tm.closeX
-		m.Update(tea.MouseMsg{X: x, Y: m.dlgY + boxPadY, Action: tea.MouseActionPress, Button: tea.MouseButtonLeft})
-	}
-	click()
-	if m.modal != tm || tm.p.form != nil {
-		t.Fatalf("form not closed: %T %v", m.modal, tm.p.form != nil)
-	}
-	click()
+	clickClose(t, m)
 	if m.modal != nil {
 		t.Fatalf("dialog not closed: %T", m.modal)
+	}
+}
+
+// The buttons of a row: [x] stops, [start] starts, [edit] opens the form,
+// [del] twice removes the saved tunnel.
+func TestTunnelRowButtons(t *testing.T) {
+	jt := newJumpTest(t, "")
+	m, svc := jt.m, jt.svc
+	if err := svc.SaveJumpTemplates(svc.Config().JumpTemplates); err != nil {
+		t.Fatal(err)
+	}
+	_, port := tunnelWeb(t)
+	if err := svc.SaveTunnels([]core.TunnelTemplate{{Name: "web", Jump: "Workstations", Target: "127.0.0.1:" + port}}); err != nil {
+		t.Fatal(err)
+	}
+	m.openTunnels(nil)
+	tm := m.modal.(*tunnelsModal)
+	click := func(name string) {
+		t.Helper()
+		m.View()
+		for _, b := range tm.p.btns[0] {
+			if b.name == name {
+				m.Update(tea.MouseMsg{X: m.dlgX + boxPadX + b.x0 + 1, Y: m.dlgY + tm.p.rowY[0], Action: tea.MouseActionPress, Button: tea.MouseButtonLeft})
+				return
+			}
+		}
+		t.Fatalf("no button %s: %+v", name, tm.p.btns[0])
+	}
+	click("start")
+	waitTunnelUI(t, m, svc, core.TunnelActive)
+	click("x")
+	if len(svc.Tunnels()) != 0 {
+		t.Fatal("[x] did not stop")
+	}
+	click("edit")
+	if tm.p.form == nil || tm.p.form.edit != 0 {
+		t.Fatal("[edit] did not open the form")
+	}
+	keys(m, "esc")
+	click("del")
+	if len(svc.SavedTunnels()) != 1 {
+		t.Fatal("removed at the first click")
+	}
+	click("del")
+	if len(svc.SavedTunnels()) != 0 {
+		t.Fatal("[del] twice did not remove")
 	}
 }

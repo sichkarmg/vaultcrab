@@ -117,6 +117,28 @@ func TestEditAndAddItem(t *testing.T) {
 	if !ok || u.Port != 2222 || u.Addr != "10.0.0.1" || u.Password != nil || u.FolderID != "f" {
 		t.Fatalf("update %+v", u)
 	}
+	if u.Knock == nil || *u.Knock != "" {
+		t.Fatalf("knock of an SSH host: %v", u.Knock)
+	}
+	// the knock field: checked, saved
+	keys(m, "e")
+	f = m.modal.(*hostForm)
+	if !slices.Contains(f.fields(), fKnock) {
+		t.Fatal("no Knock field for an SSH host")
+	}
+	f.setFocus(fKnock)
+	typeText(m, "7000,8000/sctp")
+	if _, cmd := m.Update(tea.KeyMsg{Type: tea.KeyEnter}); cmd != nil || !strings.Contains(f.err, "knock") {
+		t.Fatalf("an invalid knock accepted: %q", f.err)
+	}
+	f.in[fKnock].SetValue("7000,8000/udp")
+	enterAndRun(t, m)
+	src.mu.Lock()
+	u = src.updated["1"]
+	src.mu.Unlock()
+	if u.Knock == nil || *u.Knock != "7000,8000/udp" {
+		t.Fatalf("knock not saved: %v", u.Knock)
+	}
 	if !strings.Contains(ansi.Strip(m.View()), "saved alpha") {
 		t.Error("no confirmation")
 	}

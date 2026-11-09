@@ -21,12 +21,18 @@ password vault, a built-in SSH client and terminal emulator, tabs and tmux-like 
 mouse support, a local shell, your own scripts and widgets. Passwords and keys are fetched from
 the vault only at the moment of connecting and never written to disk.
 
-![Host list: type filter tabs, folder tree, item card, widget column](docs/screenshot-hosts.png)
+![Host list: type filter tabs, folder tree, item card, widget column; sessions through a jump host in the tab bar (two of one host grouped), ⇄ the running tunnels](docs/screenshot-hosts.png)
 
-![A tab split into three panes](docs/screenshot-panes.png)
+![Tunnels: Proxmox web through a jump host, a stopped saved tunnel, a failed one, a SOCKS proxy](docs/screenshot-tunnels.png)
 
 <details>
 <summary>More screenshots</summary>
+
+![Through a jump host, step 2: the targets used before, the credentials](docs/screenshot-jump.png)
+
+![A failed connection with its debug steps (ssh.debug)](docs/screenshot-debug.png)
+
+![A tab split into three panes](docs/screenshot-panes.png)
 
 ![Settings → Appearance](docs/screenshot-settings.png)
 
@@ -180,9 +186,22 @@ A host is a Login item in one of these forms:
 
 The password or private key goes into the `password` field. Optional fields: `port`, `tags`, any
 others (`env`, …) for filters; `script` (the script `Enter` runs); `jump` (VNC through an SSH
-host). Hidden fields and notes never become metadata. A Login item without an address but with a
+host); `knock` and `knock_delay` (port knocking before connecting, see below). Hidden fields and notes never become metadata. A Login item without an address but with a
 field `credential` = `true` is not a host: it is a credential offered for addresses typed through a
 jump host (see [Jump hosts](#jump-hosts)).
+
+### Port knocking
+
+A host whose SSH port opens only after a knock (knockd, a MikroTik or iptables rule): put the
+sequence into a custom field **`knock`** of its item — ports separated by commas or spaces, each
+`port`, `port/tcp` or `port/udp` (TCP by default), e.g. `7000,8000/udp,9000` — and optionally
+**`knock_delay`** (the pause after each knock, `200ms` by default, up to `10s`). Before every connection
+(and reconnection) Vaultcrab sends a TCP connection attempt or a UDP packet to each port in turn from
+this computer, then connects; the steps appear in the connection debug. The same applies to a host
+used as a **jump host** (also for its tunnels); a jump template can set `knock:` / `knock_delay:`
+itself (Settings → Jump hosts → Knock) for a jump host typed as an address. A target behind a jump
+host is not knocked (the knocks would have to come from the jump host). The sequence is not a secret
+of the item: it is a plain field, like the port.
 
 ## Several vaults
 

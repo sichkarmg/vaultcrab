@@ -19,6 +19,7 @@ import (
 	"github.com/sichkarmg/vaultcrab/internal/config"
 	"github.com/sichkarmg/vaultcrab/internal/connect"
 	"github.com/sichkarmg/vaultcrab/internal/jump"
+	"github.com/sichkarmg/vaultcrab/internal/knock"
 	"github.com/sichkarmg/vaultcrab/internal/model"
 	"github.com/sichkarmg/vaultcrab/internal/secret"
 	"github.com/sichkarmg/vaultcrab/internal/session"
@@ -389,6 +390,9 @@ func (s *Service) planVia(via string) (*jumpPlan, *JumpTemplate, error) {
 		if h, err := s.findHost(tpl.Jump, true); err == nil {
 			p.jump = connect.Hop{Name: h.Name, Addr: sshAddr(h), User: h.User}
 			p.jumpKey = keySource{kind: jump.KeyVault, item: h.ID}
+			if p.jump.Knock, err = connect.KnockOf(h.Fields); err != nil {
+				return nil, nil, fmt.Errorf("jump host %s: %w", h.Name, err)
+			}
 		} else if !errors.Is(err, errNoItem) {
 			return nil, nil, fmt.Errorf("template %s: jump: %w", tpl.Name, err) // several items with the name
 		} else {
@@ -401,6 +405,13 @@ func (s *Service) planVia(via string) (*jumpPlan, *JumpTemplate, error) {
 			if p.jump.User == "" {
 				p.jump.User = tpl.User
 			}
+		}
+		if strings.TrimSpace(tpl.Knock) != "" {
+			k, err := knock.Parse(tpl.Knock, tpl.KnockDelay)
+			if err != nil {
+				return nil, nil, fmt.Errorf("template %s: %w", tpl.Name, err)
+			}
+			p.jump.Knock = k
 		}
 		key, _ := jump.ParseKey(tpl.Key) // checked when the config was loaded
 		jk, _ := jump.ParseKey(tpl.JumpKey)
@@ -434,6 +445,11 @@ func (s *Service) planVia(via string) (*jumpPlan, *JumpTemplate, error) {
 		p.jump = connect.Hop{Name: h.Name, Addr: sshAddr(h), User: h.User}
 		p.jumpKey = keySource{kind: jump.KeyVault, item: h.ID}
 		p.targetKey = p.jumpKey
+		k, err := connect.KnockOf(h.Fields)
+		if err != nil {
+			return nil, nil, fmt.Errorf("jump host %s: %w", h.Name, err)
+		}
+		p.jump.Knock = k
 	default:
 		return nil, nil, fmt.Errorf("unknown jump host %q", via)
 	}

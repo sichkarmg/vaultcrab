@@ -449,17 +449,18 @@ func TestJumpSettingsPage(t *testing.T) {
 	s.jp.in[0].SetValue("Lab")
 	s.jp.in[4].SetValue("~/.ssh/id_lab")
 	s.jp.in[6].SetValue("accept-new")
+	s.jp.in[7].SetValue("7000,8000/udp")
 	if v := ansi.Strip(m.View()); !strings.Contains(v, "accept-new remembers a new host key without asking") {
 		t.Fatalf("no warning:\n%s", v)
 	}
-	for range 7 {
+	for range 8 {
 		keys(m, "enter")
 	}
 	if s.jp.editing || s.jp.err != "" {
 		t.Fatalf("not saved: %q", s.jp.err)
 	}
 	ts := jt.svc.Config().JumpTemplates
-	if len(ts) != 2 || ts[1].Name != "Lab" || ts[1].Jump != "alpha" || ts[1].HostKeyCheck != "accept-new" {
+	if len(ts) != 2 || ts[1].Name != "Lab" || ts[1].Jump != "alpha" || ts[1].HostKeyCheck != "accept-new" || ts[1].Knock != "7000,8000/udp" {
 		t.Fatalf("templates %+v", ts)
 	}
 	b, _ := os.ReadFile(jt.svc.Config().Path)

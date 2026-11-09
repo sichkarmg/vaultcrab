@@ -688,7 +688,10 @@ func (f *tunnelForm) mouse(m *Model, x, y int) tea.Cmd {
 
 // tunnelsModal is the Tunnels dialog: it stays with the host list (the
 // other tabs can be used while it is open).
-type tunnelsModal struct{ p tunnelPane }
+type tunnelsModal struct {
+	p      tunnelPane
+	closeX int // column of the ✕ in the title row
+}
 
 func (*tunnelsModal) docked() {}
 
@@ -736,14 +739,26 @@ func (t *tunnelsModal) update(m *Model, msg tea.Msg) tea.Cmd {
 func (t *tunnelsModal) view(m *Model, w, h int) []string {
 	width := max(60, min(w-8, 110))
 	body := t.p.view(m, width, boxPadY+boxTitleGap)
-	return m.box("Tunnels", body, w)
+	// the title with a close button at the right end (for the mouse)
+	t.closeX = width - 1
+	head := padRight(stBold.Render("Tunnels"), width-1) + stKey.Render(m.ascii("✕"))
+	return m.box("", head+"\n\n"+body, w)
 }
 
 func (t *tunnelsModal) mouse(m *Model, msg tea.MouseMsg, x, y int) tea.Cmd {
 	if msg.Action != tea.MouseActionPress || msg.Button != tea.MouseButtonLeft {
 		return nil
 	}
-	return t.p.mouse(m, x-boxPadX, y)
+	x -= boxPadX
+	if y == boxPadY && x >= t.closeX-1 {
+		if t.p.form != nil {
+			t.p.form = nil // the form first, like Esc
+		} else {
+			m.modal = nil
+		}
+		return nil
+	}
+	return t.p.mouse(m, x, y)
 }
 
 // tunnelFromHost opens a new tunnel through the SSH host h (T in the host

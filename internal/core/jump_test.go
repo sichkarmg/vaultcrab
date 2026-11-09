@@ -495,3 +495,25 @@ func TestJumpTypedCredentials(t *testing.T) {
 		t.Fatalf("secret in the history: %s", b)
 	}
 }
+
+// Port knocking at the jump host: the template's sequence, else the knock
+// field of the jump host's item (none here).
+func TestJumpKnock(t *testing.T) {
+	e := newJumpEnv(t, []config.JumpTemplate{
+		{Name: "K", Jump: "bastion", Knock: "7000, 8000/udp", KnockDelay: "300ms"},
+		{Name: "plain", Jump: "bastion"},
+	})
+	p, _, err := e.s.planVia("t:K")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if p.jump.Knock.String() != "7000/tcp, 8000/udp" || p.jump.Knock.Delay != 300*time.Millisecond {
+		t.Fatalf("knock %s %v", p.jump.Knock, p.jump.Knock.Delay)
+	}
+	if p, _, _ := e.s.planVia("t:plain"); !p.jump.Knock.Empty() {
+		t.Fatal("knock without one configured")
+	}
+	if err := (config.JumpTemplate{Name: "x", Jump: "j", Knock: "1/sctp"}).Check(); err == nil {
+		t.Fatal("an invalid knock accepted")
+	}
+}

@@ -372,7 +372,7 @@ func (m *Model) prefixed(msg tea.KeyMsg) tea.Cmd {
 	case core.ActSettings:
 		m.openSettings()
 	case core.ActShowLog:
-		m.modal = newLogView(m)
+		m.openLog()
 	case core.ActLocal:
 		return m.openHost(m.svc.LocalHost())
 	case core.ActJump:

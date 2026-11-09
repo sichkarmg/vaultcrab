@@ -23,7 +23,7 @@ type jumpPage struct {
 	row     int
 	editing bool
 	edit    int // the template being edited, -1 = a new one
-	in      [7]textinput.Model
+	in      [8]textinput.Model
 	field   int
 	remove  int  // the template to remove on a second D (-1 = none)
 	clear   bool // c pressed once
@@ -33,7 +33,7 @@ type jumpPage struct {
 	rowY []int // dialog rows of the template lines
 }
 
-var jumpFieldLabels = []string{"Name", "Jump host", "User", "Port", "Key", "Jump key", "Host keys"}
+var jumpFieldLabels = []string{"Name", "Jump host", "User", "Port", "Key", "Jump key", "Host keys", "Knock"}
 
 var jumpFieldHints = []string{
 	"Workstations",
@@ -43,11 +43,12 @@ var jumpFieldHints = []string{
 	"~/.ssh/id_ed25519 | agent | vault:<item> (empty: as the jump host)",
 	"empty: the vault item's credential, else Key",
 	"ask | accept-new | strict",
+	"port knocking at the jump host: 7000,8000/udp,9000 (empty: its item's knock field)",
 }
 
 func (p *jumpPage) startEdit(m *Model, i int, t core.JumpTemplate) {
 	p.editing, p.edit, p.field, p.err, p.status = true, i, 0, "", ""
-	vals := []string{t.Name, t.Jump, t.User, "", t.Key, t.JumpKey, t.HostKeyCheck}
+	vals := []string{t.Name, t.Jump, t.User, "", t.Key, t.JumpKey, t.HostKeyCheck, t.Knock}
 	if t.Port != 0 {
 		vals[3] = strconv.Itoa(t.Port)
 	}
@@ -187,7 +188,10 @@ func (p *jumpPage) update(m *Model, k tea.KeyMsg) (tea.Cmd, bool) {
 // save checks the form and writes the templates.
 func (p *jumpPage) save(m *Model) {
 	v := func(i int) string { return strings.TrimSpace(p.in[i].Value()) }
-	t := core.JumpTemplate{Name: v(0), Jump: v(1), User: v(2), Key: v(4), JumpKey: v(5), HostKeyCheck: v(6)}
+	t := core.JumpTemplate{Name: v(0), Jump: v(1), User: v(2), Key: v(4), JumpKey: v(5), HostKeyCheck: v(6), Knock: v(7)}
+	if p.edit >= 0 && p.edit < len(m.svc.Config().JumpTemplates) {
+		t.KnockDelay = m.svc.Config().JumpTemplates[p.edit].KnockDelay // only in the config
+	}
 	if s := v(3); s != "" {
 		n, err := strconv.Atoi(s)
 		if err != nil || n < 1 || n > 65535 {

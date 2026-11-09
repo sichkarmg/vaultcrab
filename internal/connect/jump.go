@@ -16,6 +16,7 @@ import (
 	"golang.org/x/crypto/ssh"
 	"golang.org/x/crypto/ssh/agent"
 
+	"github.com/sichkarmg/vaultcrab/internal/knock"
 	"github.com/sichkarmg/vaultcrab/internal/secret"
 )
 
@@ -29,6 +30,9 @@ type Hop struct {
 	User     string
 	Auth     []ssh.AuthMethod
 	Keys     HostKeyPolicy
+	// Knock is knocked at the host before connecting (only for a hop
+	// reached directly: the jump host).
+	Knock knock.Sequence
 }
 
 // JumpError is a failed connection through a jump host, by stage: the jump
@@ -133,6 +137,9 @@ func DialJumpHost(ctx context.Context, jump Hop, o SSHOptions) (*JumpClient, err
 	o = o.withDefaults()
 	jump.defaults("jump host", jump.Name)
 	tracef(ctx, "jump host %s (%s) as %q, %s", jump.Name, jump.Addr, jump.User, jump.AuthInfo)
+	if err := knockAt(ctx, jump.Addr, jump.Knock); err != nil {
+		return nil, &JumpError{Jump: jump.Name, Addr: jump.Addr, User: jump.User, Stage: StageConnect, Err: err}
+	}
 	c, _, err := dialHop(ctx, jump.Addr, jump.User, jump.Auth, jump.Keys, o, nil)
 	if err != nil {
 		return nil, hopFail(ctx, false, jump.Name, jump, err)
@@ -303,4 +310,29 @@ func Agent() (ssh.AuthMethod, func(), error) {
 	}
 	ag := agent.NewClient(rw)
 	return ssh.PublicKeysCallback(ag.Signers), func() { rw.Close() }, nil
+}
+
+// Item fields of port knocking (a vault host; a jump template has keys of
+// the same names).
+const (
+	FieldKnock      = "knock"       // "7000,8000/udp,9000"
+	FieldKnockDelay = "knock_delay" // "200ms" (the default)
+)
+
+// KnockOf returns the port knocking sequence of a host's fields.
+func KnockOf(fields map[string]string) (knock.Sequence, error) {
+	return knock.Parse(fields[FieldKnock], fields[FieldKnockDelay])
+}
+
+// knockAt knocks at the host of addr (host:port) when seq has knocks.
+func knockAt(ctx context.Context, addr string, seq knock.Sequence) error {
+	if seq.Empty() {
+		return nil
+	}
+	host, _, err := net.SplitHostPort(addr)
+	if err != nil {
+		host = addr
+	}
+	tracef(ctx, "port knocking at %s: %s, %s after each", host, seq, seq.Delay)
+	return seq.Do(ctx, host, func(f string, a ...any) { tracef(ctx, f, a...) })
 }

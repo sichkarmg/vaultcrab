@@ -28,6 +28,10 @@ type hostList struct {
 	collection string
 	grouping   core.Grouping
 	collapsed  map[string]bool
+	// searchFold are the groups folded during a search: a search shows
+	// the hosts it finds in folded folders too, and starts from none.
+	searchFold map[string]bool
+	searchText string // the query searchFold belongs to
 
 	rows     []core.Row
 	cursor   int
@@ -69,7 +73,7 @@ func (l *hostList) options() core.ListOptions {
 		Org:        l.org,
 		Collection: l.collection,
 		Grouping:   l.grouping,
-		Collapsed:  l.collapsed,
+		Collapsed:  l.folds(),
 	}
 	if fs := l.m.svc.Filters(); l.filterIdx < len(fs) {
 		o.Filter = fs[l.filterIdx].Rule
@@ -133,11 +137,25 @@ func (l *hostList) current() *core.Row {
 	return &l.rows[l.cursor]
 }
 
+// folds returns the folded groups: those of the search while one is
+// active (none at its start), else the user's.
+func (l *hostList) folds() map[string]bool {
+	q := strings.TrimSpace(l.search.Value())
+	if q == "" {
+		return l.collapsed
+	}
+	if q != l.searchText || l.searchFold == nil {
+		l.searchText, l.searchFold = q, map[string]bool{}
+	}
+	return l.searchFold
+}
+
 func (l *hostList) setCollapsed(key string, v bool) {
+	f := l.folds()
 	if v {
-		l.collapsed[key] = true
+		f[key] = true
 	} else {
-		delete(l.collapsed, key)
+		delete(f, key)
 	}
 	l.rebuild()
 }

@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+- After a lost connection, the mouse wheel no longer types `64;62;28M…` into the shell of the next
+  connection: the modes an application of the old connection turned on (mouse tracking and its
+  encodings, bracketed paste, application keys, the alternate screen) are reset when it ends.
+- Windows: editing or copying an item right after it was created, or connecting with the password
+  of a new copy at once, no longer fails with "Not found" (bw serve does not see a new item for a
+  moment there); such answers are retried for 5 s for items Vaultcrab has just created.
+
 ## [0.5.0] - 2026-11-09
 
 ### Added

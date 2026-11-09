@@ -271,3 +271,44 @@ func TestPasteDoesNotBlockOutput(t *testing.T) {
 		t.Errorf("sent %d bytes, want %d in order (tail %q)", len(got), len(want), got[max(0, len(got)-20):])
 	}
 }
+
+// After a lost connection the modes of the gone application are reset: the
+// wheel scrolls locally instead of sending mouse reports to the next shell,
+// keys and pastes are plain again, the alternate screen is left. A later
+// application (mc: tracking without SGR) gets the encoding it asks for.
+func TestResetModes(t *testing.T) {
+	tm := New(20, 5, 50)
+	var out syncBuf
+	tm.SetSink(&out)
+	tm.WriteString("\x1b[?1049h\x1b[?1002h\x1b[?1006h\x1b[?1h\x1b[?2004h\x1b[?25l")
+	if !tm.MouseTracking() || !tm.AltScreen() {
+		t.Fatal("modes not set")
+	}
+	before := tm.Output()
+	tm.ResetModes()
+	if tm.Output() != before {
+		t.Error("the reset counted as remote output")
+	}
+	if tm.MouseTracking() || tm.AltScreen() {
+		t.Fatalf("tracking %v alt %v", tm.MouseTracking(), tm.AltScreen())
+	}
+	if tm.SendMouse(Mouse{X: 1, Y: 2, Button: MouseWheelUp}) {
+		t.Fatal("wheel sent to the remote side")
+	}
+	tm.SendKey(Key{Code: KeyUp})
+	tm.Paste("hi")
+	waitFor(t, func() bool { return strings.HasSuffix(out.String(), "hi") })
+	if got := out.String(); got != "\x1b[Ahi" {
+		t.Fatalf("keys after the reset: %q", got)
+	}
+	// mc: X10-style reports while it runs, none after it exits
+	tm.WriteString("\x1b[?1000h")
+	if !tm.SendMouse(Mouse{X: 1, Y: 2, Button: MouseLeft}) {
+		t.Fatal("mouse not forwarded to mc")
+	}
+	waitFor(t, func() bool { return strings.HasSuffix(out.String(), "\x1b[M \"#") })
+	tm.WriteString("\x1b[?1000l")
+	if tm.SendMouse(Mouse{X: 1, Y: 2, Button: MouseWheelUp}) {
+		t.Fatal("wheel sent after mc exited")
+	}
+}

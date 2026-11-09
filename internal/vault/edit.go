@@ -270,6 +270,7 @@ func (c *Client) CreateHost(ctx context.Context, e HostEdit) (string, error) {
 	if err := json.Unmarshal(data, &created); err != nil || created.ID == "" {
 		return "", errors.New("bw: unexpected response to create item")
 	}
+	c.markCreated(created.ID)
 	return created.ID, nil
 }
 

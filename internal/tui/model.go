@@ -101,6 +101,7 @@ type Model struct {
 	discardTabs   bool // quit without saving the open tabs
 
 	dlgX, dlgY, dlgW, dlgH int // where the dialog was drawn (mouse)
+	dlgClose               int // column of the ✕ in its top border (-1: none)
 
 	programs     *programsPage // the External programs page of the settings (its draft)
 	settingsPage int           // the settings open on the page used last
@@ -248,6 +249,11 @@ func (m *Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				// another tab, the quit button: the dialog waits
 				m.parked, m.modal = m.modal, nil
 				cmd := m.mouse(msg)
+				m.unpark()
+				return m, cmd
+			}
+			if m.onCloseMark(msg) {
+				cmd := m.closeModal()
 				m.unpark()
 				return m, cmd
 			}
@@ -608,11 +614,12 @@ func (m *Model) View() string {
 	body = fitLines(body, r.w, r.h)
 	if m.modal != nil {
 		dlg := m.modal.view(m, r.w, r.h)
-		body = overlay(body, dlg, r.w, r.h)
 		m.dlgW, m.dlgH = 0, len(dlg)
 		for _, l := range dlg {
 			m.dlgW = max(m.dlgW, ansi.StringWidth(l))
 		}
+		dlg = m.closeMark(dlg)
+		body = overlay(body, dlg, r.w, r.h)
 		m.dlgX, m.dlgY = r.x+max(0, (r.w-m.dlgW)/2), r.y+max(0, (r.h-len(dlg))/2) // as overlay places it
 	}
 	tabs := m.tabBar()

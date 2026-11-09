@@ -77,7 +77,7 @@ the vault only at the moment of connecting and never written to disk.
 - **Safe multi-line paste.** Pasted text of several lines is shown first and pasted only after
   confirmation; **Edit** (`e`) opens it in an editor (`Ctrl+S` pastes the edited text).
 - **Settings inside the program** (`,`), saved to `config.yaml`; a hand-edited config is re-read
-  automatically.
+  automatically. Every dialog has a `✕` in its top border to close it with the mouse.
 
 ## Supported systems
 
@@ -193,7 +193,7 @@ jump host (see [Jump hosts](#jump-hosts)).
 ### Port knocking
 
 A host whose SSH port opens only after a knock (knockd, a MikroTik or iptables rule): put the
-sequence into a custom field **`knock`** of its item — ports separated by commas or spaces, each
+sequence into a custom field **`knock`** of its item (or the **Knock** field of the item form, `e`/`a`) — ports separated by commas or spaces, each
 `port`, `port/tcp` or `port/udp` (TCP by default), e.g. `7000,8000/udp,9000` — and optionally
 **`knock_delay`** (the pause after each knock, `200ms` by default, up to `10s`). Before every connection
 (and reconnection) Vaultcrab sends a TCP connection attempt or a UDP packet to each port in turn from
@@ -281,8 +281,9 @@ reachable only from behind it — e.g. Proxmox at `https://192.168.1.10:8006` op
   retrying, failed, stopped), `127.0.0.1:18006 → jump → target:port`, the time and the connections
   (open/total). `Enter` starts a saved tunnel or opens a running one in the browser, `s` start/stop,
   `r` restart, `y` copy the URL, `o` open in the browser, `a` add, `e` edit, `S` save a running tunnel
-  under a name, `D` twice removes a saved one. The list stays with the host list: other tabs can be
-  used while it is open.
+  under a name, `D` twice removes a saved one (and stops it). With the mouse, each row has its buttons:
+  `[open] [edit] [del] [x]` (stop) on a running tunnel, `[start] [edit] [del]` on a stopped one (`del`
+  asks with a second click). The list stays with the host list: other tabs can be used while it is open.
 - **Saved tunnels** (`tunnels:` in the config, or the form with a **Name**; applied without a
   restart): the jump host (a jump template or an SSH host of the vault), the target `host:port`, the
   local port (`auto` or a number), the URL to open (`open:`, `{port}` and `{host}`; default

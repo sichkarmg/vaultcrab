@@ -32,7 +32,14 @@ type tunnelPane struct {
 	status string
 	warn   bool // status is a warning
 
-	rowY []int // dialog rows of the tunnel lines
+	rowY []int       // dialog rows of the tunnel lines
+	btns [][]btnSpan // the buttons of each row
+}
+
+// btnSpan is a button of a row: its columns and name.
+type btnSpan struct {
+	x0, x1 int
+	name   string
 }
 
 func newTunnelPane() tunnelPane { return tunnelPane{remove: -1} }
@@ -166,29 +173,81 @@ func (p *tunnelPane) update(m *Model, k tea.KeyMsg) (tea.Cmd, bool) {
 			p.form.focus(0)
 		}
 	case "D":
-		if cur == nil || cur.saved < 0 {
-			break
+		if cur != nil {
+			p.del(m, *cur, "D")
 		}
-		if p.remove != cur.saved {
-			p.remove = cur.saved
-			p.warnf("press D again to remove the saved tunnel %s", cur.tpl.Name)
-			break
-		}
-		p.remove = -1
-		rest := slices.Delete(slices.Clone(m.svc.SavedTunnels()), cur.saved, cur.saved+1)
-		if err := m.svc.SaveTunnels(rest); err != nil {
-			p.say(true, "%v", err)
-			break
-		}
-		msg := "removed from the config"
-		if cur.info != nil {
-			msg += "; it runs until stopped (x)"
-		}
-		p.say(false, "%s %s", cur.tpl.Name, msg)
 	default:
 		return nil, false
 	}
 	return nil, true
+}
+
+// del removes a tunnel: a saved one from the config (asked twice: again
+// with how), stopped too; a running one that is not saved is stopped.
+func (p *tunnelPane) del(m *Model, r tunnelRow, again string) {
+	if r.saved < 0 {
+		if r.info != nil {
+			p.stop(m, *r.info)
+		}
+		return
+	}
+	if p.remove != r.saved {
+		p.remove = r.saved
+		p.warnf("%s again removes the saved tunnel %s", again, r.tpl.Name)
+		return
+	}
+	p.remove = -1
+	rest := slices.Delete(slices.Clone(m.svc.SavedTunnels()), r.saved, r.saved+1)
+	if err := m.svc.SaveTunnels(rest); err != nil {
+		p.say(true, "%v", err)
+		return
+	}
+	if r.info != nil {
+		m.svc.StopTunnel(r.info.ID)
+	}
+	p.say(false, "%s removed", r.tpl.Name)
+}
+
+// tunnelButtons are the mouse buttons at the end of a row.
+func tunnelButtons(r tunnelRow) []string {
+	switch {
+	case r.info == nil:
+		return []string{"start", "edit", "del"}
+	case r.info.Spec.SOCKS:
+		return []string{"copy", "edit", "del", "x"}
+	}
+	return []string{"open", "edit", "del", "x"}
+}
+
+// button runs the action of a row button.
+func (p *tunnelPane) button(m *Model, r tunnelRow, b string) {
+	if b != "del" {
+		p.remove = -1
+	}
+	switch b {
+	case "start":
+		p.start(m, r)
+	case "open":
+		p.open(m, *r.info)
+	case "copy":
+		p.copy(m, *r.info)
+	case "x":
+		p.stop(m, *r.info)
+	case "edit":
+		if r.saved >= 0 {
+			id := 0
+			if r.info != nil {
+				id = r.info.ID
+			}
+			p.form = newTunnelForm(m, r.saved, r.tpl, id)
+		} else {
+			p.form = newTunnelForm(m, -1, templateOf(m, *r.info), r.info.ID)
+			p.form.status = "type a name to save the tunnel in the config"
+			p.form.focus(0)
+		}
+	case "del":
+		p.del(m, r, "a click on del")
+	}
 }
 
 // templateOf turns a running tunnel into a saved one.
@@ -297,7 +356,7 @@ func (p *tunnelPane) view(m *Model, w, line int) string {
 		return p.form.view(m, p, w, line)
 	}
 	var b strings.Builder
-	p.rowY = p.rowY[:0]
+	p.rowY, p.btns = p.rowY[:0], p.btns[:0]
 	write := func(s string) {
 		b.WriteString(s + "\n")
 		line += strings.Count(s, "\n") + 1
@@ -341,7 +400,22 @@ func (p *tunnelPane) view(m *Model, w, line int) string {
 			l += "  " + stDim.Render(tail)
 		}
 		p.rowY = append(p.rowY, line)
-		write(ansi.Truncate(l, w, m.g.ell))
+		var bs []btnSpan
+		var bl strings.Builder
+		names := tunnelButtons(r)
+		bw := 0
+		for _, n := range names {
+			bw += len(n) + 3
+		}
+		x := w - bw + 1
+		for _, n := range names {
+			lbl := "[" + n + "]"
+			bs = append(bs, btnSpan{x, x + len(lbl), n})
+			bl.WriteString(" " + stKey.Render(lbl))
+			x += len(lbl) + 1
+		}
+		p.btns = append(p.btns, bs)
+		write(padRight(ansi.Truncate(l, w-bw-1, m.g.ell), w-bw) + bl.String())
 		if i == p.row && r.info != nil {
 			for _, d := range m.tunnelDetails(*r.info) {
 				write(ansi.Truncate("    "+d, w, m.g.ell))
@@ -359,7 +433,7 @@ func (p *tunnelPane) view(m *Model, w, line int) string {
 		write(st.Render(ansi.Wordwrap(p.status, w, " ")))
 	}
 	write(stDim.Render(ansi.Wordwrap("↑/↓ tunnel · Enter start/open · s start/stop · r restart · y copy · o open in the browser · "+
-		"a add · e edit · S save · D remove", w, " ")))
+		"a add · e edit · S save · D remove · the buttons of a row: the same with the mouse", w, " ")))
 	return strings.TrimRight(b.String(), "\n")
 }
 
@@ -404,14 +478,25 @@ func (p *tunnelPane) mouse(m *Model, x, y int) tea.Cmd {
 	if p.form != nil {
 		return p.form.mouse(m, x, y)
 	}
+	rows := tunnelRows(m)
 	for i, ry := range p.rowY {
-		if y == ry {
-			if i == p.row {
-				cmd, _ := p.update(m, tea.KeyMsg{Type: tea.KeyEnter})
-				return cmd
-			}
-			p.row = i
+		if y != ry || i >= len(rows) {
+			continue
 		}
+		if i < len(p.btns) {
+			for _, b := range p.btns[i] {
+				if x >= b.x0 && x < b.x1 {
+					p.row = i
+					p.button(m, rows[i], b.name)
+					return nil
+				}
+			}
+		}
+		if i == p.row {
+			cmd, _ := p.update(m, tea.KeyMsg{Type: tea.KeyEnter})
+			return cmd
+		}
+		p.row = i
 	}
 	return nil
 }
@@ -688,10 +773,7 @@ func (f *tunnelForm) mouse(m *Model, x, y int) tea.Cmd {
 
 // tunnelsModal is the Tunnels dialog: it stays with the host list (the
 // other tabs can be used while it is open).
-type tunnelsModal struct {
-	p      tunnelPane
-	closeX int // column of the ✕ in the title row
-}
+type tunnelsModal struct{ p tunnelPane }
 
 func (*tunnelsModal) docked() {}
 
@@ -739,26 +821,14 @@ func (t *tunnelsModal) update(m *Model, msg tea.Msg) tea.Cmd {
 func (t *tunnelsModal) view(m *Model, w, h int) []string {
 	width := max(60, min(w-8, 110))
 	body := t.p.view(m, width, boxPadY+boxTitleGap)
-	// the title with a close button at the right end (for the mouse)
-	t.closeX = width - 1
-	head := padRight(stBold.Render("Tunnels"), width-1) + stKey.Render(m.ascii("✕"))
-	return m.box("", head+"\n\n"+body, w)
+	return m.box("Tunnels", body, w)
 }
 
 func (t *tunnelsModal) mouse(m *Model, msg tea.MouseMsg, x, y int) tea.Cmd {
 	if msg.Action != tea.MouseActionPress || msg.Button != tea.MouseButtonLeft {
 		return nil
 	}
-	x -= boxPadX
-	if y == boxPadY && x >= t.closeX-1 {
-		if t.p.form != nil {
-			t.p.form = nil // the form first, like Esc
-		} else {
-			m.modal = nil
-		}
-		return nil
-	}
-	return t.p.mouse(m, x, y)
+	return t.p.mouse(m, x-boxPadX, y)
 }
 
 // tunnelFromHost opens a new tunnel through the SSH host h (T in the host

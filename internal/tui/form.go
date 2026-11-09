@@ -30,13 +30,14 @@ const (
 	fPassword
 	fFolder
 	fTags
+	fKnock // SSH hosts only
 	fNotes // a textarea, not in in[]
 	fOrg
 	fCollection
 	fieldCount
 )
 
-var fieldLabels = [fieldCount]string{"Name", "Type", "User", "Host", "Port", "Path", "Password", "Folder", "Tags", "Notes", "Organization", "Collection"}
+var fieldLabels = [fieldCount]string{"Name", "Type", "User", "Host", "Port", "Path", "Password", "Folder", "Tags", "Knock", "Notes", "Organization", "Collection"}
 
 // hostForm adds or edits a host item (only while the vault is online).
 type hostForm struct {
@@ -107,6 +108,7 @@ func newHostForm(m *Model, h *core.Host, folder string) *hostForm {
 		f.in[fPassword].EchoCharacter = '*'
 	}
 	f.in[fTags].Placeholder = "comma separated"
+	f.in[fKnock].Placeholder = "port knocking: 7000,8000/udp,9000 (empty: none)"
 	f.notes = textarea.New()
 	f.notes.ShowLineNumbers = false
 	f.notes.Prompt = ""
@@ -130,6 +132,7 @@ func newHostForm(m *Model, h *core.Host, folder string) *hostForm {
 		}
 		f.in[fPath].SetValue(h.Path)
 		f.in[fTags].SetValue(strings.Join(h.Tags, ", "))
+		f.in[fKnock].SetValue(h.Fields[core.FieldKnock])
 		f.in[fFolder].SetValue(strings.Join(snap.FolderPath(h), "/"))
 		f.in[fPassword].Placeholder = "unchanged (type to replace; a pasted key may be one line)"
 		for i, sc := range core.Schemes {
@@ -239,7 +242,11 @@ func (f *hostForm) loadCollections(m *Model) {
 // fields returns the navigable fields: the organization for new and
 // personal items, the collection for organization items.
 func (f *hostForm) fields() []int {
-	out := []int{fName, fType, fUser, fHost, fPort, fPath, fPassword, fFolder, fTags, fNotes}
+	out := []int{fName, fType, fUser, fHost, fPort, fPath, fPassword, fFolder, fTags}
+	if core.Schemes[f.scheme] == core.SchemeSSH {
+		out = append(out, fKnock)
+	}
+	out = append(out, fNotes)
 	if f.isNew() || f.origOrg == 0 {
 		out = append(out, fOrg)
 	}
@@ -447,6 +454,14 @@ func (f *hostForm) save(m *Model) tea.Cmd {
 	}
 	for _, t := range strings.FieldsFunc(f.in[fTags].Value(), func(r rune) bool { return r == ',' || r == ' ' || r == ';' }) {
 		e.Tags = append(e.Tags, t)
+	}
+	if core.Schemes[f.scheme] == core.SchemeSSH {
+		k := strings.TrimSpace(f.in[fKnock].Value())
+		if err := core.CheckKnock(k); err != nil {
+			f.err = err.Error()
+			return nil
+		}
+		e.Knock = &k
 	}
 	if pw := f.in[fPassword].Value(); pw != "" || f.isNew() && f.copyOf == "" {
 		e.Password = []byte(pw)

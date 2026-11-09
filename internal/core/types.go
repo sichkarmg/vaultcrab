@@ -260,4 +260,5 @@ const (
 	ActSettings   = config.ActSettings
 	ActJump       = config.ActJump
 	ActRenameTab  = config.ActRenameTab
+	ActTunnels    = config.ActTunnels
 )

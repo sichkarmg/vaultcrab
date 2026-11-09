@@ -223,6 +223,12 @@ func (p *jumpPicker) update(m *Model, msg tea.Msg) tea.Cmd {
 		return p.cp.update(k)
 	}
 	switch k.String() {
+	case "ctrl+t":
+		// step 2: a tunnel to the target instead of a shell
+		if p.step == 1 {
+			return p.tunnel(m)
+		}
+		return nil
 	case "ctrl+k":
 		if p.step == 1 {
 			p.cp = newCredPicker(m, p.via.Key, p.cred, func(ref string) {
@@ -296,6 +302,35 @@ func (p *jumpPicker) choose(m *Model) tea.Cmd {
 		spec = core.JumpSpec{Via: p.via.Key, Target: t, Cred: p.cred}
 	}
 	return m.openJump(spec, p)
+}
+
+// tunnel replaces the picker with the form of a new tunnel through the
+// jump host to the host of the highlighted or typed target.
+func (p *jumpPicker) tunnel(m *Model) tea.Cmd {
+	host := ""
+	if p.cur >= 0 && p.cur < len(p.sugg) {
+		sp := p.sugg[p.cur].spec
+		if sp.Item != "" {
+			if h, ok := m.svc.Host(sp.Item); ok {
+				host = h.Addr
+			}
+		} else {
+			host = sp.Target
+		}
+	} else {
+		host = p.in.Value()
+	}
+	if host != "" {
+		t, err := core.NormalizeTarget(host)
+		if err != nil {
+			p.err = err.Error()
+			return nil
+		}
+		host = core.TargetHost(t)
+	}
+	m.modal = nil
+	m.tunnelFromPicker(p.via.Key, host)
+	return nil
 }
 
 // openJump opens a tab connecting through the jump host; on an error the
@@ -405,7 +440,7 @@ func (p *jumpPicker) view(m *Model, w, h int) []string {
 	if p.step == 0 {
 		line(stDim.Render("type to search · ↑/↓ choose · Enter: next · Esc: close"))
 	} else {
-		line(stDim.Render("Enter: connect · ↑/↓ suggestions · Tab: edit the suggestion · Ctrl+K: credentials · Esc: back"))
+		line(stDim.Render("Enter: shell · Ctrl+T: tunnel · ↑/↓ suggestions · Tab: edit the suggestion · Ctrl+K: credentials · Esc: back"))
 	}
 	_ = h
 	return m.box(title, strings.TrimRight(b.String(), "\n"), w)

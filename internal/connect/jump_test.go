@@ -91,7 +91,12 @@ func TestJumpChain(t *testing.T) {
 	case <-time.After(time.Second):
 		t.Fatal("not done")
 	}
-	if _, _, err := c.via.SendRequest("x", true, nil); err == nil {
+	select {
+	case <-c.via.(*JumpClient).Done():
+	case <-time.After(time.Second):
+		t.Fatal("the jump connection is still open")
+	}
+	if _, _, err := c.via.(*JumpClient).c.SendRequest("x", true, nil); err == nil {
 		t.Fatal("the jump connection is still open")
 	}
 	// both host keys were remembered (accept-new)
@@ -346,4 +351,55 @@ func known(t *testing.T, file, addr string, key ssh.PublicKey) bool {
 		t.Fatal(err)
 	}
 	return cb(addr, &net.TCPAddr{}, key) == nil
+}
+
+// One connection to the jump host carries two shells on the target; a
+// shell that ends does not close it, closing it ends the shells.
+func TestJumpClientShared(t *testing.T) {
+	p := newJumpPair(t)
+	j, tg := p.hops(HostKeyAcceptNew, nil)
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	jc, err := DialJumpHost(ctx, j, SSHOptions{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	a, err := DialVia(ctx, jc, j.Name, tg, 80, 24, SSHOptions{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	b, err := DialVia(ctx, jc, j.Name, tg, 80, 24, SSHOptions{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	a.Close()
+	<-a.Done()
+	select {
+	case <-jc.Done():
+		t.Fatal("the jump connection ended with one shell")
+	case <-b.Done():
+		t.Fatal("the other shell ended")
+	default:
+	}
+	// a TCP connection from the jump host (a tunnel) still works
+	c, err := jc.DialContext(ctx, "tcp", p.target.addr)
+	if err != nil {
+		t.Fatal(err)
+	}
+	c.Close()
+	jc.Close()
+	select {
+	case <-b.Done():
+	case <-time.After(5 * time.Second):
+		t.Fatal("the shell outlived the jump connection")
+	}
+	<-jc.Done()
+	// a refused jump host is a *JumpError of the jump stage
+	bad := j
+	bad.Auth = []ssh.AuthMethod{ssh.Password("nope")}
+	_, err = DialJumpHost(ctx, bad, SSHOptions{})
+	var je *JumpError
+	if !errors.As(err, &je) || je.Target || je.Stage != StageAuth {
+		t.Fatalf("%v", err)
+	}
 }

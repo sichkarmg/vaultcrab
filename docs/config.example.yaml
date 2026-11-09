@@ -70,6 +70,7 @@ ui:
     jump: j                # connect through a jump host: 1. the jump host, 2. the target (also "j" in
                            # the host list; then j does not move down there - use another key to keep it)
     rename_tab: R          # name the current tab (kept with the saved tabs)
+    tunnels: T             # the list of the tunnels (also T on an SSH host: a tunnel through it)
 
 icons:
   mode: auto               # auto | unicode | ascii (auto: ASCII in legacy Windows console / non-UTF-8)
@@ -155,6 +156,26 @@ jump:
   history: true            # remember the jump hosts and targets used (names and addresses only, in
                            # jump-history.json of the cache directory); `vaultcrab history clear`
   history_limit: 200       # entries kept (the least used and oldest go first)
+
+tunnels: []                # port forwardings through a jump host (Settings → Tunnels, T, Ctrl+T in the
+                           # jump picker); applied without a restart
+  # - name: Proxmox web
+  #   jump: Workstations             # a jump template or an SSH host of the vault (name or ID)
+  #   target: 192.168.1.10:8006      # host:port as seen from the jump host
+  #   local_port: auto               # or a number, e.g. 18006 (busy: the next free one is taken)
+  #   open: "https://localhost:{port}" # the URL of o / Enter ({port}, {host}); default http://{host}:{port}
+  # - name: lab proxy
+  #   jump: lab-jump
+  #   type: socks                    # a SOCKS5 proxy (like ssh -D) instead of one target
+  #   local_port: 1080
+  #   bind: 127.0.0.1                # the default; another address (0.0.0.0) lets other computers use
+  #                                  # the tunnel: set it only on purpose
+
+tunnel:
+  browser: []              # the command opening a URL, {url} replaced, e.g. [firefox, "{url}"];
+                           # empty: open (macOS), xdg-open (Linux), rundll32 url.dll (Windows)
+  attempts: 8              # reconnection attempts after a lost connection to the jump host (1 s, 2 s, 4 s …
+                           # up to 1 min apart); then the tunnel fails until r or a new connection to it
 
 vault:
   orgs: []                 # show only these organizations (names or IDs); empty = all

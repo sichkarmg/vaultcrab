@@ -7,6 +7,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- Tunnels (port forwarding, like `ssh -L`) through a jump host: `Ctrl+T` in step 2 of the jump picker
+  (the target's port and an optional local port), `T` on an SSH host of the list (a port of that host
+  or of one it reaches), and SOCKS5 proxies (`type: socks`, like `ssh -D`). The Tunnels list (prefix
+  `T`, the `⇄N` button of the tab bar, Settings → Tunnels) shows the state, `local → jump → target`,
+  the time and the connections; start, stop, restart, copy the URL, open it in the browser (a
+  warning about self-signed certificates for https), add, edit, save, remove.
+- Saved tunnels (`tunnels:`: name, jump template or SSH host, target, `local_port: auto` or a number,
+  `open`, `type`, `bind`) and `tunnel:` (`browser`, `attempts`), applied without a restart.
+- Tunnels listen on `127.0.0.1` only unless `bind` says otherwise (with a warning); a busy local port
+  is replaced by a free one, and the form offers it.
+- A lost connection to the jump host is noticed by keepalives (also after a sleep): the tunnels
+  connect again with a backoff (1 s … 1 min, `tunnel.attempts` times), the status bar says so; a
+  failed tunnel tries again on `r` or a new connection to its port. Quitting closes the tunnels.
+
+### Changed
+- The shells and the tunnels through the same jump host (same user and key) share one SSH connection
+  to it; it is closed when the last of them ends.
+
 ### Fixed
 - After a lost connection, the mouse wheel no longer types `64;62;28M…` into the shell of the next
   connection: the modes an application of the old connection turned on (mouse tracking and its

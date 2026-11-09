@@ -200,17 +200,27 @@ func (m *Model) logButton() string {
 // buttons at the right end of the tab bar, each after a separator.
 func (m *Model) buttonsWidth() int {
 	w := 2*ansi.StringWidth(m.g.v) + ansi.StringWidth(m.settingsButton()) + ansi.StringWidth(m.quitButton())
+	if tb, _ := m.tunnelButton(); tb != "" {
+		w += ansi.StringWidth(m.g.v) + ansi.StringWidth(tb)
+	}
 	if lb := m.logButton(); lb != "" {
 		w += ansi.StringWidth(m.g.v) + ansi.StringWidth(lb)
 	}
 	return w
 }
 
-// buttonAt names the tab bar button at column x (x >= tabsWidth): "log",
-// "settings" or "quit"; the separator before a button belongs to it.
+// buttonAt names the tab bar button at column x (x >= tabsWidth):
+// "tunnels", "log", "settings" or "quit"; the separator before a button
+// belongs to it.
 func (m *Model) buttonAt(x int) string {
 	sep := ansi.StringWidth(m.g.v)
 	x0 := m.tabsWidth()
+	if tb, _ := m.tunnelButton(); tb != "" {
+		if x < x0+sep+ansi.StringWidth(tb) {
+			return "tunnels"
+		}
+		x0 += sep + ansi.StringWidth(tb)
+	}
 	if lb := m.logButton(); lb != "" {
 		if x < x0+sep+ansi.StringWidth(lb) {
 			return "log"
@@ -292,8 +302,11 @@ func (m *Model) tabBar() string {
 	}
 	sep := stTabBar.Render(m.g.v)
 	logBtn := ""
+	if tb, st := m.tunnelButton(); tb != "" {
+		logBtn = sep + st.Render(tb)
+	}
 	if lb := m.logButton(); lb != "" {
-		logBtn = sep + stKey.Render(lb)
+		logBtn += sep + stKey.Render(lb)
 	}
 	return padRight(b.String(), m.tabsWidth()) + logBtn + sep + stKey.Render(m.settingsButton()) + sep + stQuit.Render(m.quitButton())
 }
@@ -450,4 +463,4 @@ func (m *Model) ascii(s string) string {
 	return asciiPunct.Replace(s)
 }
 
-var asciiPunct = strings.NewReplacer("·", "|", "…", "...", "—", "-", "↑", "^", "↓", "v", "←", "<", "→", ">", "⚠", "!", "✗", "x", "✕", "x", "▸", ">", "✎", "*")
+var asciiPunct = strings.NewReplacer("⇄", "<>", "●", "*", "◌", "o", "↻", "~", "○", "o", "·", "|", "…", "...", "—", "-", "↑", "^", "↓", "v", "←", "<", "→", ">", "⚠", "!", "✗", "x", "✕", "x", "▸", ">", "✎", "*")

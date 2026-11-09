@@ -123,6 +123,15 @@ type Options struct {
 	// JumpDial connects through a jump host (connect.DialJump; tests
 	// replace it).
 	JumpDial func(ctx context.Context, jump, target connect.Hop, cols, rows int, o connect.SSHOptions) (session.Remote, error)
+	// JumpConnect connects to a jump host for the shared connections of
+	// the shells and the tunnels (connect.DialJumpHost; tests replace it).
+	JumpConnect func(ctx context.Context, jump connect.Hop, o connect.SSHOptions) (JumpConn, error)
+	// OpenURL opens a URL in the browser (tunnel.browser or the system
+	// default when nil).
+	OpenURL func(url string) error
+	// TunnelBackoff is the first delay before a tunnel connects again
+	// (0 = 1 s; tests).
+	TunnelBackoff time.Duration
 	// Start runs a detached program (external-mode scripts); secret fetches
 	// the host credential if the program reads it from stdin. Optional.
 	Start func(ctx context.Context, argv []string, pwStdin bool, secret func(context.Context) (secret.Secret, error)) error
@@ -192,6 +201,8 @@ type Service struct {
 	prompts  prompts       // questions of connections to the user
 	keys     keyFiles      // keys read from files (passphrase asked once)
 	jumpHist *jump.History // the jump hosts and targets used
+	pool     jumpPool      // the shared connections to jump hosts
+	tunnels  tunnelSet     // the running tunnels (tunnels.go)
 
 	conf    configState      // guarded by mu
 	scripts []scripts.Script // guarded by mu: replaced on a config reload

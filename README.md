@@ -49,6 +49,9 @@ the vault only at the moment of connecting and never written to disk.
   devices (e.g. MikroTik RouterOS 6).
 - **Through a jump host** (`j`): pick a jump host or template, type the IP of the target — no vault
   item per machine behind a bastion; host keys of both hops checked, a history of the targets used.
+- **Tunnels** (`Ctrl+T` in the jump picker, `T` on a host, prefix `T`): forward a local port through a
+  jump host (Proxmox web on `https://localhost:port`) or run a SOCKS proxy; saved tunnels, reconnection,
+  `127.0.0.1` only by default.
 - **Tabs and panes.** Each session is a terminal emulator (16/256/true colour, Unicode, `htop`,
   `mc`, `vim`, mouse in remote apps). Split panes horizontally and vertically, resize with keys or
   by dragging borders. Dropped sessions are marked `✗` (or, with `ui.tab_status: color`, by the
@@ -242,6 +245,52 @@ The key `j` replaces "move down" in the host list (arrows still move); `ui.keys.
 key. Chains of several jump hosts and VNC/SMB through such a template are not supported yet (a VNC item
 can name a jump host in its `jump` field).
 
+## Tunnels
+
+Port forwarding through a jump host (like `ssh -L`), for web interfaces and other services that are
+reachable only from behind it — e.g. Proxmox at `https://192.168.1.10:8006` opened as
+`https://localhost:18006` on your computer:
+
+- **From the jump picker**: `j`, the jump host, the target address, then **`Ctrl+T`** instead of
+  `Enter`: the tunnel form opens with the target's host; type its port (`8006`) and `Ctrl+S`. The local
+  port is any free one unless you type one.
+- **Directly through an SSH host**: **`T`** on an SSH host of the list opens the form with that host as
+  the jump host and `localhost:` as the target (a port of the host itself, or `other-host:port` it
+  reaches).
+- **The Tunnels list** (prefix **`T`** anywhere, the **`⇄N`** button of the tab bar while tunnels run,
+  Settings → Tunnels): the saved tunnels and the running ones with their state (active, connecting,
+  retrying, failed, stopped), `127.0.0.1:18006 → jump → target:port`, the time and the connections
+  (open/total). `Enter` starts a saved tunnel or opens a running one in the browser, `s` start/stop,
+  `r` restart, `y` copy the URL, `o` open in the browser, `a` add, `e` edit, `S` save a running tunnel
+  under a name, `D` twice removes a saved one. The list stays with the host list: other tabs can be
+  used while it is open.
+- **Saved tunnels** (`tunnels:` in the config, or the form with a **Name**; applied without a
+  restart): the jump host (a jump template or an SSH host of the vault), the target `host:port`, the
+  local port (`auto` or a number), the URL to open (`open:`, `{port}` and `{host}`; default
+  `http://{host}:{port}`), the type and the bind address. A saved tunnel runs once: starting it again
+  shows the running one.
+- **SOCKS proxy** (`type: socks`, like `ssh -D`): a SOCKS5 proxy on the local port; every connection
+  goes to the address it asks for, resolved by the jump host. Set `localhost:port` as the SOCKS5 proxy
+  of the browser.
+- **Only this computer**: tunnels listen on `127.0.0.1`. Another address (`bind:`, e.g. `0.0.0.0`)
+  must be set explicitly, and the form and the list warn that other computers can then use the tunnel.
+- **A busy port**: the form offers a free one (`Ctrl+S` again takes it); a saved tunnel whose port is
+  busy when it starts takes the next free one and says so.
+- **One connection per jump host**: the tunnels and the shells through the same jump host (same user
+  and key) share one SSH connection to it; the last one to end closes it. Authentication, keys,
+  passphrases and host key checks are those of the jump connections; no secret goes into arguments,
+  the environment or logs.
+- **Reconnection**: when the connection to the jump host is lost (keepalives notice it, e.g. after a
+  sleep), the tunnels connect again after 1 s, 2 s, 4 s … up to 1 min, at most `tunnel.attempts` times
+  (8); the status bar tells about the loss and the reconnection. Then the tunnel is *failed* until `r`
+  or a new connection to its port, which tries again at once. A refused authentication or host key
+  fails at once. Nothing runs on a timer while tunnels are idle.
+- **Open in the browser**: `tunnel.browser` (a command, `{url}` replaced) or the system default (`open`,
+  `xdg-open`, `rundll32 url.dll`). For `https` the list warns that the page probably has a self-signed
+  certificate (Proxmox, routers): check it in the browser before accepting it.
+- Quitting Vaultcrab closes all tunnels. Reverse forwarding (`-R`), chains of several jump hosts and
+  VNC/SMB through a tunnel are not supported yet.
+
 ## Offline, sleep and a crashed bw serve
 
 - **Server unreachable** (no network, VPN down): the status bar says *Offline: server unreachable,
@@ -363,10 +412,10 @@ authentication methods offered (keys by type and fingerprint, never a password),
 a jump host, the PTY. When the attempt fails, the steps are shown in the pane; `y` or `[Copy debug]` at
 the right of the status bar copies them.
 
-Keys: `Enter` connect, `/` search, `x` scripts, `t` local shell, `j` through a jump host,
+Keys: `Enter` connect, `/` search, `x` scripts, `t` local shell, `j` through a jump host, `T` a tunnel,
 `a`/`e`/`C`/`D` add/edit/copy/delete, `p` copy password, `?` help. Session commands use the prefix
 `Ctrl+B` (configurable): `|` and `-` split (the host of the current pane is offered first, so `Enter`
-clones it), `c` clone the session into a new tab, `R` rename the tab, `j` jump host picker, arrows
+clones it), `c` clone the session into a new tab, `R` rename the tab, `j` jump host picker, `T` tunnels, arrows
 move focus, `z` zoom, `[` scrollback, `x` close pane, `&` close the tab with all its panes. In a split
 tab each pane header has a `✕` button that closes just that pane; `Ctrl+D`
 closes a broken or finished pane (`Enter` reconnects it).

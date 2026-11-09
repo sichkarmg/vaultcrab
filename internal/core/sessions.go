@@ -280,9 +280,12 @@ func (s *Service) Sessions() []*Session {
 	return slices.Clone(s.sessions.list)
 }
 
-// Shutdown closes all sessions.
+// Shutdown stops the tunnels and closes all sessions and the connections
+// to jump hosts.
 func (s *Service) Shutdown() {
+	s.StopTunnels()
 	for _, sess := range s.Sessions() {
 		s.CloseSession(sess)
 	}
+	s.closeJumps()
 }

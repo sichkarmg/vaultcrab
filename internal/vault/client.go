@@ -72,7 +72,51 @@ type Client struct {
 	session sessionKey
 
 	mu        sync.Mutex
-	serverURL string // as bw reported it last
+	serverURL string               // as bw reported it last
+	created   map[string]time.Time // items created by this client lately (see do)
+}
+
+// freshFor is how long bw serve may answer "Not found" for an item it has
+// just created: on Windows it sometimes does for a moment (an edit or a
+// copy right after the create, the password of a new copy).
+const freshFor = 5 * time.Second
+
+// freshRetry is the pause between the attempts on such an item.
+var freshRetry = 200 * time.Millisecond
+
+// markCreated records an item created by this client.
+func (c *Client) markCreated(id string) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	now := time.Now()
+	for k, t := range c.created {
+		if now.Sub(t) > freshFor {
+			delete(c.created, k)
+		}
+	}
+	if c.created == nil {
+		c.created = map[string]time.Time{}
+	}
+	c.created[id] = now
+}
+
+// fresh returns until when "Not found" is retried for the object of path
+// (zero: not an item created lately).
+func (c *Client) fresh(path string) time.Time {
+	if !strings.HasPrefix(path, "/object/") {
+		return time.Time{}
+	}
+	id := path[strings.LastIndexByte(path, '/')+1:]
+	if i := strings.IndexByte(id, '?'); i >= 0 {
+		id = id[:i]
+	}
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	t, ok := c.created[id]
+	if !ok {
+		return time.Time{}
+	}
+	return t.Add(freshFor)
 }
 
 // WithServer attaches the managed bw serve of c (its exit is reported by
@@ -110,6 +154,34 @@ type envelope struct {
 }
 
 func (c *Client) do(ctx context.Context, method, path string, body []byte) ([]byte, error) {
+	for {
+		data, err := c.doOnce(ctx, method, path, body)
+		if err == nil || !errors.Is(err, errNotFound) {
+			return data, err
+		}
+		until := c.fresh(path)
+		if until.IsZero() || time.Now().Add(freshRetry).After(until) {
+			return data, err
+		}
+		select {
+		case <-ctx.Done():
+			return nil, ctx.Err()
+		case <-time.After(freshRetry):
+		}
+	}
+}
+
+// errNotFound marks the "Not found." answer of bw.
+var errNotFound = errors.New("not found")
+
+// notFoundErr is a "Not found." answer of bw: its text as before, matched by
+// errors.Is(err, errNotFound).
+type notFoundErr struct{ msg string }
+
+func (e *notFoundErr) Error() string        { return e.msg }
+func (e *notFoundErr) Is(target error) bool { return target == errNotFound }
+
+func (c *Client) doOnce(ctx context.Context, method, path string, body []byte) ([]byte, error) {
 	var rd io.Reader
 	if body != nil {
 		rd = bytes.NewReader(body)
@@ -146,6 +218,9 @@ func (c *Client) do(ctx context.Context, method, path string, body []byte) ([]by
 		}
 		if msg == "" {
 			msg = http.StatusText(resp.StatusCode)
+		}
+		if strings.EqualFold(strings.TrimSuffix(strings.TrimSpace(msg), "."), "not found") {
+			return nil, &notFoundErr{msg: fmt.Sprintf("bw %s: %s", path, msg)}
 		}
 		return nil, fmt.Errorf("bw %s: %s", path, msg)
 	}

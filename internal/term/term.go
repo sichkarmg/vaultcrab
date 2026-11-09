@@ -169,6 +169,30 @@ func (t *Terminal) SetSink(w io.Writer) {
 	t.sink.Store(&w)
 }
 
+// resetModes turns off what an application of the remote side may have
+// turned on: mouse tracking and its encodings, focus events, bracketed
+// paste, application cursor keys and keypad; the cursor is shown again.
+const resetModes = "\x1b[?9l\x1b[?1000l\x1b[?1001l\x1b[?1002l\x1b[?1003l" +
+	"\x1b[?1005l\x1b[?1006l\x1b[?1015l\x1b[?1016l\x1b[?1004l\x1b[?2004l" +
+	"\x1b[?1l\x1b>\x1b[?25h\x1b[0m"
+
+// ResetModes restores the modes of a fresh terminal after the connection
+// ended: the application that set them (mc, tmux, an editor) is gone, and
+// the next connection starts a new shell. Without it the wheel would still
+// be sent to the new shell as mouse reports, printed as "64;62;28M".
+// The alternate screen is left too, so the scrollback works again.
+func (t *Terminal) ResetModes() {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	seq := resetModes
+	if t.emu.IsAltScreen() {
+		seq = "\x1b[?1049l" + seq
+	}
+	_, _ = t.emu.Write([]byte(seq)) // not output of the remote side (t.out)
+	t.scrollOff = min(t.scrollOff, t.emu.ScrollbackLen())
+	t.dirty.Store(true)
+}
+
 // Close releases the emulator.
 func (t *Terminal) Close() {
 	t.mu.Lock()

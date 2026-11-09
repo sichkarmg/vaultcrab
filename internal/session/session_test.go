@@ -78,12 +78,16 @@ func TestReconnectKeepsScrollbackAndRefetchesSecret(t *testing.T) {
 	mu.Lock()
 	r1 := remotes[0]
 	mu.Unlock()
-	go r1.pw.Write([]byte("first-output\r\n"))
-	for !strings.Contains(s.Term.PlainText(), "first-output") {
+	// the application of the first connection tracks the mouse (SGR)
+	go r1.pw.Write([]byte("first-output\r\n\x1b[?1002h\x1b[?1006h"))
+	for !strings.Contains(s.Term.PlainText(), "first-output") || !s.Term.MouseTracking() {
 		time.Sleep(5 * time.Millisecond)
 	}
 	r1.drop(errors.New("connection lost"))
 	wait(t, s, Disconnected)
+	if s.Term.MouseTracking() {
+		t.Error("mouse tracking of the lost connection kept: the wheel would type into the next shell")
+	}
 	if s.Exited() {
 		t.Error("a dropped connection is not a clean exit")
 	}

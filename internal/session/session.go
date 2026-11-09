@@ -266,6 +266,7 @@ func (s *Session) run(ctx context.Context) {
 	}
 	<-r.Done()
 	s.Term.SetSink(nil)
+	s.Term.ResetModes()
 	s.mu.Lock()
 	closed := s.state == Closed
 	s.remote = nil

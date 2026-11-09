@@ -141,6 +141,42 @@ func TestTabGroups(t *testing.T) {
 	}
 }
 
+// With ui.tab_status_close in an open group only the state icon of a tab
+// closes it; a click on the number shows the tab (in the color mode, where
+// the number is the state, it always shows the tab).
+func TestTabGroupsStatusClose(t *testing.T) {
+	m, _ := newTestModel(t, false)
+	a := m.opt.Appearance
+	a.GroupTabs, a.TabStatusClose = true, true
+	m.applyAppearance(a)
+	openTabs(t, m, 3)
+	waitAllTabs(t, m, core.SessionDisconnected)
+	m.setActive(1)
+	clickItem(m, 1, 6) // opens the group
+	if !m.openGroups["alpha"] && len(m.tabItems()) < 4 {
+		t.Fatalf("group not open: %q", ansi.Strip(m.tabBar()))
+	}
+	clickItem(m, 3, 2) // the number of tab 2
+	if m.active != 2 || len(m.tabs) != 3 || m.modal != nil {
+		t.Fatalf("number: active %d tabs %d modal %T", m.active, len(m.tabs), m.modal)
+	}
+	clickItem(m, 4, 1) // the icon of the inactive tab 3 closes it
+	if len(m.tabs) != 2 {
+		t.Fatalf("icon: tabs %d", len(m.tabs))
+	}
+	a.TabStatus = "color"
+	m.applyAppearance(a)
+	m.setActive(1)
+	bar := ansi.Strip(m.tabBar())
+	if !strings.Contains(bar, "▾ alpha 1") {
+		t.Fatalf("color: %q", bar)
+	}
+	clickItem(m, 3, 1) // the number of tab 2
+	if m.active != 2 || len(m.tabs) != 2 || m.modal != nil {
+		t.Fatalf("color: active %d tabs %d modal %T", m.active, len(m.tabs), m.modal)
+	}
+}
+
 // waitAllTabs waits until every tab is in state want.
 func waitAllTabs(t *testing.T, m *Model, want core.SessionState) {
 	t.Helper()

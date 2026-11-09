@@ -171,7 +171,9 @@ func (m *Model) tabItem(n int, more string) barItem {
 }
 
 // tabChip is a tab of an open group: its state and number only (the name
-// is in the group header); the active one highlighted, with its ✕.
+// is in the group header); the active one highlighted, with its ✕. With
+// ui.tab_status_close only the state icon closes the tab: the number
+// always shows it, so the group stays usable with the mouse.
 func (m *Model) tabChip(n int) barItem {
 	t := m.tabs[n-1]
 	active := n == m.active
@@ -188,10 +190,13 @@ func (m *Model) tabChip(n int) barItem {
 			ns = base.Foreground(c)
 		}
 		head = base.Render(" ") + ns.Render(num)
+		// the number is all there is: it shows the tab, never closes it
 	} else {
-		head = " " + t.icon(m, active) + base.Render(num)
+		icon := t.icon(m, active)
+		head = " " + icon + base.Render(num)
+		// ui.tab_status_close: only the icon closes, the number shows the tab
+		it.status = [2]int{1, 1 + ansi.StringWidth(icon)}
 	}
-	it.status = [2]int{0, ansi.StringWidth(head)}
 	label := head
 	if active {
 		label += base.Render(" ")

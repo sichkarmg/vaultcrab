@@ -596,7 +596,7 @@ func (m *Model) mouse(msg tea.MouseMsg) tea.Cmd {
 			case "tunnels":
 				m.openTunnels(nil)
 			case "log":
-				m.modal = newLogView(m)
+				m.openLog()
 			case "settings":
 				m.openSettings()
 			case "quit":

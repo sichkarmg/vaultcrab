@@ -7,6 +7,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- Port knocking before a connection: the custom fields `knock` (`7000,8000/udp,9000`) and
+  `knock_delay` (`200ms`) of an item; for a jump host also `knock:` / `knock_delay:` of a jump
+  template (Settings → Jump hosts → Knock). The knocks appear in the connection debug.
+- `scripts/screenshots.sh` renders the README screenshots from scenes with a demo vault; new
+  screenshots of the tunnels, the jump picker and the connection debug.
+
+### Changed
+- A search shows the hosts it finds in folded folders: the folders open for the search (and can
+  be folded during it); clearing it brings the folds of the list back.
+- The event log stays with the host list like the settings: the other tabs can be used while it is
+  open, and it is read again on the return.
+- The Tunnels dialog has a `✕` in its title row: it closes the form, then the dialog.
+
 ## [0.6.0] - 2026-11-09
 
 ### Added

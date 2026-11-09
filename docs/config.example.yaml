@@ -152,6 +152,10 @@ jump_templates: []
   #   host_key_check: ask          # a new host key: ask (default) | accept-new (remembered without
   #                                # asking) | strict (only keys already in known_hosts). A key that
   #                                # changed for a known address is always refused.
+  #   knock: 7000,8000/udp,9000    # port knocking at the jump host before connecting (port, port/tcp,
+  #                                # port/udp); empty: the knock field of its vault item. A vault host
+  #                                # gets the same with its custom fields knock and knock_delay.
+  #   knock_delay: 200ms           # the pause after each knock (default 200ms, at most 10s)
 jump:
   history: true            # remember the jump hosts and targets used (names and addresses only, in
                            # jump-history.json of the cache directory); `vaultcrab history clear`

@@ -80,4 +80,15 @@ func TestEventLogView(t *testing.T) {
 	if _, ok := m.modal.(*logModal); !ok {
 		t.Fatalf("prefix g opened %T", m.modal)
 	}
+	// it stays with the host list: tab 1 can be used while it is open
+	lv := m.modal.(*logModal)
+	m.tabs = append(m.tabs, newTab(svc.OpenLocal(80, 20)))
+	keys(m, "ctrl+b", "1")
+	if m.active != 1 || m.modal != nil || m.parked != lv {
+		t.Fatalf("switch: active %d modal %T parked %T", m.active, m.modal, m.parked)
+	}
+	keys(m, "ctrl+b", "g") // back to it from the session tab
+	if m.active != 0 || m.modal != lv {
+		t.Fatalf("back: active %d modal %T", m.active, m.modal)
+	}
 }

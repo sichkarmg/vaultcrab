@@ -14,7 +14,8 @@ import (
 const logLines = 2000
 
 // logModal shows the end of the event log (prefix g, the ≡ button). It is
-// read when opened and on r: no timer runs while it is open.
+// read when opened, shown again and on r: no timer runs while it is open.
+// It stays with the host list: the other tabs can be used meanwhile.
 type logModal struct {
 	lines []string
 	err   error
@@ -27,6 +28,33 @@ func newLogView(m *Model) *logModal {
 	l := &logModal{}
 	l.load(m)
 	return l
+}
+
+// openLog opens the event log over the host list (prefix g, the ≡
+// button); it stays there while other tabs are used, and one left waiting
+// is shown again (read anew).
+func (m *Model) openLog() {
+	if m.parked != nil {
+		m.switchTab(0)
+		return
+	}
+	if m.active != 0 && m.modal == nil {
+		m.setActive(0)
+	}
+	if l, ok := m.modal.(*logModal); ok {
+		l.reshow(m)
+		return
+	}
+	if m.modal == nil {
+		m.modal = newLogView(m)
+	}
+}
+
+// reshow reads the log again when the view follows its end.
+func (l *logModal) reshow(m *Model) {
+	if l.end {
+		l.load(m)
+	}
 }
 
 func (l *logModal) load(m *Model) {

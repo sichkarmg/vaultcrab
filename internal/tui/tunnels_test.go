@@ -253,3 +253,28 @@ func TestTunnelsDocked(t *testing.T) {
 		t.Fatalf("back: active %d modal %T", m.active, m.modal)
 	}
 }
+
+// The ✕ in the title row closes the form first, then the dialog.
+func TestTunnelsCloseButton(t *testing.T) {
+	jt := newJumpTest(t, "")
+	m := jt.m
+	m.openTunnels(nil)
+	tm := m.modal.(*tunnelsModal)
+	keys(m, "a")
+	v := ansi.Strip(m.View())
+	if !strings.Contains(v, "Tunnels") || !strings.Contains(v, "✕") {
+		t.Fatalf("no close button:\n%s", v)
+	}
+	click := func() {
+		x := m.dlgX + boxPadX + tm.closeX
+		m.Update(tea.MouseMsg{X: x, Y: m.dlgY + boxPadY, Action: tea.MouseActionPress, Button: tea.MouseButtonLeft})
+	}
+	click()
+	if m.modal != tm || tm.p.form != nil {
+		t.Fatalf("form not closed: %T %v", m.modal, tm.p.form != nil)
+	}
+	click()
+	if m.modal != nil {
+		t.Fatalf("dialog not closed: %T", m.modal)
+	}
+}

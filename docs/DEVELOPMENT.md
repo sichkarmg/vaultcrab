@@ -3,7 +3,8 @@
 ## Layout
 
 - `cmd/vaultcrab` — the program; `cmd/termproto`, `tools/` — developer tools
-  (`tools/ansi2svg` renders the README screenshots, `tools/sshprobe` debugs SSH handshakes).
+  (`tools/ansi2svg` renders the README screenshots: `scripts/screenshots.sh` makes the scenes of
+  `internal/tui/screenshots_test.go` with a demo vault and renders them; `tools/sshprobe` debugs SSH handshakes).
 - `internal/core` — application logic; `internal/tui` — the Bubble Tea interface.
 - `internal/vault` — the Bitwarden/Vaultwarden provider (`bw serve` client).
 - `internal/connect`, `internal/session`, `internal/term` — SSH, VNC, external clients, terminal.

@@ -128,6 +128,13 @@ func dialClient(ctx context.Context, h model.Host, sec *secret.Secret, o SSHOpti
 		mode = HostKeyStrict
 	}
 	tracef(ctx, "authentication: %s from the vault", DescribeSecret(sec))
+	seq, err := KnockOf(h.Fields)
+	if err != nil {
+		return nil, err
+	}
+	if err := knockAt(ctx, hostAddr(h), seq); err != nil {
+		return nil, err
+	}
 	c, _, err := dialHop(ctx, hostAddr(h), h.User, auth, HostKeyPolicy{File: o.KnownHosts, Mode: mode}, o, nil)
 	if err != nil {
 		var he *hopErr

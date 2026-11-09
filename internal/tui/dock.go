@@ -8,7 +8,8 @@ import (
 	"github.com/sichkarmg/vaultcrab/internal/core"
 )
 
-// The settings, the item form, the jump picker and the tunnels belong to the host list (tab 0): while
+// The settings, the item form, the jump picker, the tunnels and the event
+// log belong to the host list (tab 0): while
 // one is open the other tabs can still be switched to (prefix + digit,
 // next/previous tab, a click in the tab bar). The dialog is parked then and
 // shown again on the return to the host list.
@@ -19,6 +20,7 @@ type docked interface{ docked() }
 func (*settingsModal) docked() {}
 func (*hostForm) docked()      {}
 func (*jumpPicker) docked()    {}
+func (*logModal) docked()      {}
 
 func isDocked(d modal) bool { _, ok := d.(docked); return ok }
 
@@ -36,6 +38,9 @@ func (m *Model) switchTab(i int) {
 func (m *Model) unpark() {
 	if m.parked != nil && m.active == 0 && m.modal == nil {
 		m.modal, m.parked = m.parked, nil
+		if r, ok := m.modal.(interface{ reshow(*Model) }); ok {
+			r.reshow(m)
+		}
 	}
 }
 

@@ -10,6 +10,7 @@ import (
 	"gopkg.in/yaml.v3"
 
 	"github.com/sichkarmg/vaultcrab/internal/jump"
+	"github.com/sichkarmg/vaultcrab/internal/knock"
 )
 
 // Host key checks of a jump template (host_key_check).
@@ -39,6 +40,11 @@ type JumpTemplate struct {
 	// vault item of jump, else key).
 	JumpKey      string `yaml:"jump_key,omitempty"`
 	HostKeyCheck string `yaml:"host_key_check,omitempty"` // ask (default) | accept-new | strict
+	// Knock is a port knocking sequence sent to the jump host before
+	// connecting ("7000,8000/udp,9000"; default: the knock field of its
+	// vault item); KnockDelay the pause after each knock (200ms).
+	Knock      string `yaml:"knock,omitempty"`
+	KnockDelay string `yaml:"knock_delay,omitempty"`
 }
 
 // Check returns why t is not valid (nil if it is).
@@ -62,6 +68,9 @@ func (t JumpTemplate) Check() error {
 	case "", HostKeyAsk, HostKeyAcceptNew, HostKeyStrict:
 	default:
 		return fmt.Errorf("%s: host_key_check %q (want ask|accept-new|strict)", t.Name, t.HostKeyCheck)
+	}
+	if _, err := knock.Parse(t.Knock, t.KnockDelay); err != nil {
+		return fmt.Errorf("%s: %w", t.Name, err)
 	}
 	return nil
 }
@@ -138,6 +147,8 @@ func SaveJumpTemplates(path string, ts []JumpTemplate) error {
 			add("key", strings.TrimSpace(t.Key))
 			add("jump_key", strings.TrimSpace(t.JumpKey))
 			add("host_key_check", t.HostKeyCheck)
+			add("knock", strings.TrimSpace(t.Knock))
+			add("knock_delay", strings.TrimSpace(t.KnockDelay))
 			seq.Content = append(seq.Content, item)
 		}
 		setPath(root, []string{"jump_templates"}, seq)

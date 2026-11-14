@@ -95,11 +95,7 @@ func (s *Service) UnlockWithTouchID(ctx context.Context, id string) error {
 		return v.notOnline()
 	}
 	if err := src.Unlock(ctx, pw); err != nil { // wipes pw
-		if errors.Is(err, ErrNotOnline) || ctx.Err() != nil {
-			return err
-		}
-		_ = m.DropTouch(v.key())
-		return errStoredPWChanged
+		return v.storedRefused(err, func() { _ = m.DropTouch(v.key()) })
 	}
 	logf("%s: unlocked with Touch ID", v.who())
 	s.touch()

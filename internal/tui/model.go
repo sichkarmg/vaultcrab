@@ -98,7 +98,7 @@ type Model struct {
 	lastClick     time.Time
 	lastClickKey  string
 	unlockOffered bool
-	openGroups    map[string]bool // groups of tabs shown open (by host)
+	groupLead     map[string]*tab // the tab shown in full in its group (by host)
 	lastInput     time.Time       // the last key or mouse event (wall clock)
 	quitting      bool
 	discardTabs   bool // quit without saving the open tabs
@@ -426,6 +426,10 @@ func (m *Model) setActive(i int) {
 	if t := m.curTab(); t != nil {
 		t.resize(m.bodyRect())
 		m.lastUse = t
+		if m.groupLead == nil {
+			m.groupLead = map[string]*tab{}
+		}
+		m.groupLead[t.groupKey()] = t
 	}
 }
 

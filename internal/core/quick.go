@@ -11,6 +11,7 @@ import (
 
 	"github.com/sichkarmg/vaultcrab/internal/quickunlock"
 	"github.com/sichkarmg/vaultcrab/internal/secret"
+	"github.com/sichkarmg/vaultcrab/internal/vault"
 )
 
 // Quick unlock with a PIN (unlock.pin, Settings → Security): the master
@@ -165,17 +166,29 @@ func (s *Service) UnlockWithPIN(ctx context.Context, id string, pin []byte) erro
 		return v.notOnline()
 	}
 	if err := src.Unlock(ctx, pw); err != nil { // wipes pw
-		if errors.Is(err, ErrNotOnline) || ctx.Err() != nil {
-			return err
-		}
-		logf("%s: the stored master password was not accepted: %v", v.who(), err)
-		_ = m.Drop(v.key())
-		return errStoredPWChanged
+		return v.storedRefused(err, func() { _ = m.Drop(v.key()) })
 	}
 	logf("%s: unlocked with the PIN", v.who())
 	s.touch()
 	v.refresh(ctx)
 	return nil
+}
+
+// storedRefused handles a failed unlock with a stored master password: only
+// bw's "Invalid master password" (the password was changed) deletes it
+// (drop); any other failure (bw serve gone or slow after a long sleep, a
+// time-out) keeps it, so that the next try works.
+func (v *vaultConn) storedRefused(err error, drop func()) error {
+	switch {
+	case errors.Is(err, vault.ErrWrongPassword):
+		logf("%s: the stored master password was not accepted: %v", v.who(), err)
+		drop()
+		return errStoredPWChanged
+	case errors.Is(err, ErrNotOnline) || errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded):
+		return err
+	}
+	logf("%s: unlock with the stored master password failed (it is kept): %v", v.who(), err)
+	return fmt.Errorf("bw could not unlock (the stored master password is kept; try again): %w", err)
 }
 
 // SetPIN sets (or changes) the PIN and stores the master password of vault

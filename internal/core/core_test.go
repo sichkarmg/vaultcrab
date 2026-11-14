@@ -5,6 +5,7 @@ package core
 import (
 	"context"
 	"errors"
+	"fmt"
 	"sync"
 	"sync/atomic"
 	"testing"
@@ -17,14 +18,15 @@ import (
 )
 
 type fakeSource struct {
-	mu       sync.Mutex
-	status   vault.Status
-	down     bool
-	snap     model.Snapshot
-	secrets  map[string]string
-	syncErr  error // the server is unreachable, bw works from its local copy
-	syncHang bool
-	password string // "" = "master"
+	mu        sync.Mutex
+	status    vault.Status
+	down      bool
+	snap      model.Snapshot
+	secrets   map[string]string
+	syncErr   error // the server is unreachable, bw works from its local copy
+	syncHang  bool
+	password  string // "" = "master"
+	unlockErr error  // bw fails the unlock otherwise (not a wrong password)
 }
 
 func (f *fakeSource) Status(context.Context) (vault.StatusInfo, error) {
@@ -38,6 +40,12 @@ func (f *fakeSource) Status(context.Context) (vault.StatusInfo, error) {
 func (f *fakeSource) Unlock(_ context.Context, pw []byte) error {
 	f.mu.Lock()
 	defer f.mu.Unlock()
+	if err := f.unlockErr; err != nil {
+		for i := range pw {
+			pw[i] = 0
+		}
+		return err
+	}
 	want := f.password
 	if want == "" {
 		want = "master"
@@ -47,7 +55,7 @@ func (f *fakeSource) Unlock(_ context.Context, pw []byte) error {
 		pw[i] = 0 // like vault.Client
 	}
 	if !ok {
-		return errors.New("Invalid master password.")
+		return fmt.Errorf("bw /unlock: Invalid master password.: %w", vault.ErrWrongPassword)
 	}
 	f.status = vault.Unlocked
 	return nil

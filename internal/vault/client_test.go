@@ -87,8 +87,8 @@ func TestLockedAndUnlock(t *testing.T) {
 		t.Fatalf("want ErrLocked, got %v", err)
 	}
 	bad := []byte("wrong")
-	if err := c.Unlock(ctx, bad); err == nil {
-		t.Fatal("unlock with wrong password succeeded")
+	if err := c.Unlock(ctx, bad); !errors.Is(err, ErrWrongPassword) {
+		t.Fatalf("wrong password: %v", err)
 	}
 	if string(bad) != "\x00\x00\x00\x00\x00" {
 		t.Error("password buffer not wiped")

@@ -8,17 +8,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Changed
-- An open group of tabs takes less room: the name of the host once, then each tab by its state icon
-  and number (`▾ web-01 ●4 ●5 ✗6`; the active one highlighted, with its `✕`), instead of a header and
-  every tab with the full name.
+- A group of tabs no longer opens and folds: the lead tab is shown in full with its number first,
+  the other tabs of the host by state and number after it (`● 4:web-01 ✕ ●5 ✗6`; `‹5 ‹6` in the
+  color mode). A click on one makes it the active lead, the previous lead goes back among the others.
+  The lead closes like any tab, so the mouse closes grouped tabs also in the color mode.
 
 ### Fixed
 - The mouse works again after `bw login` (`L`) had the terminal: Bubble Tea restored the screen but
   not the mouse reports.
 - macOS: an unlock dialog that opens by itself after a lock waits for Enter before it asks for
   Touch ID, also when you are at the computer (`u` still asks at once).
-- With "Click on status closes" (`ui.tab_status_close`) an open group of tabs works with the mouse
-  again: a click on the number of a tab shows it, only its state icon closes it.
+- A failed unlock with the PIN or Touch ID no longer deletes the stored master password unless bw
+  answers "Invalid master password": after a long idle bw serve could fail or time out, and the
+  password was deleted as if it had been changed.
 
 ## [0.7.0] - 2026-11-09
 

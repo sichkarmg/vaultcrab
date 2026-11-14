@@ -22,6 +22,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   The lead closes like any tab, so the mouse closes grouped tabs also in the color mode.
 
 ### Fixed
+- After a resize of the window (macOS Terminal) a column of the old session content could stay at
+  the right edge: the screen is now cleared and painted in full after a resize and once more when
+  the resize is over.
 - The mouse works again after `bw login` (`L`) had the terminal: Bubble Tea restored the screen but
   not the mouse reports.
 - macOS: an unlock dialog that opens by itself after a lock waits for Enter before it asks for

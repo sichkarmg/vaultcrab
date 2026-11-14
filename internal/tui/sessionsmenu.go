@@ -82,7 +82,7 @@ func (m *Model) menuButton() (string, lipgloss.Style) {
 type sessionsMenu struct {
 	cursor int
 	items  []int // the tabs as last shown
-	rows   []int      // dialog row of each item
+	rows   []int // dialog row of each item
 	btns   [][]btnSpan
 }
 

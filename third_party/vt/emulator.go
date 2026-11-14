@@ -508,6 +508,10 @@ func (e *Emulator) ClearScrollback() {
 }
 
 // IsAltScreen returns whether the terminal is in alternate screen mode.
+// LineWrapped reports that line y of the active screen continues on the
+// next line (it wrapped at the right margin; vaultcrab patch).
+func (e *Emulator) LineWrapped(y int) bool { return e.scr.Wrapped(y) }
+
 func (e *Emulator) IsAltScreen() bool {
 	return e.scr == &e.scrs[1]
 }

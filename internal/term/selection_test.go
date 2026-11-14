@@ -72,3 +72,29 @@ func TestWordAndLine(t *testing.T) {
 		t.Errorf("line %q", got)
 	}
 }
+
+// A line that wrapped at the right margin is copied as one line, also from
+// the history; a triple click takes the whole wrapped line.
+func TestSelectionWrappedLines(t *testing.T) {
+	tm := New(10, 3, 100)
+	defer tm.Close()
+	long := "hello world, this is long"
+	tm.WriteString(long + "\r\nnext\r\n$ ")
+	// rows: hello worl|d, this is| long|next|$ : the first two in the history
+	tm.Scroll(2)
+	tm.SetSelection(tm.ViewPos(0, 0), tm.ViewPos(9, 2))
+	if got := tm.SelectedText(); got != long {
+		t.Fatalf("history: %q", got)
+	}
+	tm.ScrollToBottom()
+	tm.Scroll(100)
+	a, b := tm.LineBounds(tm.ViewPos(3, 1))
+	tm.SetSelection(a, b)
+	if got := tm.SelectedText(); got != long {
+		t.Fatalf("triple click: %q", got)
+	}
+	tm.SetSelection(tm.ViewPos(0, 0), tm.ViewPos(3, 3))
+	if got := tm.SelectedText(); got != long+"\nnext" {
+		t.Fatalf("with the next line: %q", got)
+	}
+}

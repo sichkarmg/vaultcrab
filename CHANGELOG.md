@@ -15,6 +15,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   alternate screen (`mc`, `vim`) redraw themselves as before.
 
 ### Fixed
+- Copying a line that wrapped at the right edge gives one line of text, not one per screen row
+  (mouse and keyboard selection, also from the scrollback); a triple click selects the whole
+  wrapped line.
 - A wide character (CJK, emoji) that does not fit at the end of a line goes to the next line whole
   instead of being lost.
 

@@ -189,7 +189,7 @@ func (t *Terminal) ResetModes() {
 		seq = "\x1b[?1049l" + seq
 	}
 	_, _ = t.emu.Write([]byte(seq)) // not output of the remote side (t.out)
-	t.scrollOff = min(t.scrollOff, t.emu.ScrollbackLen())
+	t.clampScroll()
 	t.dirty.Store(true)
 }
 
@@ -218,7 +218,7 @@ func (t *Terminal) Write(p []byte) (int, error) {
 		}
 		p = p[len(c):]
 	}
-	t.scrollOff = min(t.scrollOff, t.emu.ScrollbackLen())
+	t.clampScroll()
 	t.dirty.Store(true)
 	return n, nil
 }
@@ -248,10 +248,27 @@ func (t *Terminal) Resize(w, h int) bool {
 	if w == t.w && h == t.h {
 		return false
 	}
+	widthChanged := w != t.w
 	t.w, t.h = w, h
-	t.emu.Resize(w, h)
+	t.emu.Resize(w, h) // the main screen and the history are rewrapped
+	if widthChanged {
+		// the lines of the history are numbered anew: the view returns to
+		// the live screen and a selection ends
+		t.scrollOff = 0
+		t.sel = selection{}
+	}
 	t.dirty.Store(true)
 	return true
+}
+
+// clampScroll keeps the view inside the history; called with mu held. It
+// reads the history length only while the view is scrolled back: the
+// history is rewrapped after a resize when it is read (see vt reflow.go),
+// not on every frame or output.
+func (t *Terminal) clampScroll() {
+	if t.scrollOff > 0 {
+		t.scrollOff = min(t.scrollOff, t.emu.ScrollbackLen())
+	}
 }
 
 // Title returns the window title set by the remote side (OSC 0/2).
@@ -326,10 +343,13 @@ func (t *Terminal) Render(w, h int, o RenderOptions) []string {
 	t.mu.Lock()
 	defer t.mu.Unlock()
 	lines := make([]string, h)
-	sbLen := t.emu.ScrollbackLen()
 	off := t.scrollOff
 	if t.emu.IsAltScreen() {
 		off = 0
+	}
+	sbLen := 0
+	if off > 0 { // read the history only when it is shown
+		sbLen = t.emu.ScrollbackLen()
 	}
 	cur := t.emu.CursorPosition()
 	showCursor := o.Cursor && off == 0 && !t.emu.CursorHidden()

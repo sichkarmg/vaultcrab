@@ -312,3 +312,38 @@ func TestResetModes(t *testing.T) {
 		t.Fatal("wheel sent after mc exited")
 	}
 }
+
+// A narrower terminal wraps the long lines instead of cutting them, a
+// wider one joins them again; the history is rewrapped when it is shown.
+func TestResizeReflows(t *testing.T) {
+	tm := New(20, 3, 100)
+	defer tm.Close()
+	tm.WriteString("0123456789abcdefghij-tail\r\n")
+	for i := range 5 {
+		tm.WriteString(fmt.Sprintf("line %d\r\n", i))
+	}
+	tm.WriteString("$ ")
+	view := func() []string {
+		var out []string
+		for _, l := range tm.Render(tm.w, 3, RenderOptions{}) {
+			out = append(out, strings.TrimRight(ansi.Strip(l), " "))
+		}
+		return out
+	}
+	tm.Resize(8, 3)
+	if v := view(); v[2] != "$" {
+		t.Fatalf("narrow: %q", v)
+	}
+	tm.Scroll(100) // to the top of the history
+	if v := view(); strings.Join(v, "|") != "01234567|89abcdef|ghij-tai" {
+		t.Fatalf("history at 8: %q", v)
+	}
+	tm.Resize(40, 3)
+	if tm.ScrollOffset() != 0 {
+		t.Fatal("the view stayed in the history after a resize")
+	}
+	tm.Scroll(100)
+	if v := view(); v[0] != "0123456789abcdefghij-tail" {
+		t.Fatalf("joined: %q", v)
+	}
+}

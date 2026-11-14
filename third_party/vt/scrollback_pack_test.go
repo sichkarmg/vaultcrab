@@ -19,7 +19,7 @@ func TestPackRoundTrip(t *testing.T) {
 		{Content: " ", Width: 1},
 		uv.EmptyCell, uv.EmptyCell,
 	}
-	p := pack(line)
+	p := pack(line, false)
 	got := p.unpack()
 	if len(got) != 5 { // " " with no style equals EmptyCell and is trimmed too
 		t.Fatalf("trailing blanks not trimmed: %d", len(got))
@@ -29,7 +29,7 @@ func TestPackRoundTrip(t *testing.T) {
 			t.Errorf("cell %d: got %+v want %+v", i, got[i], line[i])
 		}
 	}
-	ascii := pack(uv.Line{{Content: "x", Width: 1}, {Content: "y", Width: 1}})
+	ascii := pack(uv.Line{{Content: "x", Width: 1}, {Content: "y", Width: 1}}, false)
 	if ascii.cells != nil || ascii.text != "xy" {
 		t.Errorf("ascii fast path not used: %+v", ascii)
 	}

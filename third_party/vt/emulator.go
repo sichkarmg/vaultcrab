@@ -228,6 +228,19 @@ func (e *Emulator) CursorStyle() (style CursorStyle, blink bool) {
 
 // Resize resizes the terminal.
 func (e *Emulator) Resize(width int, height int) {
+	// vaultcrab patch: the main screen is reflowed (reflow.go), also while
+	// the alternate screen is shown.
+	if e.scr == &e.scrs[0] {
+		e.atPhantom = e.scrs[0].reflow(width, height, e.atPhantom)
+		e.scrs[1].Resize(width, height)
+		e.tabstops = uv.DefaultTabStops(width)
+		if e.isModeSet(ansi.ModeInBandResize) {
+			_, _ = io.WriteString(e.pw, ansi.InBandResize(e.Height(), e.Width(), 0, 0))
+		}
+		return
+	}
+	e.scrs[0].reflow(width, height, false)
+
 	x, y := e.scr.CursorPosition()
 	if e.atPhantom {
 		if x < width-1 {
@@ -249,7 +262,6 @@ func (e *Emulator) Resize(width int, height int) {
 		x = width - 1
 	}
 
-	e.scrs[0].Resize(width, height)
 	e.scrs[1].Resize(width, height)
 	e.tabstops = uv.DefaultTabStops(width)
 

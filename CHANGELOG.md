@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+- The terminal of a session rewraps its output on a resize instead of cutting it: a narrower
+  window wraps the long lines onto the next ones, a wider one joins them again; the scrollback is
+  rewrapped too (when it is next shown). A lower window moves the top lines to the scrollback instead
+  of dropping the bottom ones, and a taller one brings them back. Full-screen programs on the
+  alternate screen (`mc`, `vim`) redraw themselves as before.
+
+### Fixed
+- A wide character (CJK, emoji) that does not fit at the end of a line goes to the next line whole
+  instead of being lost.
+
 ## [0.8.0] - 2026-11-14
 
 ### Added

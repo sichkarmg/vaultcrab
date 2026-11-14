@@ -19,13 +19,17 @@ type Scrollback struct {
 	n        int // number of lines
 	maxLines int
 	total    int // lines ever pushed (monotonic; for anchoring scrolled views)
+	// want: the width the lines are rewrapped to before they are read
+	// (0 = none); a resize only sets it (vaultcrab patch: reflow.go).
+	want int
 }
 
 type packedLine struct {
-	text  string   // cell contents concatenated
-	cells []uint16 // per cell: content byte length<<2 | width; nil when every cell is 1 byte, width 1
-	ncell int
-	runs  []styleRun
+	wrapped bool     // continues on the next line (vaultcrab patch: reflow)
+	text    string   // cell contents concatenated
+	cells   []uint16 // per cell: content byte length<<2 | width; nil when every cell is 1 byte, width 1
+	ncell   int
+	runs    []styleRun
 }
 
 type styleRun struct {
@@ -42,17 +46,20 @@ func NewScrollback(maxLines int) *Scrollback {
 	return &Scrollback{maxLines: maxLines}
 }
 
-func pack(line uv.Line) packedLine {
+func pack(line uv.Line, wrapped bool) packedLine {
 	// Trim trailing empty cells. This helps with wrapping and window resizing.
-	last := -1
-	for i := len(line) - 1; i >= 0; i-- {
-		if !blank(&line[i]) {
-			last = i
-			break
+	// A wrapped line keeps them: they are part of the text that continues.
+	if !wrapped {
+		last := -1
+		for i := len(line) - 1; i >= 0; i-- {
+			if !blank(&line[i]) {
+				last = i
+				break
+			}
 		}
+		line = line[:last+1]
 	}
-	line = line[:last+1]
-	p := packedLine{ncell: len(line)}
+	p := packedLine{ncell: len(line), wrapped: wrapped}
 	if len(line) == 0 {
 		return p
 	}
@@ -125,11 +132,20 @@ func (p *packedLine) unpack() uv.Line {
 
 // Push adds a line to the scrollback buffer.
 // If the buffer is full, the oldest line is removed.
-func (s *Scrollback) Push(line uv.Line) {
+func (s *Scrollback) Push(line uv.Line) { s.PushWrapped(line, false) }
+
+// PushWrapped adds a line that continues on the next one if wrapped.
+func (s *Scrollback) PushWrapped(line uv.Line, wrapped bool) {
 	if s == nil || s.maxLines <= 0 {
 		return
 	}
-	p := pack(line)
+	s.pushPacked(pack(line, wrapped))
+}
+
+func (s *Scrollback) pushPacked(p packedLine) {
+	if s == nil || s.maxLines <= 0 {
+		return
+	}
 	s.total++
 	if s.n < s.maxLines {
 		if s.n == len(s.ring) {
@@ -151,6 +167,28 @@ func (s *Scrollback) grow() {
 		r[i] = s.ring[(s.head+i)%len(s.ring)]
 	}
 	s.ring, s.head = r, 0
+}
+
+// Wrapped reports that line index (0 = oldest) continues on the next line.
+func (s *Scrollback) Wrapped(index int) bool {
+	s.settle()
+	return s.wrappedAt(index)
+}
+
+func (s *Scrollback) wrappedAt(index int) bool {
+	if s == nil || index < 0 || index >= s.n {
+		return false
+	}
+	return s.ring[(s.head+index)%len(s.ring)].wrapped
+}
+
+// settle rewraps the lines to the width of the last resize, if pending.
+func (s *Scrollback) settle() {
+	if s != nil && s.want > 0 {
+		w := s.want
+		s.want = 0
+		s.rewrap(w)
+	}
 }
 
 // PushN adds n lines from the buffer starting at line y to the scrollback.
@@ -179,6 +217,7 @@ func (s *Scrollback) Len() int {
 	if s == nil {
 		return 0
 	}
+	s.settle()
 	return s.n
 }
 
@@ -208,6 +247,7 @@ func (s *Scrollback) SetMaxLines(maxLines int) {
 // Index 0 is the oldest line. Returns nil if index is out of bounds.
 // The returned line is a fresh copy.
 func (s *Scrollback) Line(index int) uv.Line {
+	s.settle()
 	if s == nil || index < 0 || index >= s.n {
 		return nil
 	}
@@ -219,6 +259,7 @@ func (s *Scrollback) Lines() []uv.Line {
 	if s == nil {
 		return nil
 	}
+	s.settle()
 	out := make([]uv.Line, s.n)
 	for i := range out {
 		out[i] = s.Line(i)
@@ -231,7 +272,7 @@ func (s *Scrollback) Clear() {
 	if s == nil {
 		return
 	}
-	s.ring, s.head, s.n = nil, 0, 0
+	s.ring, s.head, s.n, s.want = nil, 0, 0, 0
 }
 
 // CellAt returns the cell at the given position in the scrollback buffer.

@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- Sessions through a jump host stay out of the tab bar: the `↪N` button by the settings (colored by
+  the worst state) opens a menu of them, like `⇄N` for the tunnels; a click shows one, `[close]`
+  closes it. The active one stays in the bar while it is active. `ui.jump_tabs_menu` (Settings →
+  Appearance → Jump sessions in a menu), on by default.
+
 ### Changed
 - A group of tabs no longer opens and folds: the lead tab is shown in full with its number first,
   the other tabs of the host by state and number after it (`● 4:web-01 ✕ ●5 ✗6`; `‹5 ‹6` in the

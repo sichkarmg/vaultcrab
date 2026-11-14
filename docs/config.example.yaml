@@ -35,6 +35,8 @@ ui:
                            # after a confirmation); of the other tabs of a group only the icon
   group_tabs: true         # the tabs of one host are one group "● 4:host ●5 ●6": the lead tab in full,
                            # the others by state and number; a click on one makes it the lead
+  jump_tabs_menu: true     # sessions through a jump host stay out of the tab bar (the active one
+                           # excepted): the ↪N button by the settings opens a menu of them
   accent: cyan             # cyan | blue | green | magenta | yellow | red (keys, focused borders, folders)
   selection_color: reverse # selection and active items (list cursor, active tab, filter, status bar,
                            # buttons): reverse | cyan | blue | green |

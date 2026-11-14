@@ -56,12 +56,26 @@ func TestLocalSizeAndInput(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	time.Sleep(200 * time.Millisecond)
+	// resize only after the first size was printed (a slow runner may
+	// start the shell late)
+	var first strings.Builder
+	buf := make([]byte, 256)
+	deadline := time.Now().Add(5 * time.Second)
+	for !strings.Contains(first.String(), "23 90") {
+		if time.Now().After(deadline) {
+			t.Fatalf("first size: %q", first.String())
+		}
+		n, err := c.Read(buf)
+		first.Write(buf[:n])
+		if err != nil {
+			t.Fatalf("read: %v (%q)", err, first.String())
+		}
+	}
 	if err := c.Resize(100, 30); err != nil {
 		t.Fatal(err)
 	}
 	io.WriteString(c, "abc\r")
-	out := readAll(t, c)
+	out := first.String() + readAll(t, c)
 	if !strings.Contains(out, "23 90") || !strings.Contains(out, "30 100") || !strings.Contains(out, "got-abc") {
 		t.Errorf("output %q", out)
 	}

@@ -23,3 +23,4 @@ Fork of `github.com/charmbracelet/x/vt@v0.1.0` (MIT, see LICENSE), used via `rep
    costs only the screen (≈3 ms with 10k lines of history instead of ≈350 ms). The alternate screen
    is not reflowed. A wide character that does not fit at the end of a line wraps whole (as in
    xterm) instead of being written past the margin.
+   `Emulator.LineWrapped` exposes the mark of a screen line (selection copies a wrapped line as one).

@@ -92,6 +92,17 @@ func (t *Terminal) lineCells(line int) func(x int) *uv.Cell {
 	}
 }
 
+// lineWrapped reports that an absolute line continues on the next one (it
+// wrapped at the right margin); called with mu held.
+func (t *Terminal) lineWrapped(line int) bool {
+	sb := t.emu.Scrollback()
+	total := sb.Total()
+	if line < total {
+		return sb.Wrapped(line - (total - sb.Len()))
+	}
+	return t.emu.LineWrapped(line - total)
+}
+
 // SetSelection selects from a to b (inclusive, in either order).
 func (t *Terminal) SetSelection(a, b Pos) {
 	t.mu.Lock()
@@ -128,7 +139,9 @@ func (t *Terminal) HasSelection() bool {
 }
 
 // SelectedText returns the selected text: trailing blanks of every line are
-// removed and lines are joined with "\n".
+// removed and lines are joined with "\n"; a line that wrapped at the right
+// margin is joined to the next one as it is (one line of text stays one
+// line on the clipboard).
 func (t *Terminal) SelectedText() string {
 	t.mu.Lock()
 	defer t.mu.Unlock()
@@ -136,7 +149,7 @@ func (t *Terminal) SelectedText() string {
 		return ""
 	}
 	a, b := t.sel.ordered()
-	var out []string
+	var out strings.Builder
 	for line := a.Line; line <= b.Line; line++ {
 		cell := t.lineCells(line)
 		if cell == nil {
@@ -163,9 +176,16 @@ func (t *Terminal) SelectedText() string {
 				sb.WriteString(c.Content)
 			}
 		}
-		out = append(out, strings.TrimRight(sb.String(), " "))
+		if line < b.Line && t.lineWrapped(line) {
+			out.WriteString(sb.String())
+			continue
+		}
+		out.WriteString(strings.TrimRight(sb.String(), " "))
+		if line < b.Line {
+			out.WriteByte('\n')
+		}
 	}
-	return strings.Join(out, "\n")
+	return out.String()
 }
 
 // WordAt returns the bounds of the word under p (non-blank characters
@@ -198,9 +218,17 @@ func (t *Terminal) WordAt(p Pos) (Pos, Pos) {
 	return Pos{p.Line, a}, Pos{p.Line, b}
 }
 
-// LineBounds returns the whole line of p (for triple-click selection).
+// LineBounds returns the whole line of p (for triple-click selection),
+// with the lines it wrapped from and onto.
 func (t *Terminal) LineBounds(p Pos) (Pos, Pos) {
 	t.mu.Lock()
 	defer t.mu.Unlock()
-	return Pos{p.Line, 0}, Pos{p.Line, t.w - 1}
+	a, b := p.Line, p.Line
+	for i := 0; i < 1000 && t.lineCells(a-1) != nil && t.lineWrapped(a-1); i++ {
+		a--
+	}
+	for i := 0; i < 1000 && t.lineWrapped(b) && t.lineCells(b+1) != nil; i++ {
+		b++
+	}
+	return Pos{a, 0}, Pos{b, t.w - 1}
 }

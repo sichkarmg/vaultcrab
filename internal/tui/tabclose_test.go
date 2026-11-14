@@ -90,48 +90,43 @@ func TestTabStatusClose(t *testing.T) {
 	}
 }
 
-// The tabs of one host are one entry "×n ▸"; a click opens the group (a
-// header and its tabs), a click on the header closes it; the numbers and
-// keys still address every tab.
+// The tabs of one host are one group: the lead tab in full, the others by
+// state and number after it; a click on one makes it the lead (and active),
+// the lead it replaces goes back among the others. Keys still address every
+// tab.
 func TestTabGroups(t *testing.T) {
 	m, _ := newTestModel(t, false)
 	a := m.opt.Appearance
 	a.GroupTabs = true
 	m.applyAppearance(a)
 	openTabs(t, m, 3)
+	waitAllTabs(t, m, core.SessionDisconnected)
 	keys(m, "t") // a local shell: another host
 	if len(m.tabs) != 4 {
 		t.Fatalf("tabs %d", len(m.tabs))
 	}
 	m.setActive(2)
 	items := m.tabItems()
-	if len(items) != 3 || items[1].members == nil || len(items[1].members) != 3 || items[1].tab != 2 {
+	if len(items) != 5 || items[1].tab != 2 || items[2].tab != 1 || items[3].tab != 3 || items[1].group == "" {
 		t.Fatalf("items %+v", items)
 	}
 	bar := ansi.Strip(m.tabBar())
-	if !strings.Contains(bar, "2:alpha ×3 ▸") || strings.Contains(bar, "1:alpha") || !strings.Contains(bar, "4:local") {
-		t.Fatalf("collapsed: %q", bar)
+	if !strings.Contains(bar, "2:alpha") || !strings.Contains(bar, " ✗1 ✗3 │") || strings.Contains(bar, "1:alpha") || !strings.Contains(bar, "4:local") {
+		t.Fatalf("group: %q", bar)
 	}
-	clickItem(m, 1, 6) // opens
+	clickItem(m, 3, 1) // the number of tab 3: the new lead
 	bar = ansi.Strip(m.tabBar())
-	// the name once, the tabs by state and number
-	if !strings.Contains(bar, "▾ alpha ✗1 ✗2") || !strings.Contains(bar, "✗3 │") || strings.Contains(bar, "1:alpha") || strings.Contains(bar, "×3") {
-		t.Fatalf("open: %q", bar)
+	if m.active != 3 || !strings.Contains(bar, "3:alpha") || !strings.Contains(bar, " ✗1 ✗2 │") {
+		t.Fatalf("lead: active %d %q", m.active, bar)
 	}
-	items = m.tabItems()
-	clickItem(m, 4, 1) // tab 3
-	if m.active != 3 {
-		t.Fatalf("active %d", m.active)
-	}
-	clickItem(m, 1, 2) // the header closes the group
-	bar = ansi.Strip(m.tabBar())
-	if !strings.Contains(bar, "3:alpha ×3 ▸") {
-		t.Fatalf("closed again: %q", bar)
-	}
-	// keys still go through every tab
+	// another tab active: the group keeps its last lead
 	keys(m, "ctrl+b", "n")
-	if m.active != 4 {
-		t.Fatalf("next: %d", m.active)
+	if m.active != 4 || !strings.Contains(ansi.Strip(m.tabBar()), "3:alpha") {
+		t.Fatalf("next: %d %q", m.active, ansi.Strip(m.tabBar()))
+	}
+	clickItem(m, 2, 1) // tab 1 (the first chip)
+	if m.active != 1 {
+		t.Fatalf("active %d", m.active)
 	}
 	// off: every tab on its own
 	a.GroupTabs = false
@@ -141,39 +136,42 @@ func TestTabGroups(t *testing.T) {
 	}
 }
 
-// With ui.tab_status_close in an open group only the state icon of a tab
-// closes it; a click on the number shows the tab (in the color mode, where
-// the number is the state, it always shows the tab).
+// With ui.tab_status_close the number of the lead closes it (the active one
+// after a confirmation), also in the color mode; a click on a chip shows
+// that tab, only its state icon closes it.
 func TestTabGroupsStatusClose(t *testing.T) {
 	m, _ := newTestModel(t, false)
 	a := m.opt.Appearance
 	a.GroupTabs, a.TabStatusClose = true, true
 	m.applyAppearance(a)
-	openTabs(t, m, 3)
+	openTabs(t, m, 4)
 	waitAllTabs(t, m, core.SessionDisconnected)
 	m.setActive(1)
-	clickItem(m, 1, 6) // opens the group
-	if !m.openGroups["alpha"] && len(m.tabItems()) < 4 {
-		t.Fatalf("group not open: %q", ansi.Strip(m.tabBar()))
-	}
-	clickItem(m, 3, 2) // the number of tab 2
-	if m.active != 2 || len(m.tabs) != 3 || m.modal != nil {
+	clickItem(m, 2, 1) // the number of chip tab 2
+	if m.active != 2 || len(m.tabs) != 4 || m.modal != nil {
 		t.Fatalf("number: active %d tabs %d modal %T", m.active, len(m.tabs), m.modal)
 	}
-	clickItem(m, 4, 1) // the icon of the inactive tab 3 closes it
-	if len(m.tabs) != 2 {
+	clickItem(m, 4, 0) // the icon of chip tab 4 closes it
+	if len(m.tabs) != 3 {
 		t.Fatalf("icon: tabs %d", len(m.tabs))
 	}
 	a.TabStatus = "color"
 	m.applyAppearance(a)
-	m.setActive(1)
 	bar := ansi.Strip(m.tabBar())
-	if !strings.Contains(bar, "▾ alpha 1") {
+	if !strings.Contains(bar, "2:alpha") || !strings.Contains(bar, "‹1 ‹3 │") {
 		t.Fatalf("color: %q", bar)
 	}
-	clickItem(m, 3, 1) // the number of tab 2
-	if m.active != 2 || len(m.tabs) != 2 || m.modal != nil {
-		t.Fatalf("color: active %d tabs %d modal %T", m.active, len(m.tabs), m.modal)
+	clickItem(m, 3, 1) // chip tab 3: shown, not closed
+	if m.active != 3 || len(m.tabs) != 3 || m.modal != nil {
+		t.Fatalf("color chip: active %d tabs %d modal %T", m.active, len(m.tabs), m.modal)
+	}
+	clickItem(m, 1, 1) // the number of the active lead: asks
+	if c, ok := m.modal.(*confirmModal); !ok || !strings.Contains(c.text, "Close the active tab") {
+		t.Fatalf("no confirmation: %T", m.modal)
+	}
+	keys(m, "y")
+	if len(m.tabs) != 2 {
+		t.Fatalf("lead close: tabs %d", len(m.tabs))
 	}
 }
 

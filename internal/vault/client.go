@@ -49,6 +49,11 @@ func (s StatusInfo) Account() string {
 	return s.UserEmail + "@" + s.ServerURL
 }
 
+// ErrWrongPassword is bw's answer to a master password it does not accept
+// ("Invalid master password."), as opposed to any other failure of an
+// unlock (bw serve gone, slow, not logged in).
+var ErrWrongPassword = errors.New("invalid master password")
+
 // ErrUnavailable means bw serve could not be reached.
 var ErrUnavailable = errors.New("bw serve unavailable")
 
@@ -213,6 +218,9 @@ func (c *Client) doOnce(ctx context.Context, method, path string, body []byte) (
 	if !env.Success {
 		secret.Zero(raw)
 		msg := env.Message
+		if strings.Contains(strings.ToLower(msg), "invalid master password") {
+			return nil, fmt.Errorf("bw %s: %s: %w", path, msg, ErrWrongPassword)
+		}
 		if strings.Contains(strings.ToLower(msg), "locked") {
 			return nil, ErrLocked
 		}

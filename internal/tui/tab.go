@@ -489,18 +489,13 @@ func (t *tab) closeButtonAt(m *Model, id core.PaneID, x, y int) bool {
 
 // clickTab acts on a left click at x (relative) in a tab bar entry: the
 // close button closes the tab; the state icon or number closes it when
-// ui.tab_status_close is on (the active tab after a confirmation); a group
-// opens or closes; otherwise the tab is shown.
+// ui.tab_status_close is on (the active tab after a confirmation);
+// otherwise the tab is shown (a tab of a group becomes its lead).
 func (m *Model) clickTab(it barItem, x int) {
 	in := func(r [2]int) bool { return r != [2]int{} && x >= r[0] && x < r[1] }
 	switch {
 	case it.tab == 0:
 		m.switchTab(0)
-	case it.header || it.members != nil && !in(it.close):
-		if m.openGroups == nil {
-			m.openGroups = map[string]bool{}
-		}
-		m.openGroups[it.group] = !m.openGroups[it.group]
 	case in(it.close):
 		m.confirmCloseTab(m.tabs[it.tab-1])
 	case in(it.status) && m.opt.Appearance.TabStatusClose:
@@ -610,7 +605,7 @@ func (m *Model) mouse(msg tea.MouseMsg) tea.Cmd {
 			}
 		}
 		if msg.Action == tea.MouseActionPress && msg.Button == tea.MouseButtonMiddle {
-			if it, _, ok := m.itemAt(msg.X); ok && it.tab > 0 && !it.header && it.members == nil {
+			if it, _, ok := m.itemAt(msg.X); ok && it.tab > 0 {
 				m.confirmCloseTab(m.tabs[it.tab-1])
 			}
 		}

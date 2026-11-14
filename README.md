@@ -371,7 +371,8 @@ KWallet, KeePassXC); the config only gets `unlock.pin: true`. The unlock dialog 
   passwords and the PIN are deleted and the master password is needed.
 - The master password is asked again after a restart of the computer (`master_after_reboot`) and
   every `master_every_days` days (default 14). A logout of bw, another account, or a password bw no
-  longer accepts (a changed master password) deletes the stored copy.
+  longer accepts (a changed master password: "Invalid master password") deletes the stored copy; any
+  other failure of bw (gone or slow after a long sleep) keeps it, so the next try works.
 - `p` on the Security page changes the PIN; `F` twice or **`vaultcrab forget`** deletes the PIN and
   every stored master password (and the Touch ID data).
 - Secrets never go into argv, the environment, the log or the config; on Linux and macOS Vaultcrab
@@ -443,11 +444,12 @@ closes a broken or finished pane (`Enter` reconnects it).
 
 **Tab bar** (Settings → Appearance): `✕` on the active tab closes it, connected or not
 (`ui.tab_close_button`, on); a click on the state icon or number of a tab closes it, the active tab
-after a confirmation (`ui.tab_status_close`, off); the tabs of one host are grouped into one entry
-`N:host ×3 ▸` — a click opens the group (the name once, then each tab by its state and number:
-`▾ host ●4 ●5 ✗6`; a click on a number switches to that tab, also with `ui.tab_status_close`,
-where only the state icon of a grouped tab closes it), a click on the
-header folds it again (`ui.group_tabs`, on). Tab numbers and keys still address every tab.
+after a confirmation (`ui.tab_status_close`, off); the tabs of one host are one group
+(`ui.group_tabs`, on): the lead tab in full, its number first, then the others by state and number,
+`● 4:web-01 ●5 ●6` (in the color mode `4:web-01 ‹5 ‹6`). A click on one of them makes it the active
+lead, the previous lead goes back among the others; the group remembers its lead. The lead closes
+like any tab (`✕`, or its number with `ui.tab_status_close`); the others close by their state icon
+with `ui.tab_status_close`, the middle button or the keys. Tab numbers and keys still address every tab.
 
 ## External clients (VNC, SMB, SFTP, …)
 

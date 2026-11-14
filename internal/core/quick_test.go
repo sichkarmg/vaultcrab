@@ -5,6 +5,7 @@ package core
 import (
 	"context"
 	"errors"
+	"fmt"
 	"path/filepath"
 	"strings"
 	"sync"
@@ -138,6 +139,40 @@ func TestPINLimit(t *testing.T) {
 	if q := p.s.QuickUnlock(""); q.PIN || !strings.Contains(q.Why, "no PIN") {
 		t.Fatalf("quick state %+v", q)
 	}
+}
+
+// Any other failure of bw (gone, slow, a time-out after a long sleep) keeps
+// the stored master password: the next try with the PIN or Touch ID works.
+func TestStoredPasswordKeptOnFailure(t *testing.T) {
+	p, _ := newTouchTest(t)
+	p.s.EnableTouchID(p.ctx, "", []byte("master"))
+	p.s.SetPIN(p.ctx, "", []byte("482913"), []byte("master"))
+	p.lock(t)
+	for _, fail := range []error{
+		fmt.Errorf("%w: read: connection reset", vault.ErrUnavailable),
+		errors.New("bw /unlock: Internal Server Error"),
+		errors.New("bw POST /unlock: HTTP 500: invalid response"),
+	} {
+		p.src.mu.Lock()
+		p.src.unlockErr = fail
+		p.src.mu.Unlock()
+		if err := p.s.UnlockWithPIN(p.ctx, "", []byte("482913")); err == nil || errors.Is(err, errStoredPWChanged) || !strings.Contains(err.Error(), "kept") {
+			t.Fatalf("PIN, %v: %v", fail, err)
+		}
+		if err := p.s.UnlockWithTouchID(p.ctx, ""); err == nil || errors.Is(err, errStoredPWChanged) {
+			t.Fatalf("Touch ID, %v: %v", fail, err)
+		}
+		if q := p.s.QuickUnlock(""); !q.PIN || !q.TouchID {
+			t.Fatalf("%v: stored password dropped: %+v", fail, q)
+		}
+	}
+	p.src.mu.Lock()
+	p.src.unlockErr = nil
+	p.src.mu.Unlock()
+	if err := p.s.UnlockWithTouchID(p.ctx, ""); err != nil {
+		t.Fatal(err)
+	}
+	waitState(t, p.s, Online)
 }
 
 // A changed master password (bw refuses the stored one) or a logout

@@ -32,9 +32,9 @@ ui:
                            # itself: green connected, yellow connecting, red broken, blue new output)
   tab_close_button: true   # ✕ on the active tab closes it (connected or not; asks if a session is live)
   tab_status_close: false  # a click on the state icon or number of a tab closes it (the active tab
-                           # after a confirmation); in an open group only the icon, the number shows it
-  group_tabs: true         # the tabs of one host are one entry "N:host ×3 ▸"; a click opens the group:
-                           # "▾ host ●4 ●5 ✗6" (the name once, the tabs by state and number)
+                           # after a confirmation); of the other tabs of a group only the icon
+  group_tabs: true         # the tabs of one host are one group "● 4:host ●5 ●6": the lead tab in full,
+                           # the others by state and number; a click on one makes it the lead
   accent: cyan             # cyan | blue | green | magenta | yellow | red (keys, focused borders, folders)
   selection_color: reverse # selection and active items (list cursor, active tab, filter, status bar,
                            # buttons): reverse | cyan | blue | green |

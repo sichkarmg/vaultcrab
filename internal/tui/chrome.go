@@ -46,17 +46,15 @@ func (m *Model) sessionIcon(s *core.Session) string {
 }
 
 // barItem is an entry of the tab bar: the host list, a session tab, or a
-// group of the tabs of one host (collapsed: one entry; open: a header
-// followed by its tabs).
+// tab of a group of the tabs of one host (the lead tab in full, the others
+// as chips after it).
 type barItem struct {
-	label   string
-	tab     int    // the tab (0 = host list); of a collapsed group, the tab it shows
-	group   string // the host of a group entry ("" = a plain tab)
-	header  bool   // the header of an open group
-	members []int  // the tabs of a group
-	status  [2]int // the x range (relative) of the state icon and number
-	close   [2]int // the x range (relative) of the close button ([0 0] = none)
-	joined  bool   // no separator after it (the header and the tabs of an open group)
+	label  string
+	tab    int    // the tab (0 = host list)
+	group  string // the host of a grouped tab ("" = a plain tab)
+	status [2]int // the x range (relative) of the state icon and number
+	close  [2]int // the x range (relative) of the close button ([0 0] = none)
+	joined bool   // no separator after it (inside a group)
 }
 
 // groupKey groups tabs: the host of the focused pane.
@@ -100,29 +98,34 @@ func (m *Model) tabItems() []barItem {
 				members = append(members, j+1)
 			}
 		}
-		if m.openGroups[k] {
-			// the name once, then each tab of the group by its state and
-			// number: ▾ web-01  ●4  ●5  ✗6
-			title := ansi.Truncate(sessionTitle(t.focused(), m.g), m.tabWidth(), m.g.ell)
-			h := stTabBar.Render(fmt.Sprintf(" %s %s", m.ascii("▾"), title))
-			items = append(items, barItem{label: h, tab: members[0], group: k, header: true, members: members, joined: true})
-			for i, n := range members {
-				it := m.tabChip(n)
-				it.joined = i < len(members)-1
-				if !it.joined {
-					it.label += " "
-				}
-				items = append(items, it)
-			}
-			continue
-		}
-		shown := members[0]
+		// the lead tab in full (its number first: a click on it acts as on
+		// any tab), then the other tabs of the group by state and number:
+		// 4:web-01 ●5 ●6 — a click on one makes it the active lead
+		lead := members[0]
 		if slices.Contains(members, m.active) {
-			shown = m.active
+			lead = m.active
+		} else if l := m.groupLead[k]; l != nil {
+			for _, n := range members {
+				if m.tabs[n-1] == l {
+					lead = n
+				}
+			}
 		}
-		it := m.tabItem(shown, fmt.Sprintf(" ×%d %s", len(members), m.ascii("▸")))
-		it.group, it.members = k, members
+		it := m.tabItem(lead, "")
+		it.group, it.joined = k, true
 		items = append(items, it)
+		var rest []int
+		for _, n := range members {
+			if n != lead {
+				rest = append(rest, n)
+			}
+		}
+		for i, n := range rest {
+			c := m.tabChip(n)
+			c.group = k
+			c.joined = i < len(rest)-1
+			items = append(items, c)
+		}
 	}
 	return items
 }
@@ -170,44 +173,26 @@ func (m *Model) tabItem(n int, more string) barItem {
 	return it
 }
 
-// tabChip is a tab of an open group: its state and number only (the name
-// is in the group header); the active one highlighted, with its ✕. With
-// ui.tab_status_close only the state icon closes the tab: the number
-// always shows it, so the group stays usable with the mouse.
+// tabChip is a tab of a group after its lead: its state and number only
+// (the name is in the lead), e.g. ●5, or ‹5 in the number color in the
+// color mode. A click shows it (it becomes the lead); with
+// ui.tab_status_close a click on the state icon closes it.
 func (m *Model) tabChip(n int) barItem {
 	t := m.tabs[n-1]
-	active := n == m.active
 	base := stTabInactive
-	if active {
-		base = stTabActive
-	}
 	num := strconv.Itoa(n)
 	it := barItem{tab: n}
-	var head string
 	if m.opt.Appearance.TabStatus == "color" {
 		ns := base
-		if c, ok := t.stateColor(active); ok {
+		if c, ok := t.stateColor(false); ok {
 			ns = base.Foreground(c)
 		}
-		head = base.Render(" ") + ns.Render(num)
-		// the number is all there is: it shows the tab, never closes it
-	} else {
-		icon := t.icon(m, active)
-		head = " " + icon + base.Render(num)
-		// ui.tab_status_close: only the icon closes, the number shows the tab
-		it.status = [2]int{1, 1 + ansi.StringWidth(icon)}
+		it.label = base.Render(m.g.more) + ns.Render(num) + base.Render(" ")
+		return it
 	}
-	label := head
-	if active {
-		label += base.Render(" ")
-		if m.opt.Appearance.TabCloseButton {
-			x := ansi.StringWidth(label)
-			btn := m.ascii("✕")
-			label += stQuit.Render(btn)
-			it.close = [2]int{x, x + ansi.StringWidth(btn) + 1}
-		}
-	}
-	it.label = label
+	icon := t.icon(m, false)
+	it.label = icon + base.Render(num+" ")
+	it.status = [2]int{0, ansi.StringWidth(icon)}
 	return it
 }
 
@@ -292,7 +277,7 @@ func (m *Model) tabSpans() (labels []string, starts []int, first int) {
 	activeItem := 0
 	for i, it := range items {
 		labels[i] = it.label
-		if it.tab == m.active && !it.header && (m.active == 0) == (i == 0) {
+		if it.tab == m.active && (m.active == 0) == (i == 0) {
 			activeItem = i
 		}
 	}

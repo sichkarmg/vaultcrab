@@ -63,6 +63,9 @@ the vault only at the moment of connecting and never written to disk.
   by dragging borders. Dropped sessions are marked `✗` (or, with `ui.tab_status: color`, by the
   colour of the tab number: green connected, yellow connecting, red broken); `Enter` reconnects and
   keeps the scrollback (memory only). With many tabs the `0:Hosts` tab always stays visible.
+  Resizing the window rewraps the output (screen and scrollback) instead of cutting it: narrower,
+  long lines continue on the next line; wider, they join again. Full-screen programs (`mc`, `vim`,
+  `htop`) redraw themselves at the new size.
 - **VNC, SMB, FTP, SFTP, RDP** through external clients, auto-detected per OS. VNC signs in without
   a password prompt: Vaultcrab authenticates to the server itself and lets the client in through a
   one-shot local proxy (optionally through an SSH jump host).

@@ -17,6 +17,9 @@ type Screen struct {
 	scroll uv.Rectangle
 	// scrollback is the scrollback buffer for lines scrolled off the top.
 	scrollback *Scrollback
+	// wrap[y] reports that line y continues on line y+1: the text reached
+	// the right margin and wrapped (vaultcrab patch: reflow on resize).
+	wrap []bool
 }
 
 // NewScreen creates a new screen.
@@ -24,6 +27,7 @@ func NewScreen(w, h int) *Screen {
 	s := Screen{
 		buf:        uv.NewRenderBuffer(w, h),
 		scrollback: NewScrollback(DefaultScrollbackSize),
+		wrap:       make([]bool, h),
 	}
 	s.scroll = s.buf.Bounds()
 	return &s
@@ -34,6 +38,7 @@ func NewScreen(w, h int) *Screen {
 // cursor styles, and resets the scroll region.
 func (s *Screen) Reset() {
 	s.buf.Clear()
+	clear(s.wrap)
 	s.cur = Cursor{}
 	s.saved = Cursor{}
 	s.scroll = s.buf.Bounds()
@@ -79,6 +84,39 @@ func (s *Screen) Resize(width int, height int) {
 		s.buf.Touched = nil
 	}
 	s.scroll = s.buf.Bounds()
+	s.resizeWrap(height)
+}
+
+// resizeWrap keeps the wrap flags of the lines that stay; a changed width
+// without a reflow ends every wrap (the lines were cut or padded).
+func (s *Screen) resizeWrap(height int) {
+	if len(s.wrap) > height {
+		s.wrap = s.wrap[:height]
+	}
+	for len(s.wrap) < height {
+		s.wrap = append(s.wrap, false)
+	}
+}
+
+// Wrapped reports that line y continues on the next line.
+func (s *Screen) Wrapped(y int) bool { return y >= 0 && y < len(s.wrap) && s.wrap[y] }
+
+// setWrapped marks line y as continued on the next line.
+func (s *Screen) setWrapped(y int, on bool) {
+	if y >= 0 && y < len(s.wrap) {
+		s.wrap[y] = on
+	}
+}
+
+// unwrapArea ends the wraps of the lines of area that reach the right
+// edge (erasing the end of a line ends its wrap, as in xterm).
+func (s *Screen) unwrapArea(area uv.Rectangle) {
+	if area.Max.X < s.buf.Width() {
+		return
+	}
+	for y := max(area.Min.Y, 0); y < area.Max.Y && y < len(s.wrap); y++ {
+		s.wrap[y] = false
+	}
 }
 
 // Width returns the width of the screen.
@@ -100,7 +138,7 @@ func (s *Screen) ClearWithScrollback() {
 		for y := 0; y < s.buf.Height(); y++ {
 			line := s.buf.Line(y)
 			if line != nil && !s.isLineEmpty(line) {
-				s.scrollback.Push(line)
+				s.scrollback.PushWrapped(line, s.Wrapped(y))
 			}
 		}
 	}
@@ -120,6 +158,7 @@ func (s *Screen) isLineEmpty(line uv.Line) bool {
 // ClearArea clears the given area.
 func (s *Screen) ClearArea(area uv.Rectangle) {
 	s.buf.ClearArea(area)
+	s.unwrapArea(area)
 	s.touchArea(area)
 }
 
@@ -131,6 +170,7 @@ func (s *Screen) Fill(c *uv.Cell) {
 // FillArea fills the given area with the given cell.
 func (s *Screen) FillArea(c *uv.Cell, area uv.Rectangle) {
 	s.buf.FillArea(c, area)
+	s.unwrapArea(area)
 	s.touchArea(area)
 }
 
@@ -332,6 +372,7 @@ func (s *Screen) InsertLine(n int) bool {
 	}
 
 	s.buf.InsertLineArea(y, n, s.blankCell(), s.scroll)
+	s.shiftWrap(y, n, true)
 
 	return true
 }
@@ -363,12 +404,48 @@ func (s *Screen) DeleteLine(n int) bool {
 		scroll.Min.X == 0 && scroll.Max.X == s.buf.Width() {
 		// Save lines that will be deleted
 		linesToSave := min(n, scroll.Max.Y-y)
-		s.scrollback.PushN(s.buf, y, linesToSave)
+		for i := range min(linesToSave, s.buf.Height()-y) {
+			if line := s.buf.Line(y + i); line != nil {
+				s.scrollback.PushWrapped(line, s.Wrapped(y+i))
+			}
+		}
 	}
 
 	s.buf.DeleteLineArea(y, n, s.blankCell(), scroll)
+	s.shiftWrap(y, n, false)
 
 	return true
+}
+
+// shiftWrap moves the wrap flags as InsertLine (insert) or DeleteLine move
+// the lines from y within the scroll region: full-width regions move whole
+// lines, the new blank lines are not wrapped; within left/right margins
+// the lines of the region are no longer whole, so their wraps end.
+func (s *Screen) shiftWrap(y, n int, insert bool) {
+	r := s.scroll
+	if r.Min.X != 0 || r.Max.X != s.buf.Width() {
+		for i := y; i < r.Max.Y && i < len(s.wrap); i++ {
+			s.wrap[i] = false
+		}
+		return
+	}
+	end := min(r.Max.Y, len(s.wrap))
+	if y >= end {
+		return
+	}
+	seg := s.wrap[y:end]
+	n = min(n, len(seg))
+	if insert {
+		copy(seg[n:], seg[:len(seg)-n])
+		clear(seg[:n])
+	} else {
+		copy(seg, seg[n:])
+		clear(seg[len(seg)-n:])
+	}
+	// the line above no longer continues into the line that was at y
+	if y > 0 {
+		s.wrap[y-1] = false
+	}
 }
 
 // blankCell returns the cursor blank cell with the background color set to the

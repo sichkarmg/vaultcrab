@@ -85,6 +85,15 @@ func (e *Emulator) handleGrapheme(content string, width int) {
 		// moves cursor down similar to [Terminal.linefeed] except it doesn't
 		// respects [ansi.LNM] mode.
 		// This will reset the phantom state i.e. pending wrap state.
+		// vaultcrab patch: the line continues on the next one (reflow).
+		e.scr.setWrapped(y, true)
+		e.index()
+		_, y = e.scr.CursorPosition()
+		x = 0
+	} else if awm && width > 1 && x > 0 && x+width > e.scr.Width() {
+		// vaultcrab patch: a wide character that does not fit at the end of
+		// the line goes to the next one whole (as in xterm).
+		e.scr.setWrapped(y, true)
 		e.index()
 		_, y = e.scr.CursorPosition()
 		x = 0
@@ -123,8 +132,12 @@ func (e *Emulator) handleGrapheme(content string, width int) {
 	e.scr.SetCell(x, y, &cell)
 
 	// Handle phantom state at the end of the line
-	e.atPhantom = awm && x >= e.scr.Width()-1
-	if !e.atPhantom {
+	// vaultcrab patch: a wide character that ends at the right margin
+	// leaves the cursor at the last column, waiting to wrap.
+	e.atPhantom = awm && x+max(cell.Width, 1) >= e.scr.Width()
+	if e.atPhantom {
+		x = e.scr.Width() - 1
+	} else {
 		x += cell.Width
 	}
 

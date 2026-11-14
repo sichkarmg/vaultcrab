@@ -104,6 +104,7 @@ type Model struct {
 	discardTabs   bool // quit without saving the open tabs
 
 	dlgX, dlgY, dlgW, dlgH int // where the dialog was drawn (mouse)
+	resizeGen              int // counts the window resizes (resizeSettledMsg)
 	dlgClose               int // column of the ✕ in its top border (-1: none)
 
 	programs     *programsPage // the External programs page of the settings (its draft)
@@ -222,6 +223,11 @@ func (m *Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.w, m.h = msg.Width, msg.Height
 		m.resizeSessions()
 		m.restoreWorkspace()
+		return m, m.afterResize()
+	case resizeSettledMsg:
+		if msg.gen == m.resizeGen {
+			return m, tea.ClearScreen
+		}
 		return m, nil
 	case unlockResultMsg, pinResultMsg, touchResultMsg, pinSetMsg, loginDoneMsg, launchResultMsg:
 		return m, m.handleResult(msg)
@@ -678,4 +684,23 @@ func padRight(s string, w int) string {
 		s += strings.Repeat(" ", w-sw)
 	}
 	return s
+}
+
+// resizeSettled: a resize of the window is over when no other followed
+// for this long.
+const resizeSettled = 250 * time.Millisecond
+
+// resizeSettledMsg ends resize number gen, if no other followed.
+type resizeSettledMsg struct{ gen int }
+
+// afterResize clears the screen and paints it again in full, now and once
+// the resize is over. Some terminals (macOS Terminal) rewrap or keep their
+// own cells while the window is being resized, after the frame was drawn;
+// the renderer then rewrites only the lines that changed, and a column of
+// the old content could stay at the right edge. One timer per resize, none
+// while idle.
+func (m *Model) afterResize() tea.Cmd {
+	m.resizeGen++
+	gen := m.resizeGen
+	return tea.Batch(tea.ClearScreen, tea.Tick(resizeSettled, func(time.Time) tea.Msg { return resizeSettledMsg{gen} }))
 }

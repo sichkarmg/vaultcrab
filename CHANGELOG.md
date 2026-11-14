@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.8.0] - 2026-11-14
+
 ### Added
 - Sessions through a jump host stay out of the tab bar: the `↪N` button by the settings (colored by
   the worst state) opens a menu of them, like `⇄N` for the tunnels; a click shows one, `[close]`
@@ -218,7 +220,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   item editing, scripts, widgets, local shell, settings inside the program.
 - On the first start, offer to copy the config directory of the project's former name.
 
-[Unreleased]: https://github.com/sichkarmg/vaultcrab/compare/v0.7.0...HEAD
+[Unreleased]: https://github.com/sichkarmg/vaultcrab/compare/v0.8.0...HEAD
+[0.8.0]: https://github.com/sichkarmg/vaultcrab/compare/v0.7.0...v0.8.0
 [0.7.0]: https://github.com/sichkarmg/vaultcrab/compare/v0.6.0...v0.7.0
 [0.6.0]: https://github.com/sichkarmg/vaultcrab/compare/v0.5.0...v0.6.0
 [0.5.0]: https://github.com/sichkarmg/vaultcrab/compare/v0.4.0...v0.5.0

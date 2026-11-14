@@ -448,6 +448,8 @@ func (s *settingsModal) settings(m *Model) []setting {
 			func(a *core.Appearance, i int) { a.TabStatusClose = i == 0 }},
 		{"Group tabs of a host", []string{"on", "off"}, onOff(a.GroupTabs),
 			func(a *core.Appearance, i int) { a.GroupTabs = i == 0 }},
+		{"Jump sessions in a menu", []string{"on", "off"}, onOff(a.JumpTabsMenu),
+			func(a *core.Appearance, i int) { a.JumpTabsMenu = i == 0 }},
 	}
 }
 

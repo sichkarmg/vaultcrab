@@ -77,12 +77,17 @@ func (m *Model) tabItems() []barItem {
 	items := []barItem{{label: st.Render(hosts), tab: 0}}
 	count := map[string]int{}
 	if m.opt.Appearance.GroupTabs {
-		for _, t := range m.tabs {
-			count[t.groupKey()]++
+		for i, t := range m.tabs {
+			if !m.inJumpMenu(i + 1) {
+				count[t.groupKey()]++
+			}
 		}
 	}
 	seen := map[string]bool{}
 	for i, t := range m.tabs {
+		if m.inJumpMenu(i + 1) {
+			continue
+		}
 		k := t.groupKey()
 		if count[k] < 2 {
 			items = append(items, m.tabItem(i+1, ""))
@@ -94,7 +99,7 @@ func (m *Model) tabItems() []barItem {
 		seen[k] = true
 		var members []int
 		for j, u := range m.tabs {
-			if u.groupKey() == k {
+			if u.groupKey() == k && !m.inJumpMenu(j+1) {
 				members = append(members, j+1)
 			}
 		}
@@ -234,6 +239,9 @@ func (m *Model) logButton() string {
 // buttons at the right end of the tab bar, each after a separator.
 func (m *Model) buttonsWidth() int {
 	w := 2*ansi.StringWidth(m.g.v) + ansi.StringWidth(m.settingsButton()) + ansi.StringWidth(m.quitButton())
+	if jb, _ := m.jumpButton(); jb != "" {
+		w += ansi.StringWidth(m.g.v) + ansi.StringWidth(jb)
+	}
 	if tb, _ := m.tunnelButton(); tb != "" {
 		w += ansi.StringWidth(m.g.v) + ansi.StringWidth(tb)
 	}
@@ -244,11 +252,17 @@ func (m *Model) buttonsWidth() int {
 }
 
 // buttonAt names the tab bar button at column x (x >= tabsWidth):
-// "tunnels", "log", "settings" or "quit"; the separator before a button
+// "jumps", "tunnels", "log", "settings" or "quit"; the separator before a button
 // belongs to it.
 func (m *Model) buttonAt(x int) string {
 	sep := ansi.StringWidth(m.g.v)
 	x0 := m.tabsWidth()
+	if jb, _ := m.jumpButton(); jb != "" {
+		if x < x0+sep+ansi.StringWidth(jb) {
+			return "jumps"
+		}
+		x0 += sep + ansi.StringWidth(jb)
+	}
 	if tb, _ := m.tunnelButton(); tb != "" {
 		if x < x0+sep+ansi.StringWidth(tb) {
 			return "tunnels"
@@ -342,8 +356,11 @@ func (m *Model) tabBar() string {
 	}
 	sep := stTabBar.Render(m.g.v)
 	logBtn := ""
+	if jb, st := m.jumpButton(); jb != "" {
+		logBtn = sep + st.Render(jb)
+	}
 	if tb, st := m.tunnelButton(); tb != "" {
-		logBtn = sep + st.Render(tb)
+		logBtn += sep + st.Render(tb)
 	}
 	if lb := m.logButton(); lb != "" {
 		logBtn += sep + stKey.Render(lb)

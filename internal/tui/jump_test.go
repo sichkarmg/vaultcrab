@@ -629,3 +629,72 @@ func TestJumpPickerDocked(t *testing.T) {
 	}
 	waitConnected(t, m, m.tabs[1].focused())
 }
+
+// Sessions through a jump host stay out of the tab bar but the active one:
+// ↪N by the settings opens their menu; a click shows one, [close] closes it.
+func TestJumpTabsMenu(t *testing.T) {
+	jt := newJumpTest(t, "")
+	m := jt.m
+	a := m.opt.Appearance
+	a.JumpTabsMenu = true
+	m.applyAppearance(a)
+	for _, addr := range []string{"10.20.0.5", "10.20.0.6"} {
+		m.switchTab(0)
+		keys(m, "j", "enter")
+		typeKeys(m, addr)
+		keys(m, "enter")
+	}
+	if len(m.tabs) != 2 || m.active != 2 {
+		t.Fatalf("tabs %d active %d", len(m.tabs), m.active)
+	}
+	bar := ansi.Strip(m.tabBar())
+	if strings.Contains(bar, "1:") || !strings.Contains(bar, "2:") || !strings.Contains(bar, "↪2 │ ⚙") {
+		t.Fatalf("bar: %q", bar)
+	}
+	m.switchTab(0)
+	if bar := ansi.Strip(m.tabBar()); strings.Contains(bar, "1:") || strings.Contains(bar, "2:") {
+		t.Fatalf("hosts: %q", bar)
+	}
+	// a click on ↪2 opens the menu
+	x := m.tabsWidth() + 2
+	if m.buttonAt(x) != "jumps" {
+		t.Fatalf("button at %d: %q", x, m.buttonAt(x))
+	}
+	m.Update(tea.MouseMsg{X: x, Y: m.tabBarY(), Action: tea.MouseActionPress, Button: tea.MouseButtonLeft})
+	j, ok := m.modal.(*jumpTabsModal)
+	if !ok {
+		t.Fatalf("modal %T", m.modal)
+	}
+	v := ansi.Strip(m.View())
+	if !strings.Contains(v, "10.20.0.5") || !strings.Contains(v, "10.20.0.6") || !strings.Contains(v, "[close]") {
+		t.Fatalf("menu:\n%s", v)
+	}
+	// a click on the first session shows it
+	m.Update(tea.MouseMsg{X: m.dlgX + boxPadX + 2, Y: m.dlgY + j.listY, Action: tea.MouseActionPress, Button: tea.MouseButtonLeft})
+	if m.active != 1 || m.modal != nil {
+		t.Fatalf("open: active %d modal %T", m.active, m.modal)
+	}
+	if bar := ansi.Strip(m.tabBar()); !strings.Contains(bar, "1:") || strings.Contains(bar, "2:") {
+		t.Fatalf("shown: %q", bar)
+	}
+	// [close] of the second one asks (it is connected)
+	m.openJumpTabs()
+	j = m.modal.(*jumpTabsModal)
+	m.View()
+	b := j.btns[1][1]
+	m.Update(tea.MouseMsg{X: m.dlgX + boxPadX + b.x0, Y: m.dlgY + j.listY + 1, Action: tea.MouseActionPress, Button: tea.MouseButtonLeft})
+	if _, ok := m.modal.(*confirmModal); !ok {
+		t.Fatalf("close: modal %T", m.modal)
+	}
+	keys(m, "y")
+	if len(m.tabs) != 1 {
+		t.Fatalf("tabs %d", len(m.tabs))
+	}
+	// off: in the bar as before
+	a.JumpTabsMenu = false
+	m.applyAppearance(a)
+	m.switchTab(0)
+	if bar := ansi.Strip(m.tabBar()); !strings.Contains(bar, "1:") || strings.Contains(bar, "↪1 │") {
+		t.Fatalf("off: %q", bar)
+	}
+}

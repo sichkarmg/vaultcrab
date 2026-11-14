@@ -21,7 +21,7 @@ password vault, a built-in SSH client and terminal emulator, tabs and tmux-like 
 mouse support, a local shell, your own scripts and widgets. Passwords and keys are fetched from
 the vault only at the moment of connecting and never written to disk.
 
-![Host list: type filter tabs, folder tree, item card, widget column; sessions through a jump host in the tab bar (two of one host grouped), ⇄ the running tunnels](docs/screenshot-hosts.png)
+![Host list: type filter tabs, folder tree, item card, widget column; ↪ the menu of the sessions through a jump host, ⇄ the running tunnels](docs/screenshot-hosts.png)
 
 ![Tunnels: Proxmox web through a jump host, a stopped saved tunnel, a failed one, a SOCKS proxy](docs/screenshot-tunnels.png)
 
@@ -450,6 +450,12 @@ after a confirmation (`ui.tab_status_close`, off); the tabs of one host are one 
 lead, the previous lead goes back among the others; the group remembers its lead. The lead closes
 like any tab (`✕`, or its number with `ui.tab_status_close`); the others close by their state icon
 with `ui.tab_status_close`, the middle button or the keys. Tab numbers and keys still address every tab.
+
+**Sessions through a jump host** stay out of the tab bar (`ui.jump_tabs_menu`, on; Settings →
+Appearance → Jump sessions in a menu): the **`↪N`** button by the settings, colored by the worst state
+(red: one is broken, yellow: one connects), opens their menu, like `⇄N` for the tunnels. Enter or a
+click shows a session, `[close]` or `d` closes it. The session you are in stays in the bar until you
+switch away, so its `✕` and state work as on any tab; tab numbers and keys still reach every session.
 
 ## External clients (VNC, SMB, SFTP, …)
 

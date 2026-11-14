@@ -158,13 +158,17 @@ type UI struct {
 	// (the active tab after a confirmation).
 	TabStatusClose bool `yaml:"tab_status_close"`
 	// GroupTabs shows the tabs of one host as one entry that opens on a click.
-	GroupTabs   bool   `yaml:"group_tabs"`
-	RestoreTabs bool   `yaml:"restore_tabs"`    // reopen the tabs of the last run (not connected)
-	RestoreView bool   `yaml:"restore_filters"` // keep the type filter, org, collection, grouping, search
-	ShowTree    bool   `yaml:"show_tree"`
-	ShowNotes   bool   `yaml:"show_notes"`      // notes of the selected item in its card (read from the vault)
-	Accent      string `yaml:"accent"`          // accent color: cyan | blue | green | magenta | yellow | red
-	Selection   string `yaml:"selection_color"` // selected item: reverse | cyan | blue | green | magenta | yellow | red | gray
+	GroupTabs bool `yaml:"group_tabs"`
+	// JumpTabsMenu keeps the tabs of sessions through a jump host out of the
+	// tab bar (the active one excepted): the ↪N button by the settings opens
+	// a menu of them.
+	JumpTabsMenu bool   `yaml:"jump_tabs_menu"`
+	RestoreTabs  bool   `yaml:"restore_tabs"`    // reopen the tabs of the last run (not connected)
+	RestoreView  bool   `yaml:"restore_filters"` // keep the type filter, org, collection, grouping, search
+	ShowTree     bool   `yaml:"show_tree"`
+	ShowNotes    bool   `yaml:"show_notes"`      // notes of the selected item in its card (read from the vault)
+	Accent       string `yaml:"accent"`          // accent color: cyan | blue | green | magenta | yellow | red
+	Selection    string `yaml:"selection_color"` // selected item: reverse | cyan | blue | green | magenta | yellow | red | gray
 }
 
 // Icons settings: mode and per-icon overrides.
@@ -363,7 +367,7 @@ func Default() Config {
 	return Config{
 		BW: BW{Path: "bw", SyncInterval: 10 * time.Minute},
 		UI: UI{
-			TabsPosition: "top", Accent: "cyan", Selection: "reverse", Mouse: true, Prefix: "ctrl+b", ListWidth: 0, TabWidth: DefaultTabWidth, TabStatus: "icon", TabCloseButton: true, GroupTabs: true, ShowTree: true, ShowNotes: true, RestoreTabs: true, RestoreView: true,
+			TabsPosition: "top", Accent: "cyan", Selection: "reverse", Mouse: true, Prefix: "ctrl+b", ListWidth: 0, TabWidth: DefaultTabWidth, TabStatus: "icon", TabCloseButton: true, GroupTabs: true, JumpTabsMenu: true, ShowTree: true, ShowNotes: true, RestoreTabs: true, RestoreView: true,
 			Keys: map[string]string{
 				ActNextTab: "n", ActPrevTab: "p", ActCloseTab: "&", ActCloneTab: "c", ActList: "l",
 				ActHistory: "[", ActSplitRight: "|", ActSplitDown: "-", ActClosePane: "x",

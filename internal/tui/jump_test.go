@@ -24,6 +24,8 @@ import (
 	"github.com/sichkarmg/vaultcrab/internal/connect"
 	"github.com/sichkarmg/vaultcrab/internal/core"
 	"github.com/sichkarmg/vaultcrab/internal/jump"
+	"github.com/sichkarmg/vaultcrab/internal/secret"
+	"github.com/sichkarmg/vaultcrab/internal/session"
 )
 
 // jumpRemote is a connected shell through a jump host (fake).
@@ -657,11 +659,11 @@ func TestJumpTabsMenu(t *testing.T) {
 	}
 	// a click on ↪2 opens the menu
 	x := m.tabsWidth() + 2
-	if m.buttonAt(x) != "jumps" {
+	if m.buttonAt(x) != "sessions" {
 		t.Fatalf("button at %d: %q", x, m.buttonAt(x))
 	}
 	m.Update(tea.MouseMsg{X: x, Y: m.tabBarY(), Action: tea.MouseActionPress, Button: tea.MouseButtonLeft})
-	j, ok := m.modal.(*jumpTabsModal)
+	j, ok := m.modal.(*sessionsMenu)
 	if !ok {
 		t.Fatalf("modal %T", m.modal)
 	}
@@ -670,7 +672,7 @@ func TestJumpTabsMenu(t *testing.T) {
 		t.Fatalf("menu:\n%s", v)
 	}
 	// a click on the first session shows it
-	m.Update(tea.MouseMsg{X: m.dlgX + boxPadX + 2, Y: m.dlgY + j.listY, Action: tea.MouseActionPress, Button: tea.MouseButtonLeft})
+	m.Update(tea.MouseMsg{X: m.dlgX + boxPadX + 2, Y: m.dlgY + j.rows[0], Action: tea.MouseActionPress, Button: tea.MouseButtonLeft})
 	if m.active != 1 || m.modal != nil {
 		t.Fatalf("open: active %d modal %T", m.active, m.modal)
 	}
@@ -678,11 +680,11 @@ func TestJumpTabsMenu(t *testing.T) {
 		t.Fatalf("shown: %q", bar)
 	}
 	// [close] of the second one asks (it is connected)
-	m.openJumpTabs()
-	j = m.modal.(*jumpTabsModal)
+	m.openSessionsMenu()
+	j = m.modal.(*sessionsMenu)
 	m.View()
 	b := j.btns[1][1]
-	m.Update(tea.MouseMsg{X: m.dlgX + boxPadX + b.x0, Y: m.dlgY + j.listY + 1, Action: tea.MouseActionPress, Button: tea.MouseButtonLeft})
+	m.Update(tea.MouseMsg{X: m.dlgX + boxPadX + b.x0, Y: m.dlgY + j.rows[1], Action: tea.MouseActionPress, Button: tea.MouseButtonLeft})
 	if _, ok := m.modal.(*confirmModal); !ok {
 		t.Fatalf("close: modal %T", m.modal)
 	}
@@ -695,6 +697,59 @@ func TestJumpTabsMenu(t *testing.T) {
 	m.applyAppearance(a)
 	m.switchTab(0)
 	if bar := ansi.Strip(m.tabBar()); !strings.Contains(bar, "1:") || strings.Contains(bar, "↪1 │") {
+		t.Fatalf("off: %q", bar)
+	}
+}
+
+// VNC sessions (the client behind a local proxy) are in the sessions menu
+// too, with their own setting.
+func TestVNCTabsMenu(t *testing.T) {
+	svc := core.New(core.Options{
+		Connect: func(context.Context) (core.Source, func(), error) { return &fakeSrc{}, nil, nil },
+		VNC: func(context.Context, core.Host, *secret.Secret, func(context.Context) (*connect.Tunnel, error)) (session.Remote, error) {
+			return nil, errors.New("no VNC in tests")
+		},
+	})
+	ctx, cancel := context.WithCancel(context.Background())
+	t.Cleanup(cancel)
+	svc.Start(ctx)
+	for svc.Status().State != core.Online {
+		select {
+		case <-svc.Events():
+		case <-time.After(2 * time.Second):
+			t.Fatal("not online")
+		}
+	}
+	m := New(ctx, svc, Options{Prefix: "ctrl+b", Keys: map[string]string{core.ActNextTab: "n", core.ActList: "l", core.ActCloseTab: "&"}, Icons: testIcons(false), ShowTree: true})
+	m.onEvent()
+	m.Update(tea.WindowSizeMsg{Width: 120, Height: 30})
+	a := m.opt.Appearance
+	a.VNCTabsMenu = true
+	m.applyAppearance(a)
+	openTabs(t, m, 1)
+	vh := core.Host{ID: "2", Name: "vnc-box", Scheme: core.SchemeVNC, Addr: "10.0.0.2", Port: 5900}
+	vs, err := svc.OpenIdle(vh, 80, 24)
+	if err != nil {
+		t.Fatal(err)
+	}
+	m.tabs = append(m.tabs, newTab(vs))
+	m.setActive(1)
+	bar := ansi.Strip(m.tabBar())
+	if strings.Contains(bar, "vnc-box") || !strings.Contains(bar, "↪1 │") {
+		t.Fatalf("bar: %q", bar)
+	}
+	m.openSessionsMenu()
+	if v := ansi.Strip(m.View()); !strings.Contains(v, "VNC (local proxy)") || !strings.Contains(v, "vnc-box") {
+		t.Fatalf("menu:\n%s", v)
+	}
+	keys(m, "enter")
+	if m.active != 2 || !strings.Contains(ansi.Strip(m.tabBar()), "vnc-box") {
+		t.Fatalf("shown: %d %q", m.active, ansi.Strip(m.tabBar()))
+	}
+	a.VNCTabsMenu = false
+	m.applyAppearance(a)
+	m.setActive(1)
+	if bar := ansi.Strip(m.tabBar()); !strings.Contains(bar, "vnc-box") || strings.Contains(bar, "↪") {
 		t.Fatalf("off: %q", bar)
 	}
 }

@@ -33,8 +33,8 @@ type Appearance struct {
 	// TabCloseButton, TabStatusClose, GroupTabs: ui.tab_close_button,
 	// ui.tab_status_close, ui.group_tabs
 	TabCloseButton, TabStatusClose, GroupTabs bool
-	// JumpTabsMenu: ui.jump_tabs_menu.
-	JumpTabsMenu bool
+	// JumpTabsMenu, VNCTabsMenu: ui.jump_tabs_menu, ui.vnc_tabs_menu.
+	JumpTabsMenu, VNCTabsMenu bool
 
 	ConfirmPaste bool // ask before pasting several lines into a session
 	ConnDebug    bool // ssh.debug: the steps of a failed connection in its pane
@@ -130,6 +130,7 @@ func (c *Config) Appearance() Appearance {
 		TabStatusClose: c.UI.TabStatusClose,
 		GroupTabs:      c.UI.GroupTabs,
 		JumpTabsMenu:   c.UI.JumpTabsMenu,
+		VNCTabsMenu:    c.UI.VNCTabsMenu,
 
 		ConfirmPaste: c.Terminal.ConfirmPaste,
 		ConnDebug:    c.SSH.Debug,
@@ -213,6 +214,9 @@ func setAppearance(root *yaml.Node, old, a Appearance) {
 	}
 	if a.JumpTabsMenu != old.JumpTabsMenu {
 		setPath(root, []string{"ui", "jump_tabs_menu"}, boolean(a.JumpTabsMenu))
+	}
+	if a.VNCTabsMenu != old.VNCTabsMenu {
+		setPath(root, []string{"ui", "vnc_tabs_menu"}, boolean(a.VNCTabsMenu))
 	}
 	if a.ConfirmPaste != old.ConfirmPaste {
 		setPath(root, []string{"terminal", "confirm_paste"}, boolean(a.ConfirmPaste))

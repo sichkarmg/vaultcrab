@@ -12,6 +12,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   the worst state) opens a menu of them, like `⇄N` for the tunnels; a click shows one, `[close]`
   closes it. The active one stays in the bar while it is active. `ui.jump_tabs_menu` (Settings →
   Appearance → Jump sessions in a menu), on by default.
+- VNC sessions (the client behind a local proxy) go to the same menu: `ui.vnc_tabs_menu` (Settings →
+  Appearance → VNC sessions in a menu), on by default.
 
 ### Changed
 - A group of tabs no longer opens and folds: the lead tab is shown in full with its number first,

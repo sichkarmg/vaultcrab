@@ -451,9 +451,11 @@ lead, the previous lead goes back among the others; the group remembers its lead
 like any tab (`✕`, or its number with `ui.tab_status_close`); the others close by their state icon
 with `ui.tab_status_close`, the middle button or the keys. Tab numbers and keys still address every tab.
 
-**Sessions through a jump host** stay out of the tab bar (`ui.jump_tabs_menu`, on; Settings →
-Appearance → Jump sessions in a menu): the **`↪N`** button by the settings, colored by the worst state
-(red: one is broken, yellow: one connects), opens their menu, like `⇄N` for the tunnels. Enter or a
+**Sessions through a jump host** (`ui.jump_tabs_menu`, on; Settings → Appearance → Jump sessions in a
+menu) and **VNC sessions**, the client behind a local proxy (`ui.vnc_tabs_menu`, on; VNC sessions in a
+menu), stay out of the tab bar: the **`↪N`** button by the settings, colored by the worst state (red:
+one is broken, yellow: one connects), opens their menu, like `⇄N` for the tunnels. RDP, SMB, FTP and
+SFTP clients open directly, without a tab or a proxy: the event log records them. Enter or a
 click shows a session, `[close]` or `d` closes it. The session you are in stays in the bar until you
 switch away, so its `✕` and state work as on any tab; tab numbers and keys still reach every session.
 

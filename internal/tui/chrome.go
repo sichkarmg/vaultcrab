@@ -78,14 +78,14 @@ func (m *Model) tabItems() []barItem {
 	count := map[string]int{}
 	if m.opt.Appearance.GroupTabs {
 		for i, t := range m.tabs {
-			if !m.inJumpMenu(i + 1) {
+			if !m.inMenu(i + 1) {
 				count[t.groupKey()]++
 			}
 		}
 	}
 	seen := map[string]bool{}
 	for i, t := range m.tabs {
-		if m.inJumpMenu(i + 1) {
+		if m.inMenu(i + 1) {
 			continue
 		}
 		k := t.groupKey()
@@ -99,7 +99,7 @@ func (m *Model) tabItems() []barItem {
 		seen[k] = true
 		var members []int
 		for j, u := range m.tabs {
-			if u.groupKey() == k && !m.inJumpMenu(j+1) {
+			if u.groupKey() == k && !m.inMenu(j+1) {
 				members = append(members, j+1)
 			}
 		}
@@ -239,7 +239,7 @@ func (m *Model) logButton() string {
 // buttons at the right end of the tab bar, each after a separator.
 func (m *Model) buttonsWidth() int {
 	w := 2*ansi.StringWidth(m.g.v) + ansi.StringWidth(m.settingsButton()) + ansi.StringWidth(m.quitButton())
-	if jb, _ := m.jumpButton(); jb != "" {
+	if jb, _ := m.menuButton(); jb != "" {
 		w += ansi.StringWidth(m.g.v) + ansi.StringWidth(jb)
 	}
 	if tb, _ := m.tunnelButton(); tb != "" {
@@ -252,14 +252,14 @@ func (m *Model) buttonsWidth() int {
 }
 
 // buttonAt names the tab bar button at column x (x >= tabsWidth):
-// "jumps", "tunnels", "log", "settings" or "quit"; the separator before a button
+// "sessions", "tunnels", "log", "settings" or "quit"; the separator before a button
 // belongs to it.
 func (m *Model) buttonAt(x int) string {
 	sep := ansi.StringWidth(m.g.v)
 	x0 := m.tabsWidth()
-	if jb, _ := m.jumpButton(); jb != "" {
+	if jb, _ := m.menuButton(); jb != "" {
 		if x < x0+sep+ansi.StringWidth(jb) {
-			return "jumps"
+			return "sessions"
 		}
 		x0 += sep + ansi.StringWidth(jb)
 	}
@@ -356,7 +356,7 @@ func (m *Model) tabBar() string {
 	}
 	sep := stTabBar.Render(m.g.v)
 	logBtn := ""
-	if jb, st := m.jumpButton(); jb != "" {
+	if jb, st := m.menuButton(); jb != "" {
 		logBtn = sep + st.Render(jb)
 	}
 	if tb, st := m.tunnelButton(); tb != "" {

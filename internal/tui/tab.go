@@ -588,8 +588,8 @@ func (m *Model) mouse(msg tea.MouseMsg) tea.Cmd {
 	if msg.Y == m.tabBarY() {
 		if msg.Action == tea.MouseActionPress && msg.Button == tea.MouseButtonLeft && msg.X >= m.tabsWidth() {
 			switch m.buttonAt(msg.X) {
-			case "jumps":
-				m.openJumpTabs()
+			case "sessions":
+				m.openSessionsMenu()
 			case "tunnels":
 				m.openTunnels(nil)
 			case "log":

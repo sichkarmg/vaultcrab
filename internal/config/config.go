@@ -529,13 +529,21 @@ func (c *Config) finish() error {
 		c.UI.Accent = d.UI.Accent
 	}
 	if AccentColor(c.UI.Accent) == "" {
-		return fmt.Errorf("ui.accent: %q (want cyan|blue|green|magenta|yellow|red)", c.UI.Accent)
+		var names []string
+		for _, a := range Accents {
+			names = append(names, a.Name)
+		}
+		return fmt.Errorf("ui.accent: %q (want %s)", c.UI.Accent, colorNames(names))
 	}
 	if c.UI.Selection == "" {
 		c.UI.Selection = d.UI.Selection
 	}
 	if _, _, ok := SelectionColors(c.UI.Selection); !ok {
-		return fmt.Errorf("ui.selection_color: %q (want reverse|cyan|blue|green|magenta|yellow|red|gray)", c.UI.Selection)
+		var names []string
+		for _, s := range Selections {
+			names = append(names, s.Name)
+		}
+		return fmt.Errorf("ui.selection_color: %q (want %s)", c.UI.Selection, colorNames(names))
 	}
 	if c.UI.Prefix == "" {
 		c.UI.Prefix = d.UI.Prefix

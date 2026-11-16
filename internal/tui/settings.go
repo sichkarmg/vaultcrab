@@ -45,8 +45,8 @@ func setSelection(name string) {
 	stStatusErr = lipgloss.NewStyle().Reverse(true).Foreground(lipgloss.Color("1"))
 	if bg != "" {
 		sel = lipgloss.NewStyle().Background(lipgloss.Color(bg)).Foreground(lipgloss.Color(fg))
-		errBg := "1" // errors: white on red (yellow if the selection is red)
-		if bg == "1" {
+		errBg := "1" // errors: white on red (yellow if the selection is reddish)
+		if reddish(bg) {
 			errBg = "3"
 		}
 		stStatusErr = lipgloss.NewStyle().Background(lipgloss.Color(errBg)).Foreground(lipgloss.Color("15")).Bold(true)
@@ -55,6 +55,49 @@ func setSelection(name string) {
 	stTabActive = sel.Bold(true)
 	stStatus = sel
 	stButton = sel.Bold(true)
+}
+
+// optWindow returns the options [lo, hi) of a row that fit in width w
+// around the chosen one cur; the rest is marked by "…" on its side.
+func optWindow(opts []string, cur, w int) (lo, hi int) {
+	widths := make([]int, len(opts))
+	total := 0
+	for i, o := range opts {
+		widths[i] = ansi.StringWidth(o) + 2
+		total += widths[i]
+	}
+	if total <= w || cur < 0 || cur >= len(opts) {
+		return 0, len(opts)
+	}
+	w -= 4 // room for the marks on both sides
+	lo, hi = cur, cur+1
+	used := widths[cur]
+	for {
+		grew := false
+		if hi < len(opts) && used+widths[hi] <= w {
+			used += widths[hi]
+			hi++
+			grew = true
+		}
+		if lo > 0 && used+widths[lo-1] <= w {
+			lo--
+			used += widths[lo]
+			grew = true
+		}
+		if !grew {
+			return lo, hi
+		}
+	}
+}
+
+// reddish reports a selection background that an error in red would not
+// stand out on.
+func reddish(bg string) bool {
+	switch bg {
+	case "1", "9", "160", "196", "197", "203", "204", "205":
+		return true
+	}
+	return false
 }
 
 // pinHook: turning the PIN on opens the dialog that sets it (the PIN is on
@@ -375,25 +418,42 @@ func (s *settingsModal) settings(m *Model) []setting {
 		icons = append(icons, m.opt.Icons.Pick(a.SSHIcon.Unicode, a.SSHIcon.ASCII))
 		cur = len(sshIcons) - 1
 	}
-	var accents []string
-	acc := 0
+	// the named colors; a color of the user's own from the config is
+	// offered after them
+	var accents, accNames []string
+	acc := -1
 	for i, c := range core.Accents {
 		accents = append(accents, lipgloss.NewStyle().Foreground(lipgloss.Color(c.Color)).Render(c.Name))
+		accNames = append(accNames, c.Name)
 		if c.Name == a.Accent {
 			acc = i
 		}
 	}
-	var sels []string
-	sel := 0
-	for i, c := range core.Selections {
-		st := lipgloss.NewStyle().Reverse(true)
-		if c.Bg != "" {
-			st = lipgloss.NewStyle().Background(lipgloss.Color(c.Bg)).Foreground(lipgloss.Color(c.Fg))
+	if acc < 0 {
+		accents = append(accents, lipgloss.NewStyle().Foreground(lipgloss.Color(core.AccentColor(a.Accent))).Render(a.Accent))
+		accNames = append(accNames, a.Accent)
+		acc = len(accNames) - 1
+	}
+	var sels, selNames []string
+	sel := -1
+	selStyle := func(name string) lipgloss.Style {
+		bg, fg, _ := core.SelectionColors(name)
+		if bg == "" {
+			return lipgloss.NewStyle().Reverse(true)
 		}
-		sels = append(sels, st.Render(c.Name))
+		return lipgloss.NewStyle().Background(lipgloss.Color(bg)).Foreground(lipgloss.Color(fg))
+	}
+	for i, c := range core.Selections {
+		sels = append(sels, selStyle(c.Name).Render(c.Name))
+		selNames = append(selNames, c.Name)
 		if c.Name == a.Selection {
 			sel = i
 		}
+	}
+	if sel < 0 {
+		sels = append(sels, selStyle(a.Selection).Render(a.Selection))
+		selNames = append(selNames, a.Selection)
+		sel = len(selNames) - 1
 	}
 	widths := slices.Clone(listWidths)
 	if !slices.Contains(widths, a.ListWidth) {
@@ -427,9 +487,9 @@ func (s *settingsModal) settings(m *Model) []setting {
 		{"SSH item icon", icons, cur,
 			func(a *core.Appearance, i int) { a.SSHIcon = sshIcons[i] }},
 		{"Accent color", accents, acc,
-			func(a *core.Appearance, i int) { a.Accent = core.Accents[i].Name }},
+			func(a *core.Appearance, i int) { a.Accent = accNames[i] }},
 		{"Selection color", sels, sel,
-			func(a *core.Appearance, i int) { a.Selection = core.Selections[i].Name }},
+			func(a *core.Appearance, i int) { a.Selection = selNames[i] }},
 		{"Folder tree", []string{"on", "off"}, onOff(a.ShowTree),
 			func(a *core.Appearance, i int) { a.ShowTree = i == 0 }},
 		{"Notes in the card", []string{"on", "off"}, onOff(a.ShowNotes),
@@ -627,9 +687,18 @@ func (s *settingsModal) view(m *Model, w, h int) []string {
 				}
 			}
 			b.WriteString(mark + padRight(row.label, labelW))
-			var spans [][2]int
+			lo, hi := optWindow(row.opts, row.cur, w-4-2*boxPadX-s.optX)
+			spans := make([][2]int, len(row.opts))
+			for i := range spans {
+				spans[i] = [2]int{-1, -1} // not shown: not clickable
+			}
 			ox := 0
-			for i, o := range row.opts {
+			if lo > 0 {
+				b.WriteString(stDim.Render(m.g.ell + " "))
+				ox += 2
+			}
+			for i := lo; i < hi; i++ {
+				o := row.opts[i]
 				cell := " " + o + " "
 				cw := ansi.StringWidth(cell)
 				switch {
@@ -640,8 +709,11 @@ func (s *settingsModal) view(m *Model, w, h int) []string {
 				default:
 					b.WriteString(cell)
 				}
-				spans = append(spans, [2]int{ox, ox + cw})
+				spans[i] = [2]int{ox, ox + cw}
 				ox += cw
+			}
+			if hi < len(row.opts) {
+				b.WriteString(stDim.Render(" " + m.g.ell))
 			}
 			b.WriteString("\n")
 			s.rowY = append(s.rowY, line)

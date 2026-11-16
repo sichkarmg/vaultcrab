@@ -38,10 +38,14 @@ ui:
   jump_tabs_menu: true     # sessions through a jump host stay out of the tab bar (the active one
                            # excepted): the ↪N button by the settings opens a menu of them
   vnc_tabs_menu: true      # the same for the VNC sessions (the client behind a local proxy)
-  accent: cyan             # cyan | blue | green | magenta | yellow | red (keys, focused borders, folders)
+  accent: cyan             # keys, focused borders, folders. Terminal colors (follow its theme): cyan | blue |
+                           # green | magenta | yellow | red | bright-cyan | bright-blue | bright-green |
+                           # bright-magenta | bright-yellow | bright-red; fixed (256 colors): orange | amber |
+                           # gold | coral | pink | purple | violet | teal | sky | lime | slate;
+                           # or your own: "#rrggbb" (quoted) or a number 0-255
   selection_color: reverse # selection and active items (list cursor, active tab, filter, status bar,
-                           # buttons): reverse | cyan | blue | green |
-                           # magenta | yellow | red | gray
+                           # buttons): reverse | gray | any of the accent names | "#rrggbb" | 0-255
+                           # (your own color: the text on it is black or white, whichever reads better)
   restore_tabs: true       # on exit remember the open tabs and panes (hosts and layout, in workspace.json
                            # next to this file); on start reopen them not connected - Enter connects
   restore_filters: true    # keep the type filter, org, collection, grouping, search and folded groups

@@ -779,6 +779,9 @@ func (l *hostList) renderRow(r *core.Row, w int, selected bool) string {
 	if selected {
 		return state + " " + stSelected.Render(left+strings.Repeat(" ", gap)+right)
 	}
+	if c := l.m.hostColor(h); c != "" { // the name in its color label
+		left = fmt.Sprintf("%s%s %s%s", indent, l.schemeIcon(h), labelStyle(c, false).Render(h.Name), fav)
+	}
 	return state + " " + left + strings.Repeat(" ", gap) + stDim.Render(right)
 }
 

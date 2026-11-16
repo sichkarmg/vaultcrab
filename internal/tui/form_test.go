@@ -139,6 +139,25 @@ func TestEditAndAddItem(t *testing.T) {
 	if u.Knock == nil || *u.Knock != "7000,8000/udp" {
 		t.Fatalf("knock not saved: %v", u.Knock)
 	}
+	// the color field: checked, saved
+	keys(m, "e")
+	f = m.modal.(*hostForm)
+	f.setFocus(fColor)
+	typeText(m, "crimson")
+	if _, cmd := m.Update(tea.KeyMsg{Type: tea.KeyEnter}); cmd != nil || !strings.Contains(f.err, "color") {
+		t.Fatalf("an invalid color accepted: %q", f.err)
+	}
+	f.in[fColor].SetValue("Orange")
+	if !strings.Contains(ansi.Strip(m.View()), "██") {
+		t.Error("no color sample")
+	}
+	enterAndRun(t, m)
+	src.mu.Lock()
+	u = src.updated["1"]
+	src.mu.Unlock()
+	if u.Color == nil || *u.Color != "Orange" {
+		t.Fatalf("color not saved: %v", u.Color)
+	}
 	if !strings.Contains(ansi.Strip(m.View()), "saved alpha") {
 		t.Error("no confirmation")
 	}

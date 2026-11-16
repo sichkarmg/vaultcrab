@@ -100,6 +100,7 @@ var (
 	AccentColor     = config.AccentColor
 	Selections      = config.Selections
 	SelectionColors = config.SelectionColors
+	ContrastText    = config.ContrastText
 	SaveAppearance  = config.SaveAppearance
 	// The lock timeouts (Settings → Security).
 	LockTimeouts     = config.LockTimeouts

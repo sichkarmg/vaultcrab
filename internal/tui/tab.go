@@ -460,9 +460,13 @@ func (t *tab) paneLines(m *Model, id core.PaneID, pr core.Rect, focused bool) []
 			info = fmt.Sprintf("%s %d", m.opt.Icons.Get(core.IconHistory), off) + "  " + info
 		}
 		head := m.sessionIcon(s) + " "
-		if focused {
+		c := m.sessionColor(&s.Host)
+		switch {
+		case c != "":
+			head += labelStyle(c, focused).Render(title) + " " + stDim.Render(info)
+		case focused:
 			head += stTabActive.Render(title) + " " + stDim.Render(info)
-		} else {
+		default:
 			head += stDim.Render(title + " " + info)
 		}
 		btn := m.paneCloseButton()

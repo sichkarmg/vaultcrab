@@ -8,6 +8,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- Color labels of hosts: the field `color` of an item (also the **Color** field of the item form),
+  `ui.tag_colors` or `ui.folder_colors` give a host a color; its name in the host list and the title
+  of its tabs and pane headers are drawn in it (on it when active), so that e.g. production servers
+  stand out.
 - More interface colors: 23 accent and 25 selection colors (`ui.accent`, `ui.selection_color`). Besides
   the terminal colors there are their bright variants (`bright-cyan`, …) and fixed colors of the
   256-color palette: orange, amber, gold, coral, pink, purple, violet, teal, sky, lime, slate.

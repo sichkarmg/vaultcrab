@@ -191,9 +191,25 @@ A host is a Login item in one of these forms:
 
 The password or private key goes into the `password` field. Optional fields: `port`, `tags`, any
 others (`env`, …) for filters; `script` (the script `Enter` runs); `jump` (VNC through an SSH
-host); `knock` and `knock_delay` (port knocking before connecting, see below). Hidden fields and notes never become metadata. A Login item without an address but with a
+host); `knock` and `knock_delay` (port knocking before connecting, see below); `color` (see
+[Color labels](#color-labels)). Hidden fields and notes never become metadata. A Login item without an address but with a
 field `credential` = `true` is not a host: it is a credential offered for addresses typed through a
 jump host (see [Jump hosts](#jump-hosts)).
+
+### Color labels
+
+A host can carry a color label so that you see at once where you type: its name in the host list and the
+title of its tabs and pane headers are drawn in that color (on that color when the tab is active). The
+label is, in this order: the field **`color`** of the item (or the **Color** field of the item form,
+`e`/`a`), a color of one of its tags in `ui.tag_colors`, a color of its folder in `ui.folder_colors`
+(a folder covers its subfolders; the deepest one with a color wins). A color is an accent name (`red`,
+`orange`, `sky`, …), `"#rrggbb"` or a number 0-255:
+
+```yaml
+ui:
+  folder_colors: {Prod: red, Staging: yellow, "Clients/Acme": "#ff8800"}
+  tag_colors: {critical: bright-red}
+```
 
 ### Port knocking
 

@@ -167,7 +167,11 @@ func (m *Model) tabItem(n int, more string) barItem {
 		head = " " + t.icon(m, active) + base.Render(" "+num+":")
 	}
 	it.status = [2]int{0, ansi.StringWidth(head)}
-	label := head + base.Render(title+zoom+more+" ")
+	ts := base
+	if c := m.sessionColor(&t.focused().Host); c != "" {
+		ts = labelStyle(c, active)
+	}
+	label := head + ts.Render(title+zoom+more) + base.Render(" ")
 	if active && m.opt.Appearance.TabCloseButton {
 		x := ansi.StringWidth(label)
 		btn := m.ascii("✕")

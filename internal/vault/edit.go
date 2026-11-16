@@ -44,6 +44,9 @@ type HostEdit struct {
 	// Knock replaces the port knocking sequence (the field knock; ""
 	// removes it); nil keeps it.
 	Knock *string
+	// Color replaces the color label (the field color; "" removes it); nil
+	// keeps it.
+	Color *string
 }
 
 // Validate checks the required fields.
@@ -162,7 +165,7 @@ func (e *HostEdit) apply(item map[string]json.RawMessage) error {
 			if _, ok := model.ParseScheme(name); ok || name == "port" || name == "tags" || name == "tag" {
 				continue
 			}
-			if name == "knock" && e.Knock != nil {
+			if name == "knock" && e.Knock != nil || name == "color" && e.Color != nil {
 				continue
 			}
 		}
@@ -180,6 +183,9 @@ func (e *HostEdit) apply(item map[string]json.RawMessage) error {
 	}
 	if e.Knock != nil && strings.TrimSpace(*e.Knock) != "" {
 		add("knock", strings.TrimSpace(*e.Knock), fieldText)
+	}
+	if e.Color != nil && strings.TrimSpace(*e.Color) != "" {
+		add("color", strings.TrimSpace(*e.Color), fieldText)
 	}
 
 	set := func(m map[string]json.RawMessage, k string, v any) {

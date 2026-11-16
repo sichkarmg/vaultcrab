@@ -72,3 +72,49 @@ func TestColorsInConfig(t *testing.T) {
 		t.Fatalf("bad color: %v", err)
 	}
 }
+
+func TestHostColor(t *testing.T) {
+	c := Default()
+	c.UI.FolderColors = map[string]string{"Prod": "red", "prod/db": "#ff8800", "Lab": "sky"}
+	c.UI.TagColors = map[string]string{"Critical": "magenta"}
+	for _, tc := range []struct {
+		field  string
+		tags   []string
+		folder []string
+		want   string
+	}{
+		{"", nil, nil, ""},
+		{"", nil, []string{"prod"}, "1"},
+		{"", nil, []string{"Prod", "web"}, "1"},           // a parent covers its subfolders
+		{"", nil, []string{"PROD", "db", "x"}, "#ff8800"}, // the deepest folder with a color
+		{"", []string{"linux", "critical"}, []string{"prod"}, "5"},
+		{"Orange", []string{"critical"}, []string{"prod"}, "208"}, // the field first
+		{"#ABC", nil, nil, "#aabbcc"},
+		{"no-such", nil, []string{"lab"}, "75"}, // a bad field is ignored
+		{"", nil, []string{"Production"}, ""},
+	} {
+		if got := c.HostColor(tc.field, tc.tags, tc.folder); got != tc.want {
+			t.Errorf("%+v: %q", tc, got)
+		}
+	}
+}
+
+func TestHostColorsInConfig(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "config.yaml")
+	if err := os.WriteFile(path, []byte("ui:\n  folder_colors:\n    Prod: red\n    Lab: \"#00ff00\"\n  tag_colors:\n    critical: 196\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	c, err := Load(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if c.HostColor("", []string{"critical"}, nil) != "196" || c.HostColor("", nil, []string{"Lab"}) != "#00ff00" {
+		t.Fatalf("%+v %+v", c.UI.FolderColors, c.UI.TagColors)
+	}
+	if err := os.WriteFile(path, []byte("ui:\n  folder_colors:\n    Prod: crimson\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := Load(path); err == nil || !strings.Contains(err.Error(), "ui.folder_colors") {
+		t.Fatalf("bad color: %v", err)
+	}
+}

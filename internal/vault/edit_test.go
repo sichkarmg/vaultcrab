@@ -298,3 +298,34 @@ func TestUpdateHostKnock(t *testing.T) {
 		t.Fatalf("not removed: %s", f.item)
 	}
 }
+
+// Color sets and removes the color field; nil keeps it.
+func TestUpdateHostColor(t *testing.T) {
+	f := &fakeEditServer{item: storedItem}
+	srv := httptest.NewServer(f)
+	defer srv.Close()
+	c := NewClient(srv.URL)
+	col := "orange"
+	e := HostEdit{Name: "old", Scheme: model.SSH, User: "root", Addr: "old", Color: &col}
+	if err := c.UpdateHost(context.Background(), "i1", e); err != nil {
+		t.Fatal(err)
+	}
+	if _, h := decodeItem(t, f.item); h.Fields["color"] != "orange" || h.Fields["env"] != "prod" {
+		t.Fatalf("set: %v", h.Fields)
+	}
+	e.Color = nil
+	if err := c.UpdateHost(context.Background(), "i1", e); err != nil {
+		t.Fatal(err)
+	}
+	if _, h := decodeItem(t, f.item); h.Fields["color"] != "orange" {
+		t.Fatalf("nil did not keep it: %v", h.Fields)
+	}
+	empty := ""
+	e.Color = &empty
+	if err := c.UpdateHost(context.Background(), "i1", e); err != nil {
+		t.Fatal(err)
+	}
+	if _, h := decodeItem(t, f.item); h.Fields["color"] != "" || strings.Contains(f.item, `"color"`) {
+		t.Fatalf("not removed: %s", f.item)
+	}
+}

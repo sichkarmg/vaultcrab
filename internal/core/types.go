@@ -61,6 +61,7 @@ type (
 	WidgetOutput   = widget.Output
 	WidgetSpec     = widget.Spec
 	Appearance     = config.Appearance
+	Theme          = config.Theme
 	VaultSpec      = config.VaultSpec
 	Unlock         = config.Unlock
 	Icon           = config.Icon
@@ -89,6 +90,9 @@ var (
 // LongLockTimeout is the longest lock timeout without a warning.
 const LongLockTimeout = config.LongLockTimeout
 
+// FromTheme as an accent or selection color takes the color of the theme.
+const FromTheme = config.FromTheme
+
 // WidgetClock is the built-in clock widget (WidgetSpec.Builtin).
 const WidgetClock = widget.BuiltinClock
 
@@ -101,6 +105,9 @@ var (
 	Selections      = config.Selections
 	SelectionColors = config.SelectionColors
 	ContrastText    = config.ContrastText
+	CustomColor     = config.CustomColor
+	Themes          = config.Themes
+	Palette         = config.Palette
 	SaveAppearance  = config.SaveAppearance
 	// The lock timeouts (Settings → Security).
 	LockTimeouts     = config.LockTimeouts

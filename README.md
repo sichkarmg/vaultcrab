@@ -80,7 +80,11 @@ the vault only at the moment of connecting and never written to disk.
 - **Safe multi-line paste.** Pasted text of several lines is shown first and pasted only after
   confirmation; **Edit** (`e`) opens it in an editor (`Ctrl+S` pastes the edited text).
 - **Settings inside the program** (`,`), saved to `config.yaml`; a hand-edited config is re-read
-  automatically. 23 accent and 25 selection colors: the 16 terminal colors (they follow its theme)
+  automatically. **Themes** (`ui.theme`) color the whole interface at once: `default` (the terminal
+  colors), `ocean`, `forest`, `sunset`, `mono`, `nord`, `gruvbox`, `gruvbox-light`, `dracula`, `solarized`,
+  `solarized-light`, `catppuccin`, `catppuccin-latte`. Themes do not paint the terminal background: pick a
+  `*-light` theme for a light one. The accent and the selection color are `theme` by default, and a color set
+  there wins over the theme. 23 accent and 25 selection colors: the 16 terminal colors (they follow its theme)
   and fixed ones (orange, amber, gold, coral, pink, purple, violet, teal, sky, lime, slate), or a color
   of your own in the config (`ui.accent: "#ff8800"` or a number 0-255). Every dialog has a `✕` in its top border to close it with the mouse.
 

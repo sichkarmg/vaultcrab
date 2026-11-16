@@ -22,40 +22,52 @@ type InfoItem struct{ Label, Value string }
 // settingsButton opens the settings; it is left of the close button.
 func (m *Model) settingsButton() string { return " " + m.opt.Icons.Get(core.IconSettings) + " " }
 
-// setAccent colors keys, focused pane borders and folder names.
-func setAccent(color string) {
-	if color == "" {
-		return
-	}
-	c := lipgloss.Color(color)
-	stKey = stKey.Foreground(c)
-	stBorderFocus = stBorderFocus.Foreground(c)
-	stGroup = stGroup.Foreground(c)
-}
+// setColors colors the interface with palette p (core.Palette: the theme
+// with the accent and the selection of the settings).
+//   - accent: keys, focused pane borders and folder names;
+//   - selection: what is selected or active: the host list cursor, the
+//     active tab, filter and pane title, focused buttons, chosen options and
+//     the status bar;
+//   - the rest: pane borders, session states, organizations.
+func setColors(p core.Theme) {
+	c := func(s string) lipgloss.Color { return lipgloss.Color(s) }
+	stKey = stKey.Foreground(c(p.Accent))
+	stBorderFocus = stBorderFocus.Foreground(c(p.Accent))
+	stGroup = stGroup.Foreground(c(p.Accent))
+	stBorder = stBorder.Foreground(c(p.Border))
+	stOK = stOK.Foreground(c(p.OK))
+	stWarn = stWarn.Foreground(c(p.Warn))
+	stErr = stErr.Foreground(c(p.Err))
+	stQuit = stQuit.Foreground(c(p.Err))
+	stActivity = stActivity.Foreground(c(p.Activity))
+	stOrg = stOrg.Foreground(c(p.Org))
 
-// setSelection colors what is selected or active: the host list cursor,
-// the active tab, filter and pane title, focused buttons, chosen options
-// and the status bar.
-func setSelection(name string) {
-	bg, fg, ok := core.SelectionColors(name)
-	if !ok {
-		return
-	}
 	sel := lipgloss.NewStyle().Reverse(true)
-	stStatusErr = lipgloss.NewStyle().Reverse(true).Foreground(lipgloss.Color("1"))
-	if bg != "" {
-		sel = lipgloss.NewStyle().Background(lipgloss.Color(bg)).Foreground(lipgloss.Color(fg))
-		errBg := "1" // errors: white on red (yellow if the selection is reddish)
-		if reddish(bg) {
-			errBg = "3"
+	stStatusErr = lipgloss.NewStyle().Reverse(true).Foreground(c(p.Err))
+	if p.SelBg != "" {
+		sel = lipgloss.NewStyle().Background(c(p.SelBg)).Foreground(c(p.SelFg))
+		errBg := p.Err // errors: white on red (on the warning color if the selection is reddish)
+		if reddish(p.SelBg) || p.SelBg == p.Err {
+			errBg = p.Warn
 		}
-		stStatusErr = lipgloss.NewStyle().Background(lipgloss.Color(errBg)).Foreground(lipgloss.Color("15")).Bold(true)
+		stStatusErr = lipgloss.NewStyle().Background(c(errBg)).Foreground(c(core.ContrastText(canonical(errBg)))).Bold(true)
 	}
 	stSelected = sel
 	stTabActive = sel.Bold(true)
 	stStatus = sel
 	stButton = sel.Bold(true)
 }
+
+// canonical returns a color in the form of core.CustomColor ("1", "#rrggbb").
+func canonical(s string) string {
+	if c, ok := core.CustomColor(s); ok {
+		return c
+	}
+	return "1"
+}
+
+// resetColors goes back to the default theme (tests).
+func resetColors() { setColors(core.Palette("default", core.FromTheme, core.FromTheme)) }
 
 // optWindow returns the options [lo, hi) of a row that fit in width w
 // around the chosen one cur; the rest is marked by "…" on its side.
@@ -219,8 +231,7 @@ func (m *Model) applyAppearance(a core.Appearance) {
 	if m.opt.Icons.ASCII() {
 		m.g = asciiGlyphs
 	}
-	setAccent(core.AccentColor(a.Accent))
-	setSelection(a.Selection)
+	setColors(core.Palette(a.Theme, a.Accent, a.Selection))
 	if m.opt.ShowTree != a.ShowTree {
 		m.opt.ShowTree = a.ShowTree
 		m.list.grouping = core.ByFolder
@@ -420,13 +431,28 @@ func (s *settingsModal) settings(m *Model) []setting {
 	}
 	// the named colors; a color of the user's own from the config is
 	// offered after them
-	var accents, accNames []string
+	// the themes, each in its accent color on its selection
+	var themes []string
+	th := 0
+	for i, t := range core.Themes {
+		st := lipgloss.NewStyle().Foreground(lipgloss.Color(t.Accent))
+		themes = append(themes, st.Render(t.Name))
+		if t.Name == a.Theme {
+			th = i
+		}
+	}
+	pal := core.Palette(a.Theme, core.FromTheme, core.FromTheme)
+	// "theme": the color of the theme, shown in it
+	accents, accNames := []string{lipgloss.NewStyle().Foreground(lipgloss.Color(pal.Accent)).Render(core.FromTheme)}, []string{core.FromTheme}
 	acc := -1
+	if a.Accent == core.FromTheme {
+		acc = 0
+	}
 	for i, c := range core.Accents {
 		accents = append(accents, lipgloss.NewStyle().Foreground(lipgloss.Color(c.Color)).Render(c.Name))
 		accNames = append(accNames, c.Name)
 		if c.Name == a.Accent {
-			acc = i
+			acc = i + 1
 		}
 	}
 	if acc < 0 {
@@ -434,20 +460,26 @@ func (s *settingsModal) settings(m *Model) []setting {
 		accNames = append(accNames, a.Accent)
 		acc = len(accNames) - 1
 	}
-	var sels, selNames []string
-	sel := -1
 	selStyle := func(name string) lipgloss.Style {
 		bg, fg, _ := core.SelectionColors(name)
+		if name == core.FromTheme {
+			bg, fg = pal.SelBg, pal.SelFg
+		}
 		if bg == "" {
 			return lipgloss.NewStyle().Reverse(true)
 		}
 		return lipgloss.NewStyle().Background(lipgloss.Color(bg)).Foreground(lipgloss.Color(fg))
 	}
+	sels, selNames := []string{selStyle(core.FromTheme).Render(core.FromTheme)}, []string{core.FromTheme}
+	sel := -1
+	if a.Selection == core.FromTheme {
+		sel = 0
+	}
 	for i, c := range core.Selections {
 		sels = append(sels, selStyle(c.Name).Render(c.Name))
 		selNames = append(selNames, c.Name)
 		if c.Name == a.Selection {
-			sel = i
+			sel = i + 1
 		}
 	}
 	if sel < 0 {
@@ -486,6 +518,10 @@ func (s *settingsModal) settings(m *Model) []setting {
 			func(a *core.Appearance, i int) { a.IconMode = modes[i] }},
 		{"SSH item icon", icons, cur,
 			func(a *core.Appearance, i int) { a.SSHIcon = sshIcons[i] }},
+		{"Theme", themes, th,
+			func(a *core.Appearance, i int) { // a theme picked here shows whole
+				a.Theme, a.Accent, a.Selection = core.Themes[i].Name, core.FromTheme, core.FromTheme
+			}},
 		{"Accent color", accents, acc,
 			func(a *core.Appearance, i int) { a.Accent = accNames[i] }},
 		{"Selection color", sels, sel,

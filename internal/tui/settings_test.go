@@ -5,6 +5,7 @@ package tui
 import (
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -18,7 +19,7 @@ import (
 
 func TestSettings(t *testing.T) {
 	m, _ := newTestModel(t, false)
-	t.Cleanup(func() { setAccent(core.Accents[0].Color); setSelection("reverse") })
+	t.Cleanup(func() { resetColors() })
 	m.opt.ConfigPath = filepath.Join(t.TempDir(), "config.yaml")
 	m.opt.Info = []InfoItem{{Label: "Config file", Value: m.opt.ConfigPath}}
 
@@ -57,7 +58,7 @@ func TestSettings(t *testing.T) {
 	}
 
 	// selection color: green
-	keys(m, "down", "down", "down", "down", "right", "right", "right")
+	keys(m, "down", "down", "down", "down", "down", "right", "right", "right", "right")
 	if m.opt.Appearance.Selection != "green" || !strings.Contains(string(must(os.ReadFile(m.opt.ConfigPath))), "selection_color: green") {
 		t.Fatalf("selection %q", m.opt.Appearance.Selection)
 	}
@@ -185,7 +186,7 @@ func TestSettingsLongRow(t *testing.T) {
 // the accent row cycles through all colors.
 func TestSettingsCustomColors(t *testing.T) {
 	m, _ := newTestModel(t, false)
-	t.Cleanup(func() { setAccent(core.Accents[0].Color); setSelection("reverse") })
+	t.Cleanup(func() { resetColors() })
 	m.opt.ConfigPath = filepath.Join(t.TempDir(), "config.yaml")
 	a := m.opt.Appearance
 	a.Accent, a.Selection = "#ff8800", "#ffffff"
@@ -202,11 +203,11 @@ func TestSettingsCustomColors(t *testing.T) {
 	for _, r := range rows {
 		switch r.label {
 		case "Accent color":
-			if len(r.opts) != len(core.Accents)+1 || r.cur != len(core.Accents) || !strings.Contains(ansi.Strip(r.opts[r.cur]), "#ff8800") {
+			if len(r.opts) != len(core.Accents)+2 || r.cur != len(core.Accents)+1 || !strings.Contains(ansi.Strip(r.opts[r.cur]), "#ff8800") {
 				t.Fatalf("accent row %d/%d", r.cur, len(r.opts))
 			}
 		case "Selection color":
-			if len(r.opts) != len(core.Selections)+1 || r.cur != len(core.Selections) {
+			if len(r.opts) != len(core.Selections)+2 || r.cur != len(core.Selections)+1 {
 				t.Fatalf("selection row %d/%d", r.cur, len(r.opts))
 			}
 		}
@@ -222,4 +223,48 @@ func TestSettingsCustomColors(t *testing.T) {
 			t.Fatalf("no window mark: %q", l)
 		}
 	}
+}
+
+// The theme row colors the whole interface; an accent of its own stays.
+func TestSettingsTheme(t *testing.T) {
+	m, _ := newTestModel(t, false)
+	t.Cleanup(resetColors)
+	m.opt.ConfigPath = filepath.Join(t.TempDir(), "config.yaml")
+	m.openSettings()
+	s := m.modal.(*settingsModal)
+	row := -1
+	for i, r := range s.settings(m) {
+		if r.label == "Theme" {
+			row = i
+		}
+	}
+	if row < 0 {
+		t.Fatal("no Theme row")
+	}
+	a := m.opt.Appearance
+	a.Accent = "green"
+	m.applyAppearance(a)
+	nord := slices.IndexFunc(core.Themes, func(t core.Theme) bool { return t.Name == "nord" })
+	s.change(m, row, nord)
+	if m.opt.Appearance.Accent != core.FromTheme {
+		t.Fatalf("a picked theme keeps the accent %q", m.opt.Appearance.Accent)
+	}
+	if m.opt.Appearance.Theme != "nord" || !strings.Contains(string(must(os.ReadFile(m.opt.ConfigPath))), "theme: nord") {
+		t.Fatalf("theme %q", m.opt.Appearance.Theme)
+	}
+	for name, got := range map[string]lipgloss.TerminalColor{"key": stKey.GetForeground(), "ok": stOK.GetForeground(), "err": stErr.GetForeground(),
+		"border": stBorder.GetForeground(), "selection": stSelected.GetBackground(), "org": stOrg.GetForeground()} {
+		want := map[string]string{"key": "#88c0d0", "ok": "#a3be8c", "err": "#bf616a", "border": "#4c566a", "selection": "#5e81ac", "org": "#b48ead"}[name]
+		if got != lipgloss.Color(want) {
+			t.Errorf("%s: %v, want %s", name, got, want)
+		}
+	}
+	// an accent of its own over the theme
+	a = m.opt.Appearance
+	a.Accent = "orange"
+	m.applyAppearance(a)
+	if stKey.GetForeground() != lipgloss.Color("208") || stOK.GetForeground() != lipgloss.Color("#a3be8c") {
+		t.Fatalf("accent %v ok %v", stKey.GetForeground(), stOK.GetForeground())
+	}
+	checkFrame(t, m.View(), 120, 30)
 }

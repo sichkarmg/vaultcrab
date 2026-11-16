@@ -21,17 +21,17 @@ func TestSaveAppearanceKeepsTheRest(t *testing.T) {
 		t.Fatal(err)
 	}
 	old := cfg.Appearance()
-	if old.SSHIcon != SSHIcons[0] || old.Accent != "cyan" || old.IconMode != "auto" {
+	if old.SSHIcon != SSHIcons[0] || old.Accent != FromTheme || old.Theme != "default" || old.IconMode != "auto" {
 		t.Fatalf("defaults %+v", old)
 	}
 	a := old
-	a.TabsBottom, a.SSHIcon, a.Accent, a.Widgets, a.ListWidth, a.Selection = true, Icon{"#", "#"}, "green", !old.Widgets, 50, "blue"
+	a.TabsBottom, a.SSHIcon, a.Accent, a.Widgets, a.ListWidth, a.Selection, a.Theme = true, Icon{"#", "#"}, "green", !old.Widgets, 50, "blue", "nord"
 	if err := SaveAppearance(path, old, a); err != nil {
 		t.Fatal(err)
 	}
 	b, _ := os.ReadFile(path)
 	s := string(b)
-	for _, want := range []string{"# my config", "# where the tabs are", "prefix: ctrl+a", "tabs_position: bottom", "accent: green", `unicode: "#"`, "list_width: 50", "selection_color: blue"} {
+	for _, want := range []string{"# my config", "# where the tabs are", "prefix: ctrl+a", "tabs_position: bottom", "accent: green", `unicode: "#"`, "list_width: 50", "selection_color: blue", "theme: nord"} {
 		if !strings.Contains(s, want) {
 			t.Errorf("missing %q in\n%s", want, s)
 		}

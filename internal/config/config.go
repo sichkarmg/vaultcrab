@@ -170,8 +170,9 @@ type UI struct {
 	RestoreView bool   `yaml:"restore_filters"` // keep the type filter, org, collection, grouping, search
 	ShowTree    bool   `yaml:"show_tree"`
 	ShowNotes   bool   `yaml:"show_notes"`      // notes of the selected item in its card (read from the vault)
-	Accent      string `yaml:"accent"`          // accent color: a name of Accents, "#rrggbb" or 0-255
-	Selection   string `yaml:"selection_color"` // selected item: a name of Selections, "#rrggbb" or 0-255
+	Theme       string `yaml:"theme"`           // colors of the interface: a name of Themes
+	Accent      string `yaml:"accent"`          // accent color: theme (of the theme), a name of Accents, "#rrggbb" or 0-255
+	Selection   string `yaml:"selection_color"` // selected item: theme, a name of Selections, "#rrggbb" or 0-255
 	// FolderColors and TagColors label hosts with a color (their tabs, pane
 	// headers and list rows): folder path ("A/B", it covers the subfolders
 	// too) or tag -> color (an accent name, "#rrggbb" or 0-255). The field
@@ -376,7 +377,7 @@ func Default() Config {
 	return Config{
 		BW: BW{Path: "bw", SyncInterval: 10 * time.Minute},
 		UI: UI{
-			TabsPosition: "top", Accent: "cyan", Selection: "reverse", Mouse: true, Prefix: "ctrl+b", ListWidth: 0, TabWidth: DefaultTabWidth, TabStatus: "icon", TabCloseButton: true, GroupTabs: true, JumpTabsMenu: true, VNCTabsMenu: true, ShowTree: true, ShowNotes: true, RestoreTabs: true, RestoreView: true,
+			TabsPosition: "top", Theme: "default", Accent: FromTheme, Selection: FromTheme, Mouse: true, Prefix: "ctrl+b", ListWidth: 0, TabWidth: DefaultTabWidth, TabStatus: "icon", TabCloseButton: true, GroupTabs: true, JumpTabsMenu: true, VNCTabsMenu: true, ShowTree: true, ShowNotes: true, RestoreTabs: true, RestoreView: true,
 			Keys: map[string]string{
 				ActNextTab: "n", ActPrevTab: "p", ActCloseTab: "&", ActCloneTab: "c", ActList: "l",
 				ActHistory: "[", ActSplitRight: "|", ActSplitDown: "-", ActClosePane: "x",
@@ -531,25 +532,35 @@ func (c *Config) finish() error {
 	default:
 		return fmt.Errorf("ui.tab_status: %q (want icon|color)", c.UI.TabStatus)
 	}
+	if c.UI.Theme == "" {
+		c.UI.Theme = d.UI.Theme
+	}
+	if _, ok := ThemeByName(c.UI.Theme); !ok {
+		var names []string
+		for _, t := range Themes {
+			names = append(names, t.Name)
+		}
+		return fmt.Errorf("ui.theme: %q (want %s)", c.UI.Theme, strings.Join(names, "|"))
+	}
 	if c.UI.Accent == "" {
 		c.UI.Accent = d.UI.Accent
 	}
-	if AccentColor(c.UI.Accent) == "" {
+	if c.UI.Accent != FromTheme && AccentColor(c.UI.Accent) == "" {
 		var names []string
 		for _, a := range Accents {
 			names = append(names, a.Name)
 		}
-		return fmt.Errorf("ui.accent: %q (want %s)", c.UI.Accent, colorNames(names))
+		return fmt.Errorf("ui.accent: %q (want %s)", c.UI.Accent, colorNames(append([]string{FromTheme}, names...)))
 	}
 	if c.UI.Selection == "" {
 		c.UI.Selection = d.UI.Selection
 	}
-	if _, _, ok := SelectionColors(c.UI.Selection); !ok {
+	if _, _, ok := SelectionColors(c.UI.Selection); !ok && c.UI.Selection != FromTheme {
 		var names []string
 		for _, s := range Selections {
 			names = append(names, s.Name)
 		}
-		return fmt.Errorf("ui.selection_color: %q (want %s)", c.UI.Selection, colorNames(names))
+		return fmt.Errorf("ui.selection_color: %q (want %s)", c.UI.Selection, colorNames(append([]string{FromTheme}, names...)))
 	}
 	for key, m := range map[string]map[string]string{"ui.folder_colors": c.UI.FolderColors, "ui.tag_colors": c.UI.TagColors} {
 		for k, v := range m {

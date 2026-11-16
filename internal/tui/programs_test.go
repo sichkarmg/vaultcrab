@@ -257,5 +257,5 @@ func TestConfigErrorStatus(t *testing.T) {
 	if strings.Contains(last(), "config error") || m.opt.Appearance.Accent != "green" {
 		t.Fatalf("after the fix: %q accent %s", last(), m.opt.Appearance.Accent)
 	}
-	t.Cleanup(func() { setAccent(core.Accents[0].Color) })
+	t.Cleanup(func() { resetColors() })
 }

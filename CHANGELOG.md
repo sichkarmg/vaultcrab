@@ -8,6 +8,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- Themes (`ui.theme`, Settings → Appearance → Theme) color the whole interface: accent, selection,
+  pane borders, session states and organizations. `default` (the terminal colors, the look so far),
+  `ocean`, `forest`, `sunset`, `mono`, `nord`, `gruvbox`, `gruvbox-light`, `dracula`, `solarized`,
+  `solarized-light`, `catppuccin`, `catppuccin-latte`. The accent and the selection color are `theme`
+  by default; a color chosen there wins over the theme, and picking a theme sets both back to `theme`.
 - Color labels of hosts: the field `color` of an item (also the **Color** field of the item form),
   `ui.tag_colors` or `ui.folder_colors` give a host a color; its name in the host list and the title
   of its tabs and pane headers are drawn in it (on it when active), so that e.g. production servers

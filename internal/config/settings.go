@@ -23,8 +23,9 @@ type Appearance struct {
 	TabsBottom bool
 	IconMode   string // auto | unicode | ascii
 	SSHIcon    Icon
-	Accent     string // one of Accents
-	Selection  string // one of Selections
+	Theme      string // one of Themes
+	Accent     string // FromTheme, one of Accents or a color of its own
+	Selection  string // FromTheme, one of Selections or a color of its own
 	ShowTree   bool
 	ShowNotes  bool
 	Widgets    bool
@@ -231,6 +232,7 @@ func (c *Config) Appearance() Appearance {
 		TabsBottom: c.UI.TabsPosition == "bottom",
 		IconMode:   c.Icons.Mode,
 		SSHIcon:    ssh,
+		Theme:      c.UI.Theme,
 		Accent:     c.UI.Accent,
 		Selection:  c.UI.Selection,
 		ShowTree:   c.UI.ShowTree,
@@ -292,6 +294,9 @@ func setAppearance(root *yaml.Node, old, a Appearance) {
 	if a.SSHIcon != old.SSHIcon {
 		setPath(root, []string{"icons", "set", IconSSH, "unicode"}, quoted(a.SSHIcon.Unicode))
 		setPath(root, []string{"icons", "set", IconSSH, "ascii"}, quoted(a.SSHIcon.ASCII))
+	}
+	if a.Theme != old.Theme {
+		setPath(root, []string{"ui", "theme"}, str(a.Theme))
 	}
 	if a.Accent != old.Accent {
 		setPath(root, []string{"ui", "accent"}, str(a.Accent))

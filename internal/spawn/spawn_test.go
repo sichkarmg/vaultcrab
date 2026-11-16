@@ -7,6 +7,7 @@ package spawn
 import (
 	"context"
 	"os"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"syscall"
@@ -78,12 +79,23 @@ func TestRunErrorsAndTimeout(t *testing.T) {
 
 func TestStartKillAndExit(t *testing.T) {
 	c := newClient(t)
-	p, err := c.Start([]string{"sh", "-c", "echo oops >&2; echo $X; sleep 30"}, []string{"X=from-env"})
+	// the file marks that stderr was written: killed earlier, the shell
+	// would not have written it (seen on a slow CI runner)
+	mark := filepath.Join(t.TempDir(), "written")
+	p, err := c.Start([]string{"sh", "-c", "echo oops >&2; echo $X; touch \"$M\"; sleep 30"}, []string{"X=from-env", "M=" + mark})
 	if err != nil {
 		t.Fatal(err)
 	}
 	if pp := ppidOf(t, c, strconv.Itoa(p.Pid)); pp == os.Getpid() {
 		t.Error("started process is our child")
+	}
+	deadline := time.Now().Add(5 * time.Second)
+	for _, err := os.Stat(mark); err != nil; _, err = os.Stat(mark) {
+		if time.Now().After(deadline) {
+			p.Kill()
+			t.Fatal("the shell did not run")
+		}
+		time.Sleep(10 * time.Millisecond)
 	}
 	p.Kill()
 	select {

@@ -187,6 +187,32 @@ func colorRGB(c string) (r, g, b int) {
 	}
 }
 
+// HostColor returns the color label of a host (a canonical color, "" for
+// none): field is its field color, then its tags and its folder path are
+// looked up in ui.tag_colors and ui.folder_colors (the deepest folder that
+// has a color). Names compare without case; a bad field value is ignored.
+func (c *Config) HostColor(field string, tags, folder []string) string {
+	if v := AccentColor(strings.ToLower(strings.TrimSpace(field))); v != "" {
+		return v
+	}
+	for _, t := range tags {
+		for k, v := range c.UI.TagColors {
+			if strings.EqualFold(k, t) {
+				return AccentColor(v)
+			}
+		}
+	}
+	for n := len(folder); n > 0; n-- {
+		p := strings.Join(folder[:n], "/")
+		for k, v := range c.UI.FolderColors {
+			if strings.EqualFold(strings.Trim(k, "/ "), p) {
+				return AccentColor(v)
+			}
+		}
+	}
+	return ""
+}
+
 // colorNames lists the accepted values for an error message.
 func colorNames(names []string) string { return strings.Join(names, "|") + "|#rrggbb|0-255" }
 

@@ -46,6 +46,11 @@ ui:
   selection_color: reverse # selection and active items (list cursor, active tab, filter, status bar,
                            # buttons): reverse | gray | any of the accent names | "#rrggbb" | 0-255
                            # (your own color: the text on it is black or white, whichever reads better)
+  folder_colors: {}        # color labels of hosts (name in the list, tab and pane titles): folder path ->
+                           # color (an accent name, "#rrggbb" or 0-255), e.g. {Prod: red, "Clients/Acme": orange};
+                           # a folder covers its subfolders, the deepest one with a color wins. The field
+                           # color of an item comes first, then tag_colors, then folder_colors
+  tag_colors: {}           # tag -> color, e.g. {critical: bright-red}
   restore_tabs: true       # on exit remember the open tabs and panes (hosts and layout, in workspace.json
                            # next to this file); on start reopen them not connected - Enter connects
   restore_filters: true    # keep the type filter, org, collection, grouping, search and folded groups

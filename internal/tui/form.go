@@ -30,6 +30,7 @@ const (
 	fPassword
 	fFolder
 	fTags
+	fColor
 	fKnock // SSH hosts only
 	fNotes // a textarea, not in in[]
 	fOrg
@@ -37,7 +38,7 @@ const (
 	fieldCount
 )
 
-var fieldLabels = [fieldCount]string{"Name", "Type", "User", "Host", "Port", "Path", "Password", "Folder", "Tags", "Knock", "Notes", "Organization", "Collection"}
+var fieldLabels = [fieldCount]string{"Name", "Type", "User", "Host", "Port", "Path", "Password", "Folder", "Tags", "Color", "Knock", "Notes", "Organization", "Collection"}
 
 // hostForm adds or edits a host item (only while the vault is online).
 type hostForm struct {
@@ -108,6 +109,7 @@ func newHostForm(m *Model, h *core.Host, folder string) *hostForm {
 		f.in[fPassword].EchoCharacter = '*'
 	}
 	f.in[fTags].Placeholder = "comma separated"
+	f.in[fColor].Placeholder = "tab and list color: red, orange, #ff8800, 0-255 (empty: none)"
 	f.in[fKnock].Placeholder = "port knocking: 7000,8000/udp,9000 (empty: none)"
 	f.notes = textarea.New()
 	f.notes.ShowLineNumbers = false
@@ -133,6 +135,7 @@ func newHostForm(m *Model, h *core.Host, folder string) *hostForm {
 		f.in[fPath].SetValue(h.Path)
 		f.in[fTags].SetValue(strings.Join(h.Tags, ", "))
 		f.in[fKnock].SetValue(h.Fields[core.FieldKnock])
+		f.in[fColor].SetValue(h.Fields[core.FieldColor])
 		f.in[fFolder].SetValue(strings.Join(snap.FolderPath(h), "/"))
 		f.in[fPassword].Placeholder = "unchanged (type to replace; a pasted key may be one line)"
 		for i, sc := range core.Schemes {
@@ -242,7 +245,7 @@ func (f *hostForm) loadCollections(m *Model) {
 // fields returns the navigable fields: the organization for new and
 // personal items, the collection for organization items.
 func (f *hostForm) fields() []int {
-	out := []int{fName, fType, fUser, fHost, fPort, fPath, fPassword, fFolder, fTags}
+	out := []int{fName, fType, fUser, fHost, fPort, fPath, fPassword, fFolder, fTags, fColor}
 	if core.Schemes[f.scheme] == core.SchemeSSH {
 		out = append(out, fKnock)
 	}
@@ -455,6 +458,12 @@ func (f *hostForm) save(m *Model) tea.Cmd {
 	for _, t := range strings.FieldsFunc(f.in[fTags].Value(), func(r rune) bool { return r == ',' || r == ' ' || r == ';' }) {
 		e.Tags = append(e.Tags, t)
 	}
+	if c := strings.TrimSpace(f.in[fColor].Value()); c == "" || core.AccentColor(strings.ToLower(c)) != "" {
+		e.Color = &c
+	} else {
+		f.err = "color: an accent name (red, orange, sky…), #rrggbb or 0-255"
+		return nil
+	}
 	if core.Schemes[f.scheme] == core.SchemeSSH {
 		k := strings.TrimSpace(f.in[fKnock].Value())
 		if err := core.CheckKnock(k); err != nil {
@@ -651,6 +660,12 @@ func (f *hostForm) view(m *Model, w, h int) []string {
 			val = padRight(f.in[i].View(), f.in[i].Width+2) + " " + stButton.Render(btn)
 			if cur := f.currentPassword(m); cur != "" {
 				val += "\n" + strings.Repeat(" ", 14) + cur
+			}
+		case fColor:
+			f.in[i].Width = max(20, min(60, w-24))
+			val = f.in[i].View()
+			if c := core.AccentColor(strings.ToLower(strings.TrimSpace(f.in[i].Value()))); c != "" {
+				val = padRight(val, f.in[i].Width+1) + " " + lipgloss.NewStyle().Foreground(lipgloss.Color(c)).Render(colorSwatch(m))
 			}
 		default:
 			f.in[i].Width = max(20, min(60, w-24))

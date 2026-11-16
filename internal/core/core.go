@@ -322,6 +322,18 @@ func (s *Service) Snapshot() model.Snapshot {
 	return s.snap
 }
 
+// FieldColor is the item field of the color label of a host.
+const FieldColor = "color"
+
+// HostColor returns the color label of a host ("" for none): its field
+// color, else ui.tag_colors of its tags, else ui.folder_colors of its
+// folder (Config.HostColor).
+func (s *Service) HostColor(h *model.Host) string {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.conf.cfg.HostColor(h.Fields[FieldColor], h.Tags, s.snap.FolderPath(h))
+}
+
 // Host returns a host by ID from the current snapshot.
 func (s *Service) Host(id string) (model.Host, bool) {
 	s.mu.Lock()

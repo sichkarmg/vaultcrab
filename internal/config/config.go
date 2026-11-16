@@ -170,8 +170,14 @@ type UI struct {
 	RestoreView bool   `yaml:"restore_filters"` // keep the type filter, org, collection, grouping, search
 	ShowTree    bool   `yaml:"show_tree"`
 	ShowNotes   bool   `yaml:"show_notes"`      // notes of the selected item in its card (read from the vault)
-	Accent      string `yaml:"accent"`          // accent color: cyan | blue | green | magenta | yellow | red
-	Selection   string `yaml:"selection_color"` // selected item: reverse | cyan | blue | green | magenta | yellow | red | gray
+	Accent      string `yaml:"accent"`          // accent color: a name of Accents, "#rrggbb" or 0-255
+	Selection   string `yaml:"selection_color"` // selected item: a name of Selections, "#rrggbb" or 0-255
+	// FolderColors and TagColors label hosts with a color (their tabs, pane
+	// headers and list rows): folder path ("A/B", it covers the subfolders
+	// too) or tag -> color (an accent name, "#rrggbb" or 0-255). The field
+	// color of an item comes first, then its tags, then the deepest folder.
+	FolderColors map[string]string `yaml:"folder_colors"`
+	TagColors    map[string]string `yaml:"tag_colors"`
 }
 
 // Icons settings: mode and per-icon overrides.
@@ -544,6 +550,13 @@ func (c *Config) finish() error {
 			names = append(names, s.Name)
 		}
 		return fmt.Errorf("ui.selection_color: %q (want %s)", c.UI.Selection, colorNames(names))
+	}
+	for key, m := range map[string]map[string]string{"ui.folder_colors": c.UI.FolderColors, "ui.tag_colors": c.UI.TagColors} {
+		for k, v := range m {
+			if AccentColor(v) == "" {
+				return fmt.Errorf("%s: %q: color %q (want an accent name, #rrggbb or 0-255)", key, k, v)
+			}
+		}
 	}
 	if c.UI.Prefix == "" {
 		c.UI.Prefix = d.UI.Prefix

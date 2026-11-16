@@ -11,6 +11,7 @@ import (
 	"path/filepath"
 	"runtime"
 	"strconv"
+	"strings"
 	"time"
 
 	"gopkg.in/yaml.v3"
@@ -68,17 +69,57 @@ var SSHIcons = []Icon{
 }
 
 // Accents are the accent colors (keys, focused borders, folder names) with
-// their ANSI color numbers; the first is the default.
+// their color: an ANSI number, 0-15 follow the terminal theme, 16-255 are
+// the fixed 256-color palette. The first is the default. ui.accent also
+// takes a color of its own: "#rrggbb" or a number 0-255.
 var Accents = []struct{ Name, Color string }{
 	{"cyan", "6"}, {"blue", "4"}, {"green", "2"}, {"magenta", "5"}, {"yellow", "3"}, {"red", "1"},
+	{"bright-cyan", "14"}, {"bright-blue", "12"}, {"bright-green", "10"},
+	{"bright-magenta", "13"}, {"bright-yellow", "11"}, {"bright-red", "9"},
+	{"orange", "208"}, {"amber", "214"}, {"gold", "220"}, {"coral", "203"}, {"pink", "205"},
+	{"purple", "99"}, {"violet", "141"}, {"teal", "37"}, {"sky", "75"}, {"lime", "112"}, {"slate", "67"},
 }
 
 // Selections are the colors of the selected item (host list cursor, focused
 // buttons, chosen options): background and text color; "reverse" swaps the
-// terminal colors. The first is the default.
+// terminal colors. The first is the default. ui.selection_color also takes
+// a background of its own ("#rrggbb" or 0-255); its text is black or white,
+// whichever reads better.
 var Selections = []struct{ Name, Bg, Fg string }{
 	{"reverse", "", ""}, {"cyan", "6", "0"}, {"blue", "4", "15"}, {"green", "2", "0"},
 	{"magenta", "5", "15"}, {"yellow", "3", "0"}, {"red", "1", "15"}, {"gray", "8", "15"},
+	{"bright-cyan", "14", "0"}, {"bright-blue", "12", "0"}, {"bright-green", "10", "0"},
+	{"bright-magenta", "13", "0"}, {"bright-yellow", "11", "0"}, {"bright-red", "9", "0"},
+	{"orange", "208", "0"}, {"amber", "214", "0"}, {"gold", "220", "0"}, {"coral", "203", "0"}, {"pink", "205", "0"},
+	{"purple", "99", "15"}, {"violet", "141", "0"}, {"teal", "30", "15"}, {"sky", "75", "0"}, {"lime", "112", "0"},
+	{"slate", "60", "15"},
+}
+
+// CustomColor returns a color of the user's own in a canonical form:
+// "#rrggbb" (lower case; "#rgb" is expanded) or an ANSI number 0-255.
+// ok is false for anything else.
+func CustomColor(s string) (string, bool) {
+	s = strings.TrimSpace(s)
+	if n, err := strconv.Atoi(s); err == nil {
+		if n < 0 || n > 255 {
+			return "", false
+		}
+		return strconv.Itoa(n), true
+	}
+	if !strings.HasPrefix(s, "#") {
+		return "", false
+	}
+	h := strings.ToLower(s[1:])
+	if len(h) == 3 {
+		h = string([]byte{h[0], h[0], h[1], h[1], h[2], h[2]})
+	}
+	if len(h) != 6 {
+		return "", false
+	}
+	if _, err := strconv.ParseUint(h, 16, 32); err != nil {
+		return "", false
+	}
+	return "#" + h, true
 }
 
 // SelectionColors returns the background and text colors of a selection
@@ -89,18 +130,65 @@ func SelectionColors(name string) (bg, fg string, ok bool) {
 			return s.Bg, s.Fg, true
 		}
 	}
+	if c, ok := CustomColor(name); ok {
+		return c, ContrastText(c), true
+	}
 	return "", "", false
 }
 
-// AccentColor returns the ANSI color number of an accent ("" if unknown).
+// AccentColor returns the color of an accent: a named one or a color of
+// the user's own ("" if neither).
 func AccentColor(name string) string {
 	for _, a := range Accents {
 		if a.Name == name {
 			return a.Color
 		}
 	}
-	return ""
+	c, _ := CustomColor(name)
+	return c
 }
+
+// ContrastText returns the text color that reads on background c: "0"
+// (black) on a light one, "15" (white) on a dark one. c is a canonical
+// color (CustomColor); 0-15 use the usual xterm values.
+func ContrastText(c string) string {
+	r, g, b := colorRGB(c)
+	// relative luminance, sRGB weights; light above the middle gray
+	if 299*r+587*g+114*b > 140*1000 {
+		return "0"
+	}
+	return "15"
+}
+
+// colorRGB returns the 8-bit components of a canonical color.
+func colorRGB(c string) (r, g, b int) {
+	if strings.HasPrefix(c, "#") {
+		v, _ := strconv.ParseUint(c[1:], 16, 32)
+		return int(v >> 16 & 0xff), int(v >> 8 & 0xff), int(v & 0xff)
+	}
+	n, _ := strconv.Atoi(c)
+	switch {
+	case n < 16:
+		base := [16][3]int{{0, 0, 0}, {205, 0, 0}, {0, 205, 0}, {205, 205, 0}, {0, 0, 238}, {205, 0, 205}, {0, 205, 205}, {229, 229, 229},
+			{127, 127, 127}, {255, 0, 0}, {0, 255, 0}, {255, 255, 0}, {92, 92, 255}, {255, 0, 255}, {0, 255, 255}, {255, 255, 255}}
+		return base[n][0], base[n][1], base[n][2]
+	case n < 232:
+		lv := func(i int) int {
+			if i == 0 {
+				return 0
+			}
+			return 55 + 40*i
+		}
+		n -= 16
+		return lv(n / 36), lv(n / 6 % 6), lv(n % 6)
+	default:
+		v := 8 + 10*(n-232)
+		return v, v, v
+	}
+}
+
+// colorNames lists the accepted values for an error message.
+func colorNames(names []string) string { return strings.Join(names, "|") + "|#rrggbb|0-255" }
 
 // Appearance returns the current appearance settings.
 func (c *Config) Appearance() Appearance {

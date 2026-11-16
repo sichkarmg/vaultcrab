@@ -164,3 +164,62 @@ func TestTabWidth(t *testing.T) {
 		t.Fatalf("not saved: %s", b)
 	}
 }
+
+// A row with more options than fit shows a window around the chosen one;
+// the hidden options are not clickable.
+func TestSettingsLongRow(t *testing.T) {
+	opts := []string{"aaaa", "bbbb", "cccc", "dddd", "eeee", "ffff", "gggg"}
+	if lo, hi := optWindow(opts, 3, 100); lo != 0 || hi != len(opts) {
+		t.Fatalf("all fit: %d %d", lo, hi)
+	}
+	lo, hi := optWindow(opts, 6, 24)
+	if hi != 7 || lo < 1 || 6*(hi-lo)+4 > 24 {
+		t.Fatalf("end: %d %d", lo, hi)
+	}
+	if lo, hi = optWindow(opts, 3, 24); lo > 3 || hi <= 3 || lo == 0 && hi == 7 {
+		t.Fatalf("middle: %d %d", lo, hi)
+	}
+}
+
+// A custom accent from the config is offered after the named ones, and
+// the accent row cycles through all colors.
+func TestSettingsCustomColors(t *testing.T) {
+	m, _ := newTestModel(t, false)
+	t.Cleanup(func() { setAccent(core.Accents[0].Color); setSelection("reverse") })
+	m.opt.ConfigPath = filepath.Join(t.TempDir(), "config.yaml")
+	a := m.opt.Appearance
+	a.Accent, a.Selection = "#ff8800", "#ffffff"
+	m.applyAppearance(a)
+	if stKey.GetForeground() != lipgloss.Color("#ff8800") {
+		t.Fatalf("accent %v", stKey.GetForeground())
+	}
+	if stSelected.GetBackground() != lipgloss.Color("#ffffff") || stSelected.GetForeground() != lipgloss.Color("0") {
+		t.Fatalf("selection %v on %v", stSelected.GetForeground(), stSelected.GetBackground())
+	}
+	m.openSettings()
+	s := m.modal.(*settingsModal)
+	rows := s.settings(m)
+	for _, r := range rows {
+		switch r.label {
+		case "Accent color":
+			if len(r.opts) != len(core.Accents)+1 || r.cur != len(core.Accents) || !strings.Contains(ansi.Strip(r.opts[r.cur]), "#ff8800") {
+				t.Fatalf("accent row %d/%d", r.cur, len(r.opts))
+			}
+		case "Selection color":
+			if len(r.opts) != len(core.Selections)+1 || r.cur != len(core.Selections) {
+				t.Fatalf("selection row %d/%d", r.cur, len(r.opts))
+			}
+		}
+	}
+	v := ansi.Strip(m.View())
+	checkFrame(t, m.View(), 120, 30)
+	if !strings.Contains(v, "#ff8800") {
+		t.Fatalf("custom accent not shown:\n%s", v)
+	}
+	// a long row: the chosen option is shown, the window is marked
+	for _, l := range strings.Split(v, "\n") {
+		if strings.Contains(l, "Accent color") && !strings.Contains(l, "…") {
+			t.Fatalf("no window mark: %q", l)
+		}
+	}
+}

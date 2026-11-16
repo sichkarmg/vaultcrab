@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- More interface colors: 23 accent and 25 selection colors (`ui.accent`, `ui.selection_color`). Besides
+  the terminal colors there are their bright variants (`bright-cyan`, …) and fixed colors of the
+  256-color palette: orange, amber, gold, coral, pink, purple, violet, teal, sky, lime, slate.
+- A color of your own for the accent or the selection in the config: `"#rrggbb"` or a number 0-255;
+  the text on a selection of your own is black or white, whichever reads better.
+
+### Changed
+- A settings row with more choices than fit shows a window around the chosen one, marked with `…`.
+
 ## [0.9.0] - 2026-11-14
 
 ### Changed

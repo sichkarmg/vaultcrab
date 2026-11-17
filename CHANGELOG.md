@@ -8,6 +8,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- The paste dialog has a page **To a file (EOF)** (`f`): the text is written into a file on the server
+  by a here-document typed into the shell. `Tab` completes the path from a listing made in a separate
+  SSH channel (also in the local shell); relative paths are taken from the home directory. An existing
+  file is replaced after a confirmation, `Ctrl+O` appends.
 - Themes (`ui.theme`, Settings → Appearance → Theme) color the whole interface: accent, selection,
   pane borders, session states and organizations. `default` (the terminal colors, the look so far),
   `ocean`, `forest`, `sunset`, `mono`, `nord`, `gruvbox`, `gruvbox-light`, `dracula`, `solarized`,

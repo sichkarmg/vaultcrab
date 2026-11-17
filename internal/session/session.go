@@ -58,6 +58,26 @@ type Remote interface {
 	Close() error
 }
 
+// Execer is a remote that runs commands in channels of its own, next to
+// the shell (connect.Conn, connect.LocalConn).
+type Execer interface {
+	Exec(ctx context.Context, cmd string) ([]byte, error)
+}
+
+// Exec runs a command next to the shell of the connected session (in the
+// login directory, under the login shell of the account) and returns its
+// output; connect.ErrNoExec if the session cannot.
+func (s *Session) Exec(ctx context.Context, cmd string) ([]byte, error) {
+	s.mu.Lock()
+	r := s.remote
+	s.mu.Unlock()
+	e, ok := r.(Execer)
+	if !ok {
+		return nil, connect.ErrNoExec
+	}
+	return e.Exec(ctx, cmd)
+}
+
 // Options configures a session.
 type Options struct {
 	Cols, Rows int

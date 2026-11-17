@@ -80,9 +80,14 @@ func detectSequence(input []byte) (hasSeq bool, width int, msg Msg) {
 // Note: this function is a no-op if bracketed paste was not enabled
 // on the terminal, since in that case we'd never see this
 // particular escape sequence.
+// The markers of a bracketed paste.
+const (
+	bpStart = "\x1b[200~"
+	bpEnd   = "\x1b[201~"
+)
+
 func detectBracketedPaste(input []byte) (hasBp bool, width int, msg Msg) {
 	// Detect the start sequence.
-	const bpStart = "\x1b[200~"
 	if len(input) < len(bpStart) || string(input[:len(bpStart)]) != bpStart {
 		return false, 0, nil
 	}
@@ -92,7 +97,6 @@ func detectBracketedPaste(input []byte) (hasBp bool, width int, msg Msg) {
 
 	// If we saw the start sequence, then we must have an end sequence
 	// as well. Find it.
-	const bpEnd = "\x1b[201~"
 	idx := bytes.Index(input, []byte(bpEnd))
 	inputLen := len(bpStart) + idx + len(bpEnd)
 	if idx == -1 {

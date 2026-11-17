@@ -31,6 +31,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   and the session stayed connected): line breaks of a paste are now sent as CR, as real terminals do,
   not as LF. A bracketed-paste end marker inside pasted text is dropped, so the text cannot end the
   paste early.
+- A large paste (megabytes) from the outer terminal took seconds to arrive, growing as the square of
+  its size (2 MB: 5.5 s); it is now read in linear time (2 MB: under 0.1 s).
 
 ## [0.9.0] - 2026-11-14
 

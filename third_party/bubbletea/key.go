@@ -1,6 +1,7 @@
 package tea
 
 import (
+	"bytes"
 	"context"
 	"fmt"
 	"io"
@@ -559,6 +560,11 @@ func readAnsiInputs(ctx context.Context, msgs chan<- Msg, input io.Reader) error
 	var buf [256]byte
 
 	var leftOverFromPrevIteration []byte
+	// vaultcrab patch: while a bracketed paste is incomplete, the left over
+	// data grows by appending (not copied whole on every read) and only the
+	// new bytes are searched for the end marker: a paste of n bytes took
+	// O(n²/256) before (2 MB: 5 s).
+	pasteSearched := 0 // bytes at the start of the left over known to hold no paste end
 loop:
 	for {
 		// Read and block.
@@ -569,7 +575,18 @@ loop:
 		b := buf[:numBytes]
 		if leftOverFromPrevIteration != nil {
 			b = append(leftOverFromPrevIteration, b...)
+			leftOverFromPrevIteration = b
 		}
+
+		// An open bracketed paste: wait for more unless the new bytes end it.
+		if pasteSearched > 0 {
+			from := max(len(bpStart), pasteSearched-len(bpEnd)+1)
+			if !bytes.Contains(b[from:], []byte(bpEnd)) {
+				pasteSearched = len(b)
+				continue loop
+			}
+		}
+		pasteSearched = 0
 
 		// If we had a short read (numBytes < len(buf)), we're sure that
 		// the end of this read is an event boundary, so there is no doubt
@@ -587,8 +604,16 @@ loop:
 			if w == 0 {
 				// Expecting more bytes beyond the current buffer. Try waiting
 				// for more input.
-				leftOverFromPrevIteration = make([]byte, 0, len(b[i:])+len(buf))
-				leftOverFromPrevIteration = append(leftOverFromPrevIteration, b[i:]...)
+				if leftOverFromPrevIteration != nil {
+					// b is the left over itself: move the rest to its start
+					leftOverFromPrevIteration = append(leftOverFromPrevIteration[:0], b[i:]...)
+				} else {
+					leftOverFromPrevIteration = make([]byte, 0, len(b[i:])+len(buf))
+					leftOverFromPrevIteration = append(leftOverFromPrevIteration, b[i:]...)
+				}
+				if bytes.HasPrefix(leftOverFromPrevIteration, []byte(bpStart)) {
+					pasteSearched = len(leftOverFromPrevIteration)
+				}
 				continue loop
 			}
 

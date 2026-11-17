@@ -1,7 +1,7 @@
 # Local patches (vaultcrab)
 
 Fork of `github.com/charmbracelet/bubbletea@v1.3.10` (MIT, see LICENSE), used via `replace` in the root
-`go.mod`. Tests, examples and tutorials are omitted.
+`go.mod`. Tests, examples and tutorials are omitted, except our own tests of the patches.
 
 1. `key_windows.go` (`readConInputs`): characters missing from the active keyboard layout (for example
    `@ # $ ^ & ~` with a Russian layout) arrive from ConPTY/conhost as an Alt+Numpad sequence whose
@@ -19,3 +19,8 @@ Fork of `github.com/charmbracelet/bubbletea@v1.3.10` (MIT, see LICENSE), used vi
 4. `key_windows.go` (`peekConsInput`), `inputreader_windows.go`: upstream polls the console input every
    16 ms. The reader now waits on the console input handle and on an event set by `Cancel`
    (`WaitForMultipleObjects`), falling back to polling if the event cannot be created.
+5. `key.go` (`readAnsiInputs`), `key_sequences.go`: while a bracketed paste was incomplete, every read of
+   256 bytes copied the whole data received so far and searched it all for the end marker again, so a
+   paste of n bytes took O(n²) (2 MB: 5.5 s, the program looked hung). The data now grows by appending
+   and only the new bytes are searched (2 MB: under 0.1 s). `paste_test.go` covers it (run it in this
+   directory: the root module does not run the tests of the fork).

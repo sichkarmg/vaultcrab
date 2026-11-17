@@ -67,15 +67,56 @@ type pasteModal struct {
 
 	spans [][2]int
 	row   int
+
+	page     int        // pagePreview or pageFile
+	file     *pasteFile // the "To a file" page
+	tabSpans [][2]int   // the page tabs (x ranges on the first row)
 }
 
 const (
 	pasteDo = iota
 	pasteEdit
+	pasteToFile
 	pasteCancel
 )
 
-var pasteLabels = []string{"Paste", "Edit", "Cancel"}
+var pasteLabels = []string{"Paste", "Edit", "To a file", "Cancel"}
+
+// The pages of the paste dialog.
+const (
+	pagePreview = iota
+	pageFile
+)
+
+var pastePages = []string{"Paste", "To a file (EOF)"}
+
+// showPage switches the page of the dialog.
+func (p *pasteModal) showPage(i int) {
+	p.page = i
+	if i == pageFile && p.file == nil {
+		p.file = newPasteFile()
+	}
+}
+
+// tabStrip renders the page tabs and remembers where they are.
+func (p *pasteModal) tabStrip() string {
+	var b strings.Builder
+	p.tabSpans = p.tabSpans[:0]
+	x := 0
+	for i, l := range pastePages {
+		l = " " + l + " "
+		if i == p.page {
+			b.WriteString(stTabActive.Render(l))
+		} else {
+			b.WriteString(stDim.Render(l))
+		}
+		b.WriteString(" ")
+		w := ansi.StringWidth(l)
+		p.tabSpans = append(p.tabSpans, [2]int{x, x + w})
+		x += w + 1
+	}
+	return b.String()
+}
 
 // startEdit opens the text in the editor (escape sequences and control
 // characters removed, as shown).
@@ -114,8 +155,12 @@ func (p *pasteModal) scroll(d int) {
 }
 
 func (p *pasteModal) choose(m *Model, i int) tea.Cmd {
-	if i == pasteEdit {
+	switch i {
+	case pasteEdit:
 		p.startEdit()
+		return nil
+	case pasteToFile:
+		p.showPage(pageFile)
 		return nil
 	}
 	m.modal = nil
@@ -136,9 +181,24 @@ func (p *pasteModal) choose(m *Model, i int) tea.Cmd {
 }
 
 func (p *pasteModal) update(m *Model, msg tea.Msg) tea.Cmd {
+	switch r := msg.(type) {
+	case pasteCompMsg:
+		if p.file != nil {
+			p.file.completed(r)
+		}
+		return nil
+	case pasteCheckMsg:
+		if p.file != nil {
+			return p.file.checked(m, p, r)
+		}
+		return nil
+	}
 	k, ok := msg.(tea.KeyMsg)
 	if !ok {
 		return nil
+	}
+	if p.page == pageFile && !p.editing {
+		return p.file.update(m, p, k)
 	}
 	if p.editing {
 		switch k.String() {
@@ -174,6 +234,8 @@ func (p *pasteModal) update(m *Model, msg tea.Msg) tea.Cmd {
 		p.focus = (p.focus + len(pasteLabels) - 1) % len(pasteLabels)
 	case "e", "у":
 		return p.choose(m, pasteEdit)
+	case "f", "а":
+		return p.choose(m, pasteToFile)
 	case "enter", " ":
 		return p.choose(m, p.focus)
 	case "y", "д":
@@ -186,6 +248,15 @@ func (p *pasteModal) update(m *Model, msg tea.Msg) tea.Cmd {
 
 func (p *pasteModal) mouse(m *Model, msg tea.MouseMsg, x, y int) tea.Cmd {
 	if p.editing {
+		return nil
+	}
+	if msg.Action == tea.MouseActionPress && msg.Button == tea.MouseButtonLeft && y == boxPadY+boxTitleGap {
+		if i := spanAt(p.tabSpans, x-boxPadX); i >= 0 {
+			p.showPage(i)
+		}
+		return nil
+	}
+	if p.page == pageFile {
 		return nil
 	}
 	switch {
@@ -205,13 +276,17 @@ func (p *pasteModal) view(m *Model, w, h int) []string {
 	if p.editing {
 		return p.editView(m, w, h)
 	}
+	if p.page == pageFile {
+		return m.box("Paste", p.tabStrip()+"\n\n"+p.file.view(m, p, w), w)
+	}
 	n := len(p.lines)
 	// the text: as many lines as fit, numbered, long lines cut
-	p.shown = max(3, min(n, h-14))
+	p.shown = max(3, min(n, h-16))
 	p.scroll(0)
 	numW := len(fmt.Sprint(n))
 	textW := max(20, min(100, w-12-numW))
 	var b strings.Builder
+	b.WriteString(p.tabStrip() + "\n\n")
 	b.WriteString(fmt.Sprintf("Paste %s into %s?\n", stBold.Render(fmt.Sprintf("%d lines", n)), stBold.Render(p.s.Host.Name)))
 	b.WriteString(stDim.Render("Each line may run as a command.") + "\n\n")
 	sep := stDim.Render(m.g.v)
@@ -226,9 +301,10 @@ func (p *pasteModal) view(m *Model, w, h int) []string {
 	var btn string
 	btn, p.spans = buttonRow(pasteLabels, p.focus)
 	b.WriteString(btn + "\n\n")
-	b.WriteString(stDim.Render("y: paste · e: edit · n/Esc: cancel · ←/→ Enter: choose"))
-	// title, gap, 3 header lines, the text, position, blank: then the buttons
-	p.row = boxPadY + boxTitleGap + 3 + min(p.shown, n) + 2
+	b.WriteString(stDim.Render("y: paste · e: edit · f: to a file · n/Esc: cancel · ←/→ Enter: choose"))
+	// title, gap, page tabs and a blank, 3 header lines, the text,
+	// position, blank: then the buttons
+	p.row = boxPadY + boxTitleGap + 2 + 3 + min(p.shown, n) + 2
 	return m.box("Paste", b.String(), w)
 }
 

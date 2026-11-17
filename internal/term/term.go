@@ -278,6 +278,14 @@ func (t *Terminal) Title() string {
 	return t.title
 }
 
+// BracketedPaste reports whether the application asked for bracketed
+// pastes (a shell with it on takes a paste of several lines as one input).
+func (t *Terminal) BracketedPaste() bool {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	return t.bracketed
+}
+
 // AltScreen reports whether a full-screen application is active.
 func (t *Terminal) AltScreen() bool {
 	t.mu.Lock()

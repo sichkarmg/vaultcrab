@@ -78,7 +78,13 @@ the vault only at the moment of connecting and never written to disk.
 - **Scripts, widgets, local shell.** Per-item launch scripts with placeholders, a widget column
   with the output of your commands, a local shell (`$SHELL`, or PowerShell via ConPTY on Windows).
 - **Safe multi-line paste.** Pasted text of several lines is shown first and pasted only after
-  confirmation; **Edit** (`e`) opens it in an editor (`Ctrl+S` pastes the edited text).
+  confirmation; **Edit** (`e`) opens it in an editor (`Ctrl+S` pastes the edited text). **To a file**
+  (`f`) writes it into a file on the server instead: a here-document (`cat > FILE << 'VAULTCRAB_EOF'`) is
+  typed into the shell, so the session must be at the prompt of a POSIX shell (sh, bash, zsh). `Tab`
+  completes the path from a listing made in a separate SSH channel, which leaves the shell alone;
+  relative paths are taken from the home directory. An existing file is replaced only after a second
+  `Enter`; `Ctrl+O` appends instead (`>>`). Without bracketed paste in the shell (bash 5.0) tabs of the
+  text may be completed by it: the dialog warns.
 - **Settings inside the program** (`,`), saved to `config.yaml`; a hand-edited config is re-read
   automatically. **Themes** (`ui.theme`) color the whole interface at once: `default` (the terminal
   colors), `ocean`, `forest`, `sunset`, `mono`, `nord`, `gruvbox`, `gruvbox-light`, `dracula`, `solarized`,

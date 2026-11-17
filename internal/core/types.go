@@ -90,6 +90,9 @@ var (
 // LongLockTimeout is the longest lock timeout without a warning.
 const LongLockTimeout = config.LongLockTimeout
 
+// ErrNoExec: the session cannot run commands next to its shell.
+var ErrNoExec = connect.ErrNoExec
+
 // FromTheme as an accent or selection color takes the color of the theme.
 const FromTheme = config.FromTheme
 

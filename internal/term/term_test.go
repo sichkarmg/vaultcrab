@@ -262,7 +262,7 @@ func TestPasteDoesNotBlockOutput(t *testing.T) {
 		t.Fatal("paste blocked the terminal while the remote side does not read")
 	}
 	close(sink.release)
-	want := ansi.BracketedPasteStart + text.String() + ansi.BracketedPasteEnd + "\x1b[1;7R"
+	want := ansi.BracketedPasteStart + strings.ReplaceAll(text.String(), "\n", "\r") + ansi.BracketedPasteEnd + "\x1b[1;7R"
 	deadline := time.Now().Add(3 * time.Second)
 	for sink.String() != want && time.Now().Before(deadline) {
 		time.Sleep(10 * time.Millisecond)
@@ -346,4 +346,19 @@ func TestResizeReflows(t *testing.T) {
 	if v := view(); v[0] != "0123456789abcdefghij-tail" {
 		t.Fatalf("joined: %q", v)
 	}
+}
+
+// Line breaks of a paste go as CR, as from a real terminal (mcedit stopped
+// after the first line of a paste with LF); an end marker inside the text
+// is dropped.
+func TestPasteLineBreaks(t *testing.T) {
+	tm := New(20, 5, 50)
+	var out syncBuf
+	tm.SetSink(&out)
+	tm.Paste("a\nb\r\nc\rd")
+	waitFor(t, func() bool { return out.String() == "a\rb\rc\rd" })
+	tm.WriteString("\x1b[?2004h")
+	tm.Paste("x\n\x1b[201~rm -rf\n")
+	want := "a\rb\rc\rd\x1b[200~x\rrm -rf\r\x1b[201~"
+	waitFor(t, func() bool { return out.String() == want })
 }

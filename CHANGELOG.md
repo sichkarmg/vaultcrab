@@ -26,6 +26,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 - A settings row with more choices than fit shows a window around the chosen one, marked with `…`.
 
+### Fixed
+- Pasting text of several lines into `mcedit` stopped after the first line (the editor kept running
+  and the session stayed connected): line breaks of a paste are now sent as CR, as real terminals do,
+  not as LF. A bracketed-paste end marker inside pasted text is dropped, so the text cannot end the
+  paste early.
+
 ## [0.9.0] - 2026-11-14
 
 ### Changed

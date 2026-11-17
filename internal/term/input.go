@@ -3,6 +3,8 @@
 package term
 
 import (
+	"strings"
+
 	uv "github.com/charmbracelet/ultraviolet"
 	"github.com/charmbracelet/x/ansi"
 )
@@ -74,8 +76,17 @@ func (t *Terminal) SendKey(k Key) {
 	t.emu.SendKey(uv.KeyPressEvent{Code: k.Code, Mod: k.mod()})
 }
 
-// Paste sends text, wrapped in bracketed-paste markers if the remote enabled them.
+// pasteText prepares pasted text as terminals do (xterm, iTerm2, kitty):
+// line breaks become CR, the Enter key, since programs reading the keyboard
+// expect it (mcedit takes LF in a paste for something else: the lines run
+// together and the paste stops); a bracketed-paste end marker in the text
+// is removed, so that the text cannot end the paste early and run as typed.
+var pasteText = strings.NewReplacer("\r\n", "\r", "\n", "\r", ansi.BracketedPasteEnd, "")
+
+// Paste sends text, wrapped in bracketed-paste markers if the remote enabled
+// them; line breaks are sent as CR (pasteText).
 func (t *Terminal) Paste(s string) {
+	s = pasteText.Replace(s)
 	t.mu.Lock()
 	defer t.mu.Unlock()
 	if t.bracketed {

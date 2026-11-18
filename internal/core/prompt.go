@@ -22,6 +22,8 @@ type PromptKind int
 const (
 	PromptPassphrase PromptKind = iota // a secret line (hidden input)
 	PromptHostKey                      // accept a new host key?
+	PromptLogin                        // a login and a password (User is the default login)
+	PromptSaveLogin                    // save a typed login and password to the vault? (Prompt.Save)
 )
 
 // Prompt is a question of a connection to the user.
@@ -34,6 +36,11 @@ type Prompt struct {
 	// Warning is shown with the question (accept-new templates, a retry
 	// after a wrong passphrase).
 	Warning string
+	// User is the login shown in a PromptLogin question; Target names the
+	// server.
+	User, Target string
+
+	save *loginSave // PromptSaveLogin
 
 	reply chan promptReply
 	once  sync.Once
@@ -41,6 +48,7 @@ type Prompt struct {
 }
 
 type promptReply struct {
+	user   string
 	secret []byte
 	answer connect.HostKeyAnswer
 	err    error
@@ -80,11 +88,22 @@ func (p *Prompt) answer(r promptReply) {
 // from now on (it wipes it).
 func (p *Prompt) AnswerSecret(b []byte) { p.answer(promptReply{secret: b}) }
 
+// AnswerLogin answers a login question; password belongs to the connection
+// from now on (it wipes it).
+func (p *Prompt) AnswerLogin(user string, password []byte) {
+	p.answer(promptReply{user: user, secret: password})
+}
+
 // AnswerHostKey answers a host key question.
 func (p *Prompt) AnswerHostKey(a connect.HostKeyAnswer) { p.answer(promptReply{answer: a}) }
 
 // Cancel closes the question: the connection fails.
-func (p *Prompt) Cancel() { p.answer(promptReply{err: errPromptCanceled}) }
+func (p *Prompt) Cancel() {
+	if p.save != nil {
+		p.save.wipe()
+	}
+	p.answer(promptReply{err: errPromptCanceled})
+}
 
 func (s *Service) dropPrompt(p *Prompt) {
 	s.prompts.mu.Lock()

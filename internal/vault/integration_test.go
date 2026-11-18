@@ -134,6 +134,27 @@ func TestIntegrationEdit(t *testing.T) {
 		t.Errorf("password not kept: %v", err)
 	}
 	sec.Wipe()
+	// a typed login and password saved after a refused one
+	if err := c.SetLogin(ctx, id, "carol", []byte("pw-2")); err != nil {
+		t.Fatal(err)
+	}
+	snap, err = c.Snapshot(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for i := range snap.Hosts {
+		if snap.Hosts[i].ID == id {
+			got = &snap.Hosts[i]
+		}
+	}
+	if got.Name != "vaultcrab-test-it-edit2" || got.User != "carol" || got.Port != 3390 || got.FolderID != fid {
+		t.Fatalf("after SetLogin: %+v", got)
+	}
+	sec, err = c.Secret(ctx, id)
+	if err != nil || string(sec.Value) != "pw-2" {
+		t.Errorf("password not set: %v", err)
+	}
+	sec.Wipe()
 	// copy: the password comes from the original
 	cid, err := c.CreateHost(ctx, HostEdit{CopyOf: id, Name: "vaultcrab-test-it-edit2 copy1", Scheme: model.RDP, User: "admin", Addr: "192.0.2.133", FolderID: fid})
 	if err != nil {
@@ -141,7 +162,7 @@ func TestIntegrationEdit(t *testing.T) {
 	}
 	defer c.DeleteItem(context.Background(), cid)
 	sec, err = c.Secret(ctx, cid)
-	if err != nil || string(sec.Value) != "pw-1" {
+	if err != nil || string(sec.Value) != "pw-2" {
 		t.Errorf("password not copied: %v", err)
 	}
 	sec.Wipe()

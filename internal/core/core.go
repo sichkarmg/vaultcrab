@@ -120,6 +120,9 @@ type Options struct {
 	SSH connect.SSHOptions
 	// JumpHistory keeps the connections through jump hosts (nil: none).
 	JumpHistory *jump.History
+	// SSHDial opens the shell of a direct SSH host (connect.DialSSH; tests
+	// replace it).
+	SSHDial session.Dialer
 	// JumpDial connects through a jump host (connect.DialJump; tests
 	// replace it).
 	JumpDial func(ctx context.Context, jump, target connect.Hop, cols, rows int, o connect.SSHOptions) (session.Remote, error)

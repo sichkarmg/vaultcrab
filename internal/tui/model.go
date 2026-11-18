@@ -247,6 +247,13 @@ func (m *Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.notify(true, "test start of %s: %v", msg.name, msg.err)
 		}
 		return m, nil
+	case loginSavedMsg:
+		if msg.err != nil {
+			m.notify(true, "saving the login of %s: %v", msg.target, msg.err)
+		} else {
+			m.notify(false, "the login and password of %s are saved to the vault", msg.target)
+		}
+		return m, nil
 	case passwordCopiedMsg:
 		m.passwordCopied(msg)
 		return m, nil

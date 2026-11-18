@@ -3,7 +3,9 @@
 package tui
 
 import (
+	"context"
 	"strings"
+	"time"
 
 	"github.com/charmbracelet/bubbles/textinput"
 	tea "github.com/charmbracelet/bubbletea"
@@ -19,6 +21,18 @@ type promptModal struct {
 	focus int
 	spans [][2]int
 	row   int
+	// PromptLogin: the login (in) and the password (pw); focus 0 = login,
+	// 1 = password. inRow is the row of the login field in the box.
+	pw    textinput.Model
+	inRow int
+}
+
+var saveLoginButtons = []string{"Save to the vault", "Don't save"}
+
+// loginSavedMsg reports the end of saving a typed login to the vault.
+type loginSavedMsg struct {
+	target string
+	err    error
 }
 
 var hostKeyButtons = []string{"Accept and remember", "Accept once", "Reject"}
@@ -36,7 +50,95 @@ func newPromptModal(m *Model, p *core.Prompt) *promptModal {
 		}
 		pm.in.Focus()
 	}
+	switch p.Kind {
+	case core.PromptLogin:
+		pm.in = textinput.New()
+		pm.in.Prompt = "Login:    "
+		pm.in.Placeholder = "user"
+		pm.in.CharLimit = 256
+		pm.in.SetValue(p.User)
+		pm.in.CursorEnd()
+		pm.pw = textinput.New()
+		pm.pw.Prompt = "Password: "
+		pm.pw.Placeholder = "password"
+		pm.pw.EchoMode = textinput.EchoPassword
+		pm.pw.EchoCharacter = '•'
+		if m.opt.Icons.ASCII() {
+			pm.pw.EchoCharacter = '*'
+		}
+		pm.focusLogin(1) // the password: the login is usually right
+	case core.PromptSaveLogin:
+		pm.focus = 0
+		if p.Warning != "" {
+			pm.focus = 1 // a key would be replaced: Enter does not do it by accident
+		}
+	}
 	return pm
+}
+
+func (pm *promptModal) focusLogin(i int) {
+	pm.focus = i
+	if i == 0 {
+		pm.pw.Blur()
+		pm.in.Focus()
+	} else {
+		pm.in.Blur()
+		pm.pw.Focus()
+	}
+}
+
+// loginKey handles a key in a PromptLogin question.
+func (pm *promptModal) loginKey(m *Model, k tea.KeyMsg) tea.Cmd {
+	switch k.String() {
+	case "esc":
+		pm.pw.SetValue("")
+		m.modal = nil
+		pm.p.Cancel()
+		return nil
+	case "tab", "shift+tab", "up", "down":
+		pm.focusLogin(1 - pm.focus)
+		return nil
+	case "enter":
+		user := strings.TrimSpace(pm.in.Value())
+		switch {
+		case user == "":
+			pm.focusLogin(0)
+			return nil
+		case pm.pw.Value() == "":
+			pm.focusLogin(1)
+			return nil
+		}
+		b := []byte(pm.pw.Value())
+		pm.pw.SetValue("")
+		m.modal = nil
+		pm.p.AnswerLogin(user, b) // the connection wipes it
+		return nil
+	}
+	var cmd tea.Cmd
+	if pm.focus == 0 {
+		pm.in, cmd = pm.in.Update(k)
+	} else {
+		pm.pw, cmd = pm.pw.Update(k)
+	}
+	return cmd
+}
+
+// saveLogin answers a PromptSaveLogin question.
+func (pm *promptModal) saveLogin(m *Model, save bool) tea.Cmd {
+	m.modal = nil
+	if !save {
+		pm.p.Cancel() // wipes the password
+		return nil
+	}
+	p, ctx, target := pm.p, m.ctx, pm.p.User+"@"+pm.p.Target
+	if i := strings.LastIndex(pm.p.Target, "@"); i >= 0 {
+		target = pm.p.User + pm.p.Target[i:]
+	}
+	return func() tea.Msg {
+		c, cancel := context.WithTimeout(ctx, 2*time.Minute)
+		defer cancel()
+		return loginSavedMsg{target: target, err: p.Save(c)}
+	}
 }
 
 // checkPrompt shows the oldest question of a connection when no other
@@ -45,6 +147,7 @@ func (m *Model) checkPrompt() {
 	cur := m.svc.Prompt()
 	if pm, ok := m.modal.(*promptModal); ok && pm.p != cur {
 		pm.in.SetValue("")
+		pm.pw.SetValue("")
 		m.modal = nil
 	}
 	if m.modal == nil && cur != nil {
@@ -60,6 +163,22 @@ func (pm *promptModal) answer(m *Model, a core.HostKeyAnswer) {
 func (pm *promptModal) update(m *Model, msg tea.Msg) tea.Cmd {
 	k, ok := msg.(tea.KeyMsg)
 	if !ok {
+		return nil
+	}
+	switch pm.p.Kind {
+	case core.PromptLogin:
+		return pm.loginKey(m, k)
+	case core.PromptSaveLogin:
+		switch strings.ToLower(k.String()) {
+		case "left", "right", "tab", "shift+tab", "h", "l":
+			pm.focus = 1 - pm.focus
+		case "enter", " ":
+			return pm.saveLogin(m, pm.focus == 0)
+		case "y", "s":
+			return pm.saveLogin(m, true)
+		case "n", "esc":
+			return pm.saveLogin(m, false)
+		}
 		return nil
 	}
 	if pm.p.Kind == core.PromptPassphrase {
@@ -98,6 +217,23 @@ func (pm *promptModal) update(m *Model, msg tea.Msg) tea.Cmd {
 }
 
 func (pm *promptModal) mouse(m *Model, msg tea.MouseMsg, x, y int) tea.Cmd {
+	if msg.Action != tea.MouseActionPress || msg.Button != tea.MouseButtonLeft {
+		return nil
+	}
+	switch pm.p.Kind {
+	case core.PromptLogin:
+		if y == pm.inRow || y == pm.inRow+1 {
+			pm.focusLogin(y - pm.inRow)
+		}
+		return nil
+	case core.PromptSaveLogin:
+		if y == pm.row {
+			if i := spanAt(pm.spans, x-boxPadX); i >= 0 {
+				return pm.saveLogin(m, i == 0)
+			}
+		}
+		return nil
+	}
 	if pm.p.Kind != core.PromptHostKey || msg.Action != tea.MouseActionPress || msg.Button != tea.MouseButtonLeft || y != pm.row {
 		return nil
 	}
@@ -112,6 +248,22 @@ func (pm *promptModal) view(m *Model, w, h int) []string {
 	b.WriteString(pm.p.Text + "\n")
 	if pm.p.Warning != "" {
 		b.WriteString("\n" + stWarn.Render(pm.p.Warning) + "\n")
+	}
+	switch pm.p.Kind {
+	case core.PromptLogin:
+		b.WriteString("\n")
+		pm.inRow = boxPadY + boxTitleGap + strings.Count(b.String(), "\n")
+		b.WriteString(pm.in.View() + "\n" + pm.pw.View() + "\n\n")
+		b.WriteString(stDim.Render("Enter: connect · Tab: login/password · Esc: cancel the connection"))
+		return m.box(pm.p.Title, b.String(), w)
+	case core.PromptSaveLogin:
+		b.WriteString("\n")
+		btns, spans := buttonRow(saveLoginButtons, pm.focus)
+		pm.spans = spans
+		pm.row = boxPadY + boxTitleGap + strings.Count(b.String(), "\n")
+		b.WriteString(btns + "\n\n")
+		b.WriteString(stDim.Render("y: save · n/Esc: don't save · ←/→ Enter"))
+		return m.box(pm.p.Title, b.String(), w)
 	}
 	if pm.p.Kind == core.PromptPassphrase {
 		b.WriteString("\n" + pm.in.View() + "\n\n")

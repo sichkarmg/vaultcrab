@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- When the server refuses the login and password of an SSH item (or the item has none), a login
+  dialog opens with the login of the item and the password focused; the login can be changed. After
+  the connection works, Vaultcrab offers to save the new login and password to the vault item (only
+  those two change, in the format of the item).
+
 ## [1.0.0] - 2026-11-18
 
 The first stable release: from now on the config keys, the vault item fields and the command line

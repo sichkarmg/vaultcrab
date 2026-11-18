@@ -42,6 +42,12 @@ type SSHOptions struct {
 	Legacy bool
 }
 
+// ErrAuthFailed: the server refused the login or the password (or key).
+var ErrAuthFailed = errors.New("authentication failed")
+
+// ErrNoCredential: the vault item has no password or key.
+var ErrNoCredential = errors.New("empty credential in vault")
+
 // HostKeyError is returned when the server key does not match known_hosts.
 type HostKeyError struct {
 	Host        string
@@ -140,7 +146,7 @@ func dialClient(ctx context.Context, h model.Host, sec *secret.Secret, o SSHOpti
 		var he *hopErr
 		if errors.As(err, &he) {
 			if he.stage == StageAuth {
-				return nil, errors.New("authentication failed")
+				return nil, ErrAuthFailed
 			}
 			return nil, he.err
 		}
@@ -471,7 +477,7 @@ func AuthFromSecret(sec *secret.Secret) ([]ssh.AuthMethod, error) { return authM
 // string only inside the callbacks, during the handshake.
 func authMethods(sec *secret.Secret) ([]ssh.AuthMethod, error) {
 	if sec == nil || sec.IsZero() {
-		return nil, errors.New("empty credential in vault")
+		return nil, ErrNoCredential
 	}
 	if sec.Kind == secret.PrivateKey {
 		signer, err := ssh.ParsePrivateKey(sec.Value)
@@ -501,7 +507,7 @@ func authMethods(sec *secret.Secret) ([]ssh.AuthMethod, error) {
 
 func cleanAuthErr(err error) error {
 	if strings.Contains(err.Error(), "unable to authenticate") {
-		return errors.New("authentication failed")
+		return ErrAuthFailed
 	}
 	return err
 }

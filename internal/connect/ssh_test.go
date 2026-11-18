@@ -241,7 +241,7 @@ func TestBadPassword(t *testing.T) {
 	srv := newTestServer(t, nil)
 	sec := secret.FromString("nope")
 	_, err := DialSSH(context.Background(), srv.host("u"), &sec, 80, 24, SSHOptions{})
-	if err == nil || err.Error() != "authentication failed" {
+	if err == nil || err.Error() != "authentication failed" || !errors.Is(err, ErrAuthFailed) {
 		t.Fatalf("err %v", err)
 	}
 }

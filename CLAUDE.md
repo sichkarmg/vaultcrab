@@ -19,7 +19,7 @@ Credentials stay in the user's vault (Bitwarden/Vaultwarden via `bw serve`, gopa
 6. In every PR list what can only be verified manually on macOS (interactive TUI, mouse, external client windows).
 
 ## Releases
-- SemVer. While 0.x: feat -> minor, fix -> patch. 1.0.0 is decided by the owner.
+- SemVer. feat -> minor, fix -> patch. A breaking change (config keys, vault item fields, CLI options) needs a new major version, decided by the owner.
 - Cut a release when user-visible changes have accumulated on main, or when asked. Steps: release PR (version in code, CHANGELOG, `make release-check`) -> merge -> annotated tag vX.Y.Z ->
   release workflow creates a DRAFT with binaries and checksums -> run `scripts/release-verify.sh` (Mint 20, Windows) -> publish the draft as a PRE-RELEASE.
 - Never mark a release as "latest": the owner promotes it after manual macOS testing.

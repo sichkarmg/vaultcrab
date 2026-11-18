@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.0.0] - 2026-11-18
+
+The first stable release: from now on the config keys, the vault item fields and the command line
+options change only in a new major version.
+
 ### Added
 - The paste dialog has a page **To a file (EOF)** (`f`): the text is written into a file on the server
   by a here-document typed into the shell. `Tab` completes the path from a listing made in a separate
@@ -267,7 +272,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   item editing, scripts, widgets, local shell, settings inside the program.
 - On the first start, offer to copy the config directory of the project's former name.
 
-[Unreleased]: https://github.com/sichkarmg/vaultcrab/compare/v0.9.0...HEAD
+[Unreleased]: https://github.com/sichkarmg/vaultcrab/compare/v1.0.0...HEAD
+[1.0.0]: https://github.com/sichkarmg/vaultcrab/compare/v0.9.0...v1.0.0
 [0.9.0]: https://github.com/sichkarmg/vaultcrab/compare/v0.8.0...v0.9.0
 [0.8.0]: https://github.com/sichkarmg/vaultcrab/compare/v0.7.0...v0.8.0
 [0.7.0]: https://github.com/sichkarmg/vaultcrab/compare/v0.6.0...v0.7.0

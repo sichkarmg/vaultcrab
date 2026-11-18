@@ -12,8 +12,8 @@ Credentials stay in your vault (Bitwarden/Vaultwarden, gopass).**
 
 **English** · [Русский](README.ru.md)
 
-> **Project status: early (v0.3.0).** Config keys and behaviour may still change. The
-> Bitwarden/Vaultwarden provider is implemented; gopass is planned (the extension point is
+> **Project status: stable (1.x).** Config keys, vault item fields and command line options change
+> only in a new major version. The Bitwarden/Vaultwarden provider is implemented; gopass is planned (the extension point is
 > described in [`docs/extending.md`](docs/extending.md)).
 
 Vaultcrab is a single static binary for Linux, Windows and macOS: a host list read from your

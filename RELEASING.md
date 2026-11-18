@@ -1,7 +1,8 @@
 # Releasing
 
-Vaultcrab follows [SemVer](https://semver.org/). While the version is 0.x, new features bump the
-minor version and fixes bump the patch version. 1.0.0 is decided by the owner.
+Vaultcrab follows [SemVer](https://semver.org/). New features bump the minor version and fixes bump
+the patch version. A change that breaks config keys, vault item fields or command line options needs
+a new major version, which the owner decides.
 
 ## Steps
 

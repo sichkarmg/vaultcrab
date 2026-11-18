@@ -53,6 +53,9 @@ the vault only at the moment of connecting and never written to disk.
 - **Built-in SSH** (`golang.org/x/crypto/ssh`): password, keyboard-interactive, keys; own
   `known_hosts` with trust on first use; keepalives; legacy algorithms as a last resort for old
   devices (e.g. MikroTik RouterOS 6).
+- **Wrong password?** When the server refuses the login and password of the item (or the item has
+  none), a dialog asks for them and connects; after that works, Vaultcrab offers to save the new
+  login and password to the item.
 - **Through a jump host** (`j`): pick a jump host or template, type the IP of the target — no vault
   item per machine behind a bastion; host keys of both hops checked, a history of the targets used.
 - **Tunnels** (`Ctrl+T` in the jump picker, `T` on a host, prefix `T`): forward a local port through a
@@ -233,6 +236,22 @@ used as a **jump host** (also for its tunnels); a jump template can set `knock:`
 itself (Settings → Jump hosts → Knock) for a jump host typed as an address. A target behind a jump
 host is not knocked (the knocks would have to come from the jump host). The sequence is not a secret
 of the item: it is a plain field, like the port.
+
+### A refused password
+
+When the server refuses the credential of an SSH item (a changed password, another login) or the
+item has no password, the session opens a **login dialog**: the login of the item is filled in and the
+**password field has the focus**; `Tab` (or a click) switches to the login to change it. `Enter`
+connects; a wrong pair asks again ("Wrong login or password"), `Esc` ends the attempt (`Enter` in the
+tab tries again with the vault). The typed password is used for this connection only and wiped.
+
+After the connection works, a question offers to **save the login and password to the vault item**
+(`y` / `Enter` saves, `n` / `Esc` does not). Only the login and the password of the item change, in the
+format the item already uses (`user@host` in the username, or the username and the user of an
+`ssh://` URI); notes, fields, tags, TOTP and the folder stay as they are. If the password field held a
+private key, the question says that the key would be replaced and "Don't save" is focused. The
+question appears only while the vault can be changed (unlocked, server reachable). Hosts reached
+through a jump host keep their own password prompt (see [Jump hosts](#jump-hosts)).
 
 ## Several vaults
 

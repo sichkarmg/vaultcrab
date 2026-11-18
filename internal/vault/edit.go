@@ -390,3 +390,79 @@ func (c *Client) DeleteItem(ctx context.Context, id string) error {
 	_, err := c.do(ctx, http.MethodDelete, "/object/item/"+url.PathEscape(id), nil)
 	return err
 }
+
+// SetLogin replaces the login and the password of a host item and keeps
+// everything else of it. The login goes where the item keeps it: the
+// username (and the user of the host URI, if the URI has one), or the user
+// part of "user@host" in the username. password is wiped.
+func (c *Client) SetLogin(ctx context.Context, id, user string, password []byte) error {
+	defer secret.Zero(password)
+	user = strings.TrimSpace(user)
+	if user == "" || strings.ContainsAny(user, "@ \t\r\n") {
+		return errors.New("the login must not be empty or contain @ or spaces")
+	}
+	path := "/object/item/" + url.PathEscape(id)
+	data, err := c.do(ctx, http.MethodGet, path, nil) // the full item, secrets included
+	if err != nil {
+		return err
+	}
+	defer secret.Zero(data)
+	var it bwItem
+	if err := json.Unmarshal(data, &it); err != nil {
+		return errors.New("bw: invalid item")
+	}
+	if _, ok := toHost(&it); !ok {
+		return errors.New("the item is not a host item")
+	}
+	item := map[string]json.RawMessage{}
+	if err := json.Unmarshal(data, &item); err != nil {
+		return errors.New("bw: invalid item")
+	}
+	defer wipeMap(item)
+	login := map[string]json.RawMessage{}
+	defer wipeMap(login)
+	if err := json.Unmarshal(item["login"], &login); err != nil {
+		return fmt.Errorf("item login: %w", err)
+	}
+	set := func(m map[string]json.RawMessage, k string, v any) {
+		b, _ := json.Marshal(v)
+		secret.Zero(m[k])
+		m[k] = b
+	}
+	if i := hostURI(&it, flagScheme(&it)); i >= 0 {
+		set(login, "username", user)
+		if pu, err := url.Parse(strings.TrimSpace(it.Login.URIs[i].URI)); err == nil && pu.User != nil {
+			// the user in the URI wins over the username: change it too
+			var uris []map[string]json.RawMessage
+			if err := json.Unmarshal(login["uris"], &uris); err != nil || i >= len(uris) {
+				return errors.New("bw: invalid item uris")
+			}
+			pu.User = url.User(user)
+			set(uris[i], "uri", pu.String())
+			set(login, "uris", uris)
+		}
+	} else {
+		old := strings.TrimSpace(str(it.Login.Username))
+		at := strings.LastIndex(old, "@")
+		if at < 0 {
+			return errors.New("the username of the item is not user@host")
+		}
+		set(login, "username", user+old[at:])
+	}
+	secret.Zero(login["password"])
+	login["password"] = appendJSONString(nil, password) // wiped with the login map
+	lb, err := json.Marshal(login)
+	if err != nil {
+		return err
+	}
+	secret.Zero(item["login"])
+	item["login"] = lb
+	body, err := json.Marshal(item)
+	if err != nil {
+		return err
+	}
+	defer secret.Zero(body)
+	resp, err := c.do(ctx, http.MethodPut, path, body)
+	secret.Zero(resp)
+	return err
+}

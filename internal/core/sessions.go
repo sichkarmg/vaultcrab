@@ -31,6 +31,9 @@ type sessions struct {
 func (r *sessions) init(s *Service) {
 	r.svc = s
 	r.dial = session.SSHDialer(s.opts.SSH)
+	if s.opts.SSHDial != nil {
+		r.dial = s.opts.SSHDial
+	}
 }
 
 // ErrNotSSH is returned when opening a terminal for a non-SSH host.
@@ -92,14 +95,19 @@ func (s *Service) newSSHSession(h model.Host, cols, rows int, vncSpec *connect.L
 		// through a jump host: the dialer gets the keys of both hops
 		dial, sec = s.jumpDialer(spec), nil
 	}
-	sess := session.New(h, session.Options{
+	o := session.Options{
 		Cols: cols, Rows: rows,
 		Scrollback: s.opts.Scrollback,
 		Secret:     sec,
 		Dial:       dial,
 		Notify:     s.emit,
 		Debug:      s.connDebug.Load,
-	})
+	}
+	if h.Scheme == model.SSH && sec != nil {
+		// a refused credential: ask for a login and a password, offer to save them
+		o.Login, o.LoginOK = s.askLogin(h), s.offerSave(h)
+	}
+	sess := session.New(h, o)
 	s.sessions.mu.Lock()
 	s.sessions.list = append(s.sessions.list, sess)
 	s.sessions.mu.Unlock()

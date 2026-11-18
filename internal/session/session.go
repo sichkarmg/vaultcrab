@@ -11,6 +11,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"slices"
 	"strings"
 	"sync"
 	"time"
@@ -89,9 +90,25 @@ type Options struct {
 	// Hold keeps the pane open after a clean exit (script output stays
 	// visible; Enter runs it again).
 	Hold bool
+	// Login, if set, asks the user for a login and a password when the
+	// server refuses the credential of the vault (or the vault has none);
+	// the session then connects with them. It returns an error when the
+	// user cancels.
+	Login func(ctx context.Context, q LoginQuestion) (user string, password []byte, err error)
+	// LoginOK is called after a connection with a typed login succeeded;
+	// it owns password (wipes it).
+	LoginOK func(user string, password []byte, replacesKey bool)
 	// Debug reports whether connection attempts are traced (ssh.debug): the
 	// steps are written into the terminal when the attempt fails.
 	Debug func() bool
+}
+
+// LoginQuestion describes why a login and a password are asked.
+type LoginQuestion struct {
+	User   string // the login to show (the one of the vault, then the typed one)
+	Reason error  // connect.ErrAuthFailed or connect.ErrNoCredential
+	Key    bool   // the vault credential is a private key
+	Retry  bool   // a typed login was refused
 }
 
 // SSHDialer adapts connect.DialSSH.
@@ -246,10 +263,15 @@ func (s *Session) run(ctx context.Context) {
 		}
 	}
 	cols, rows := s.Term.Size()
+	key := sec.Kind == secret.PrivateKey
 	r, err := s.opts.Dial(cctx, s.Host, &sec, cols, rows)
 	sec.Wipe()
 	ccancel()
 	s.setDebug(tr)
+	if err != nil && s.opts.Login != nil && ctx.Err() == nil &&
+		(errors.Is(err, connect.ErrAuthFailed) || errors.Is(err, connect.ErrNoCredential)) {
+		r, err = s.relogin(ctx, tr, err, key)
+	}
 	if err != nil {
 		tr.Add("failed: %v", err)
 		s.setDebug(tr)
@@ -313,6 +335,51 @@ func (s *Session) run(ctx context.Context) {
 	s.exited = clean
 	s.mu.Unlock()
 	s.setState(Disconnected, cause)
+}
+
+// relogin asks for a login and a password after the vault credential was
+// refused (failed) and connects with them, again after each refusal, until
+// the server accepts them or the user cancels (then failed is returned).
+func (s *Session) relogin(ctx context.Context, tr *connect.Trace, failed error, key bool) (Remote, error) {
+	q := LoginQuestion{User: s.Host.User, Reason: failed, Key: key}
+	for {
+		if errors.Is(q.Reason, connect.ErrNoCredential) {
+			s.status("the vault item has no password — type the login and the password")
+		} else {
+			s.status("%v — type the login and the password", q.Reason)
+		}
+		user, pw, err := s.opts.Login(ctx, q)
+		if err != nil {
+			secret.Zero(pw)
+			return nil, failed
+		}
+		h := s.Host
+		h.User = user
+		sec := secret.Secret{Kind: secret.Password, Value: slices.Clone(pw)}
+		tr.Add("connecting as %q with the typed password", user)
+		cctx, ccancel := context.WithTimeout(ctx, s.opts.Timeout)
+		if tr != nil {
+			cctx = connect.WithTrace(cctx, tr)
+		}
+		cols, rows := s.Term.Size()
+		r, err := s.opts.Dial(cctx, h, &sec, cols, rows)
+		sec.Wipe()
+		ccancel()
+		s.setDebug(tr)
+		if err == nil {
+			if s.opts.LoginOK != nil {
+				go s.opts.LoginOK(user, pw, key)
+			} else {
+				secret.Zero(pw)
+			}
+			return r, nil
+		}
+		secret.Zero(pw)
+		if !errors.Is(err, connect.ErrAuthFailed) || ctx.Err() != nil {
+			return nil, err
+		}
+		q = LoginQuestion{User: user, Reason: err, Key: key, Retry: true}
+	}
 }
 
 func (s *Session) setDebug(tr *connect.Trace) {

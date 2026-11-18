@@ -86,6 +86,37 @@ func truthy(v string) bool {
 	return false
 }
 
+// hostURI returns the index of the URI that gives the address of a host
+// item (the first one with a known scheme, the scheme of the flag field
+// flag if set), -1 if none.
+func hostURI(it *bwItem, flag model.Scheme) int {
+	for i, u := range it.Login.URIs {
+		pu, err := url.Parse(strings.TrimSpace(u.URI))
+		if err != nil || pu.Host == "" {
+			continue
+		}
+		sc, ok := model.ParseScheme(pu.Scheme)
+		if !ok || flag != "" && sc != flag {
+			continue
+		}
+		return i
+	}
+	return -1
+}
+
+// flagScheme returns the scheme of the flag field of an item ("" if none).
+func flagScheme(it *bwItem) model.Scheme {
+	for _, f := range it.Fields {
+		if f.Type == fieldHidden || f.Type == fieldLinked || f.Name == "" {
+			continue
+		}
+		if sc, ok := model.ParseScheme(strings.ToLower(strings.TrimSpace(f.Name))); ok && truthy(str(f.Value)) {
+			return sc
+		}
+	}
+	return ""
+}
+
 // toHost converts a vault item to a Host. ok is false when the item is not a
 // connectable host.
 //
@@ -134,18 +165,9 @@ func toHost(it *bwItem) (model.Host, bool) {
 	username := strings.TrimSpace(str(it.Login.Username))
 
 	// 1. URI with a known scheme.
-	for _, u := range it.Login.URIs {
-		pu, err := url.Parse(strings.TrimSpace(u.URI))
-		if err != nil || pu.Host == "" {
-			continue
-		}
-		sc, ok := model.ParseScheme(pu.Scheme)
-		if !ok {
-			continue
-		}
-		if flagScheme != "" && sc != flagScheme {
-			continue
-		}
+	if i := hostURI(it, flagScheme); i >= 0 {
+		pu, _ := url.Parse(strings.TrimSpace(it.Login.URIs[i].URI))
+		sc, _ := model.ParseScheme(pu.Scheme)
 		h.Scheme = sc
 		h.Addr = pu.Hostname()
 		if p, err := strconv.Atoi(pu.Port()); err == nil {
@@ -156,7 +178,6 @@ func toHost(it *bwItem) (model.Host, bool) {
 			h.User = pu.User.Username()
 		}
 		h.Path = strings.Trim(pu.Path, "/")
-		break
 	}
 	// 2. Flag field + user@host[:port] in username.
 	if h.Scheme == "" && flagScheme != "" {

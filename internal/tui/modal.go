@@ -337,7 +337,7 @@ func newConfirm(text string, yes func(m *Model) tea.Cmd) *confirmModal {
 // labels names the yes button after the question ("Close …?" gives Close).
 func (c *confirmModal) labels() []string {
 	yes := "Yes"
-	for _, w := range []string{"Close", "Quit", "Delete"} {
+	for _, w := range []string{"Close", "Quit", "Delete", "Open"} {
 		if strings.HasPrefix(c.text, w) {
 			yes = w
 		}
@@ -466,6 +466,7 @@ func (h *helpModal) view(m *Model, w, hh int) []string {
 		{"Up/Down PgUp/PgDn Home/End", "move"},
 		{"Enter / double click", "connect (SSH: new tab; VNC/SMB/FTP/SFTP/RDP: external program) / fold group"},
 		{"Right/Left Space", "expand / collapse"},
+		{"Space / Insert / Ctrl+click", "mark the host (✓) to open several at once; Enter opens the marked ones after a question; Esc clears the marks"},
 		{"| / -", "open in a new pane (right / below) of the last session tab"},
 		{"t", "local terminal in a new tab (anywhere: " + m.opt.Prefix + " t)"},
 		{jumpKey(m), "connect through a jump host: 1. the jump host or template, 2. the target IP (anywhere: " + m.opt.Prefix + " " + jumpKey(m) + ")"},

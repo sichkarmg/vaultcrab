@@ -61,6 +61,8 @@ the vault only at the moment of connecting and never written to disk.
 - **Tunnels** (`Ctrl+T` in the jump picker, `T` on a host, prefix `T`): forward a local port through a
   jump host (Proxmox web on `https://localhost:port`) or run a SOCKS proxy; saved tunnels, reconnection,
   `127.0.0.1` only by default.
+- **Open several hosts at once.** `Space` (or `Insert`, or `Ctrl`/`Alt`+click) marks hosts in the list
+  (`✓`); `Enter` asks "Open N sessions at once?" and opens them all in tabs. `Esc` clears the marks.
 - **Tabs and panes.** Each session is a terminal emulator (16/256/true colour, Unicode, `htop`,
   `mc`, `vim`, mouse in remote apps). Split panes horizontally and vertically, resize with keys or
   by dragging borders. Dropped sessions are marked `✗` (or, with `ui.tab_status: color`, by the

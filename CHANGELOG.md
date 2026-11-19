@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- Several hosts can be opened at once: `Space` (or `Insert`, `Ctrl`/`Alt`+click) marks hosts in the
+  list (`✓`), `Enter` asks "Open N sessions at once?" and opens them all; `Esc` clears the marks.
+
 ### Changed
 - The paste dialog no longer blocks the other tabs: while it is open, other tabs and the host list
   can be switched to (prefix + digit, `Ctrl+PgDn`/`PgUp`, a click on the tab bar); the dialog waits on

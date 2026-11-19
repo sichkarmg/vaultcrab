@@ -140,10 +140,11 @@ func (m *Model) tabItems() []barItem {
 func (m *Model) tabItem(n int, more string) barItem {
 	t := m.tabs[n-1]
 	active := n == m.active
-	title := t.title(m.g)
-	if tw := m.tabWidth(); ansi.StringWidth(title) > tw {
+	title, panes := t.titleParts(m.g)
+	if tw := max(1, m.tabWidth()-ansi.StringWidth(panes)); ansi.StringWidth(title) > tw {
 		title = ansi.Truncate(title, tw, m.g.ell)
 	}
+	title += panes
 	zoom := ""
 	if t.zoomed() {
 		zoom = m.opt.Icons.Get(core.IconZoom)

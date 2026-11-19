@@ -26,6 +26,8 @@ type tab struct {
 
 	name string // set by the user (rename_tab); "" = the host of the focused pane
 
+	parked modal // the paste dialog of this tab while another tab is shown
+
 	seen      uint64    // output of the tab's sessions when it was last shown
 	resizedAt time.Time // shells redraw after a resize: not activity
 }

@@ -46,6 +46,7 @@ type pasteFile struct {
 }
 
 type pasteCompMsg struct {
+	f     *pasteFile
 	seq   int
 	input string
 	names []string
@@ -53,6 +54,7 @@ type pasteCompMsg struct {
 }
 
 type pasteCheckMsg struct {
+	f             *pasteFile
 	seq           int
 	exists, isDir bool
 	err           error
@@ -213,7 +215,7 @@ func (f *pasteFile) complete(p *pasteModal, back bool) tea.Cmd {
 	dir, _ := splitPath(input)
 	f.busy, f.err = "listing "+dirLabel(dir), ""
 	return execCmd(p.s, listCmd(dir), func(out []byte, err error) tea.Msg {
-		return pasteCompMsg{seq: seq, input: input, names: strings.Split(strings.TrimRight(string(out), "\n"), "\n"), err: err}
+		return pasteCompMsg{f: f, seq: seq, input: input, names: strings.Split(strings.TrimRight(string(out), "\n"), "\n"), err: err}
 	})
 }
 
@@ -229,6 +231,18 @@ func (f *pasteFile) setValue(v string) {
 	f.in.SetValue(v)
 	f.in.CursorEnd()
 	f.shown = v
+}
+
+// pasteFileOf returns the "To a file" page a background result belongs
+// to, nil for other messages.
+func pasteFileOf(msg tea.Msg) *pasteFile {
+	switch r := msg.(type) {
+	case pasteCompMsg:
+		return r.f
+	case pasteCheckMsg:
+		return r.f
+	}
+	return nil
 }
 
 func (f *pasteFile) completed(msg pasteCompMsg) {
@@ -287,7 +301,7 @@ func (f *pasteFile) submit(m *Model, p *pasteModal) tea.Cmd {
 	cmd := fmt.Sprintf("if [ -d %s ]; then echo dir; elif [ -e %s ]; then echo file; else echo none; fi", w, w)
 	return execCmd(p.s, cmd, func(out []byte, err error) tea.Msg {
 		r := strings.TrimSpace(string(out))
-		return pasteCheckMsg{seq: seq, exists: r == "file", isDir: r == "dir", err: err}
+		return pasteCheckMsg{f: f, seq: seq, exists: r == "file", isDir: r == "dir", err: err}
 	})
 }
 

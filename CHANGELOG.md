@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.2.0] - 2026-11-19
+
 ### Added
 - Tab size "fit the window" (Settings → Appearance → Tab size, `ui.tab_fit: true`): no fixed tab
   width; the tabs share the width of the window and their titles shorten evenly as tabs are added,
@@ -298,7 +300,8 @@ options change only in a new major version.
   item editing, scripts, widgets, local shell, settings inside the program.
 - On the first start, offer to copy the config directory of the project's former name.
 
-[Unreleased]: https://github.com/sichkarmg/vaultcrab/compare/v1.1.0...HEAD
+[Unreleased]: https://github.com/sichkarmg/vaultcrab/compare/v1.2.0...HEAD
+[1.2.0]: https://github.com/sichkarmg/vaultcrab/compare/v1.1.0...v1.2.0
 [1.1.0]: https://github.com/sichkarmg/vaultcrab/compare/v1.0.0...v1.1.0
 [1.0.0]: https://github.com/sichkarmg/vaultcrab/compare/v0.9.0...v1.0.0
 [0.9.0]: https://github.com/sichkarmg/vaultcrab/compare/v0.8.0...v0.9.0

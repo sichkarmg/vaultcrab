@@ -36,7 +36,8 @@ type hostList struct {
 	rows     []core.Row
 	cursor   int
 	offset   int
-	selected string // key of the selected row, kept across rebuilds
+	selected string          // key of the selected row, kept across rebuilds
+	marked   map[string]bool // IDs of the hosts marked to open together (Space)
 
 	listTop int // y of the first list row within the body (for mouse)
 	listH   int
@@ -215,7 +216,12 @@ func (l *hostList) key(msg tea.KeyMsg) tea.Cmd {
 	case "end":
 		l.move(len(l.rows))
 	case "enter":
+		if len(l.markedHosts()) > 0 {
+			return l.openMarked()
+		}
 		return l.activate()
+	case "insert":
+		l.toggleMark()
 	case "|", "-":
 		// Open in a new pane of the last used session tab.
 		r := l.current()
@@ -232,7 +238,9 @@ func (l *hostList) key(msg tea.KeyMsg) tea.Cmd {
 		}
 		return m.splitWith(t, *r.Host, dir)
 	case "right", "l", " ":
-		if r := l.current(); r != nil && r.Kind == core.GroupRow {
+		if r := l.current(); r != nil && r.Kind == core.HostRow && msg.String() == " " {
+			l.toggleMark()
+		} else if r != nil && r.Kind == core.GroupRow {
 			if msg.String() == " " {
 				l.setCollapsed(r.Key, !r.Collapsed)
 			} else if r.Collapsed {
@@ -256,6 +264,10 @@ func (l *hostList) key(msg tea.KeyMsg) tea.Cmd {
 	case "/":
 		return l.startSearch()
 	case "esc":
+		if len(l.marked) > 0 {
+			l.marked = nil // the marks first, a second Esc clears the search
+			return nil
+		}
 		l.clearSearch()
 	case "F":
 		l.resetFilters()
@@ -565,10 +577,85 @@ func (l *hostList) listMouse(msg tea.MouseMsg, x, y int) tea.Cmd {
 		}
 		return nil
 	}
+	if msg.Ctrl || msg.Alt {
+		// Ctrl+click (Alt+click where the terminal keeps Ctrl+click) marks
+		l.m.lastClickKey = ""
+		l.toggleMarkOf(r.Host.ID)
+		return nil
+	}
 	if double {
 		l.m.lastClickKey = ""
+		if len(l.markedHosts()) > 0 {
+			return l.openMarked()
+		}
 		return l.activate()
 	}
+	return nil
+}
+
+// toggleMark marks the selected host to be opened with the others (or
+// unmarks it) and moves down, so that Space marks a run of hosts.
+func (l *hostList) toggleMark() {
+	if r := l.current(); r != nil && r.Kind == core.HostRow {
+		l.toggleMarkOf(r.Host.ID)
+		l.move(1)
+	}
+}
+
+func (l *hostList) toggleMarkOf(id string) {
+	if l.marked[id] {
+		delete(l.marked, id)
+		return
+	}
+	if l.marked == nil {
+		l.marked = map[string]bool{}
+	}
+	l.marked[id] = true
+}
+
+// markedHosts returns the marked hosts that still exist, in the order of
+// the vault snapshot.
+func (l *hostList) markedHosts() []core.Host {
+	if len(l.marked) == 0 {
+		return nil
+	}
+	var out []core.Host
+	for _, h := range l.m.svc.Snapshot().Hosts {
+		if l.marked[h.ID] {
+			out = append(out, h)
+		}
+	}
+	return out
+}
+
+// openMarked opens the marked hosts after a confirmation (one is opened at
+// once); the first of them is shown.
+func (l *hostList) openMarked() tea.Cmd {
+	hosts := l.markedHosts()
+	open := func(m *Model) tea.Cmd {
+		l.marked = nil
+		first := len(m.tabs) + 1
+		var cmds []tea.Cmd
+		for _, h := range hosts {
+			cmds = append(cmds, m.activateHost(h))
+		}
+		if len(m.tabs) >= first {
+			m.setActive(first)
+		}
+		return tea.Batch(cmds...)
+	}
+	if len(hosts) == 1 {
+		return open(l.m)
+	}
+	names := make([]string, 0, len(hosts))
+	for i, h := range hosts {
+		if i == 8 {
+			names = append(names, fmt.Sprintf("… and %d more", len(hosts)-i))
+			break
+		}
+		names = append(names, "  "+h.Name)
+	}
+	l.m.modal = newConfirm(fmt.Sprintf("Open %d sessions at once?\n\n%s", len(hosts), strings.Join(names, "\n")), open)
 	return nil
 }
 
@@ -579,6 +666,9 @@ func (l *hostList) status() string {
 	}
 	if r.Kind == core.GroupRow {
 		return fmt.Sprintf("%s · %d host(s) · Enter/Space fold · ? help", r.Label, r.Count)
+	}
+	if n := len(l.markedHosts()); n > 0 && !l.searching {
+		return fmt.Sprintf("%d marked · Enter opens them · Space mark/unmark · Esc clear the marks", n)
 	}
 	if l.searching {
 		return r.Host.Target() + " · typing the search · Up/Down move · Enter/Esc leave the field (the search stays)"
@@ -776,13 +866,17 @@ func (l *hostList) renderRow(r *core.Row, w int, selected bool) string {
 		right = ansi.Truncate(right, room, l.m.g.ell)
 	}
 	gap := max(1, w-2-ansi.StringWidth(left)-ansi.StringWidth(right))
+	mark := " "
+	if l.marked[h.ID] {
+		mark = stKey.Render(l.m.ascii("✓")) // marked to open with the others
+	}
 	if selected {
-		return state + " " + stSelected.Render(left+strings.Repeat(" ", gap)+right)
+		return state + mark + stSelected.Render(left+strings.Repeat(" ", gap)+right)
 	}
 	if c := l.m.hostColor(h); c != "" { // the name in its color label
 		left = fmt.Sprintf("%s%s %s%s", indent, l.schemeIcon(h), labelStyle(c, false).Render(h.Name), fav)
 	}
-	return state + " " + left + strings.Repeat(" ", gap) + stDim.Render(right)
+	return state + mark + left + strings.Repeat(" ", gap) + stDim.Render(right)
 }
 
 // details renders the side panel for the selected row.

@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- Several hosts can be opened at once: `Space` (or `Insert`, `Ctrl`/`Alt`+click) marks hosts in the
+  list (`✓`), `Enter` asks "Open N sessions at once?" and opens them all; `Esc` clears the marks.
+
 ### Changed
 - The unlock dialog opens over any open dialog (the item form, the settings) instead of replacing it:
   after unlocking, or `Esc`, that dialog is back with what was typed.

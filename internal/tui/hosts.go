@@ -275,7 +275,7 @@ func (l *hostList) key(msg tea.KeyMsg) tea.Cmd {
 		m.svc.Sync(m.ctx) // syncs vaults that are up, retries unreachable ones
 	case "u":
 		if _, ok := m.svc.LockedVault(); ok {
-			m.modal = newUnlock(m)
+			m.openUnlock(newUnlock(m))
 		} else {
 			m.notify(false, "vault is %s", m.svc.Status().State)
 		}

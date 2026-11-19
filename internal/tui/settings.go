@@ -534,6 +534,8 @@ func (s *settingsModal) settings(m *Model) []setting {
 			func(a *core.Appearance, i int) { a.Widgets = i == 0 }},
 		{"Host list width", wl, slices.Index(widths, a.ListWidth),
 			func(a *core.Appearance, i int) { a.ListWidth = widths[i] }},
+		{"Tab size", []string{"fixed (Tab width)", "fit the window"}, onOff(!a.TabFit),
+			func(a *core.Appearance, i int) { a.TabFit = i == 1 }},
 		{"Tab width", twl, slices.Index(tws, a.TabWidth),
 			func(a *core.Appearance, i int) { a.TabWidth = tws[i] }},
 		{"Tab status", tabStatuses, max(0, slices.Index(tabStatuses, a.TabStatus)),

@@ -26,12 +26,13 @@ func TestSaveAppearanceKeepsTheRest(t *testing.T) {
 	}
 	a := old
 	a.TabsBottom, a.SSHIcon, a.Accent, a.Widgets, a.ListWidth, a.Selection, a.Theme = true, Icon{"#", "#"}, "green", !old.Widgets, 50, "blue", "nord"
+	a.TabFit = true
 	if err := SaveAppearance(path, old, a); err != nil {
 		t.Fatal(err)
 	}
 	b, _ := os.ReadFile(path)
 	s := string(b)
-	for _, want := range []string{"# my config", "# where the tabs are", "prefix: ctrl+a", "tabs_position: bottom", "accent: green", `unicode: "#"`, "list_width: 50", "selection_color: blue", "theme: nord"} {
+	for _, want := range []string{"# my config", "# where the tabs are", "prefix: ctrl+a", "tabs_position: bottom", "accent: green", `unicode: "#"`, "list_width: 50", "selection_color: blue", "theme: nord", "tab_fit: true"} {
 		if !strings.Contains(s, want) {
 			t.Errorf("missing %q in\n%s", want, s)
 		}

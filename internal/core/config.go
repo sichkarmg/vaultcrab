@@ -222,6 +222,7 @@ func restartNeeded(old, cur config.Config) []string {
 		c.External, c.Scripts = nil, nil
 		// applied live (the settings dialog)
 		c.UI.TabsPosition, c.UI.Accent, c.UI.Selection, c.UI.ShowTree, c.UI.ShowNotes, c.UI.ListWidth, c.UI.TabWidth, c.UI.TabStatus = "", "", "", false, false, 0, 0, ""
+		c.UI.TabFit = false
 		c.UI.RestoreTabs, c.UI.RestoreView = false, false
 		c.UI.FolderColors, c.UI.TagColors = nil, nil // read at every redraw
 		c.UI.Theme = ""

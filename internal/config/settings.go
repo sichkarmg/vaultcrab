@@ -31,6 +31,7 @@ type Appearance struct {
 	Widgets    bool
 	ListWidth  int    // 0 = automatic
 	TabWidth   int    // the longest tab title
+	TabFit     bool   // tabs share the width of the window (ui.tab_fit)
 	TabStatus  string // icon | color: how a tab shows the state of its sessions
 	// TabCloseButton, TabStatusClose, GroupTabs: ui.tab_close_button,
 	// ui.tab_status_close, ui.group_tabs
@@ -240,6 +241,7 @@ func (c *Config) Appearance() Appearance {
 		Widgets:    c.Widgets.Show,
 		ListWidth:  c.UI.ListWidth,
 		TabWidth:   c.UI.TabWidth,
+		TabFit:     c.UI.TabFit,
 		TabStatus:  c.UI.TabStatus,
 
 		TabCloseButton: c.UI.TabCloseButton,
@@ -318,6 +320,9 @@ func setAppearance(root *yaml.Node, old, a Appearance) {
 	}
 	if a.TabWidth != old.TabWidth {
 		setPath(root, []string{"ui", "tab_width"}, &yaml.Node{Kind: yaml.ScalarNode, Tag: "!!int", Value: strconv.Itoa(a.TabWidth)})
+	}
+	if a.TabFit != old.TabFit {
+		setPath(root, []string{"ui", "tab_fit"}, boolean(a.TabFit))
 	}
 	if a.TabStatus != old.TabStatus {
 		setPath(root, []string{"ui", "tab_status"}, str(a.TabStatus))

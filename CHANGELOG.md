@@ -8,6 +8,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- Tab size "fit the window" (Settings → Appearance → Tab size, `ui.tab_fit: true`): no fixed tab
+  width; the tabs share the width of the window and their titles shorten evenly as tabs are added,
+  down to the number of each tab (the `+N` of a split tab and the tabs of a group stay).
 - Several hosts can be opened at once: `Space` (or `Insert`, `Ctrl`/`Alt`+click) marks hosts in the
   list (`✓`), `Enter` asks "Open N sessions at once?" and opens them all; `Esc` clears the marks.
 

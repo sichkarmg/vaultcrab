@@ -28,6 +28,8 @@ ui:
   show_notes: true         # notes of the selected item at the bottom of its card (read from the vault)
   list_width: 0            # 0 = auto
   tab_width: 24            # longest tab title (6..120 columns); longer titles are cut with … (the pane count +N of a split tab stays)
+  tab_fit: false           # true: no fixed tab width, the tabs share the width of the window (titles
+                           # shorten evenly, down to the number and +N / the group of each tab)
   tab_status: icon         # state of a tab's sessions: icon (before the number) | color (the number
                            # itself: green connected, yellow connecting, red broken, blue new output)
   tab_close_button: true   # ✕ on the active tab closes it (connected or not; asks if a session is live)

@@ -496,7 +496,10 @@ move focus, `z` zoom, `[` scrollback, `x` close pane, `&` close the tab with all
 tab each pane header has a `✕` button that closes just that pane; `Ctrl+D`
 closes a broken or finished pane (`Enter` reconnects it).
 
-**Tab bar** (Settings → Appearance): `✕` on the active tab closes it, connected or not
+**Tab bar** (Settings → Appearance): **Tab size** `fixed` cuts titles at Tab width (`ui.tab_width`,
+24; the pane count `+N` of a split tab stays); `fit the window` (`ui.tab_fit: true`) has no fixed width:
+the tabs share the width of the window and their titles shorten evenly as tabs are added, down to the
+tab number, the `+N` of a split tab and the other tabs of a group. `✕` on the active tab closes it, connected or not
 (`ui.tab_close_button`, on); a click on the state icon or number of a tab closes it, the active tab
 after a confirmation (`ui.tab_status_close`, off); the tabs of one host are one group
 (`ui.group_tabs`, on): the lead tab in full, its number first, then the others by state and number,

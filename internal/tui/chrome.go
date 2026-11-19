@@ -61,7 +61,42 @@ type barItem struct {
 func (t *tab) groupKey() string { return t.focused().Host.ID }
 
 // tabItems returns the entries of the tab bar (index 0 = host list).
+// With ui.tab_fit the titles are cut at the widest common length with
+// which all tabs fit the bar (down to none: the number, the pane count and
+// the group stay).
 func (m *Model) tabItems() []barItem {
+	if !m.opt.Appearance.TabFit {
+		return m.barItems(m.tabWidth())
+	}
+	fits := func(items []barItem) bool {
+		w := 0
+		for _, it := range items {
+			w += ansi.StringWidth(it.label)
+			if !it.joined {
+				w++ // separator
+			}
+		}
+		return w <= m.tabsWidth()
+	}
+	full := m.barItems(core.MaxTabWidth)
+	if fits(full) {
+		return full
+	}
+	lo, hi := 0, core.MaxTabWidth // the answer is in [lo, hi)
+	for lo+1 < hi {
+		mid := (lo + hi) / 2
+		if fits(m.barItems(mid)) {
+			lo = mid
+		} else {
+			hi = mid
+		}
+	}
+	return m.barItems(lo)
+}
+
+// barItems returns the entries of the tab bar with titles of at most
+// titleW columns.
+func (m *Model) barItems(titleW int) []barItem {
 	hosts := fmt.Sprintf(" 0:%s ", "Hosts")
 	if m.parked != nil {
 		mark := m.ascii("✎") // a dialog waits there
@@ -90,7 +125,7 @@ func (m *Model) tabItems() []barItem {
 		}
 		k := t.groupKey()
 		if count[k] < 2 {
-			items = append(items, m.tabItem(i+1, ""))
+			items = append(items, m.tabItem(i+1, titleW))
 			continue
 		}
 		if seen[k] {
@@ -116,7 +151,7 @@ func (m *Model) tabItems() []barItem {
 				}
 			}
 		}
-		it := m.tabItem(lead, "")
+		it := m.tabItem(lead, titleW)
 		it.group, it.joined = k, true
 		items = append(items, it)
 		var rest []int
@@ -135,14 +170,21 @@ func (m *Model) tabItems() []barItem {
 	return items
 }
 
-// tabItem renders the entry of tab n (1-based); more follows the title (a
-// collapsed group).
-func (m *Model) tabItem(n int, more string) barItem {
+// tabItem renders the entry of tab n (1-based) with a title of at most
+// titleW columns (0: the number only); the pane count is never cut.
+func (m *Model) tabItem(n int, titleW int) barItem {
 	t := m.tabs[n-1]
 	active := n == m.active
 	title, panes := t.titleParts(m.g)
-	if tw := max(1, m.tabWidth()-ansi.StringWidth(panes)); ansi.StringWidth(title) > tw {
-		title = ansi.Truncate(title, tw, m.g.ell)
+	if !m.opt.Appearance.TabFit {
+		titleW = max(1, titleW-ansi.StringWidth(panes))
+	}
+	if ansi.StringWidth(title) > titleW {
+		title = ansi.Truncate(title, titleW, m.g.ell)
+	}
+	colon := ":"
+	if title == "" {
+		colon = "" // only the number is left
 	}
 	title += panes
 	zoom := ""
@@ -165,17 +207,17 @@ func (m *Model) tabItem(n int, more string) barItem {
 		if c, ok := t.stateColor(active); ok {
 			ns = base.Foreground(c)
 		}
-		head = base.Render(" ") + ns.Render(num) + base.Render(":")
+		head = base.Render(" ") + ns.Render(num) + base.Render(colon)
 	} else {
 		// the state icon first, outside the highlight of the active tab
-		head = " " + t.icon(m, active) + base.Render(" "+num+":")
+		head = " " + t.icon(m, active) + base.Render(" "+num+colon)
 	}
 	it.status = [2]int{0, ansi.StringWidth(head)}
 	ts := base
 	if c := m.sessionColor(&t.focused().Host); c != "" {
 		ts = labelStyle(c, active)
 	}
-	label := head + ts.Render(title+zoom+more) + base.Render(" ")
+	label := head + ts.Render(title+zoom) + base.Render(" ")
 	if active && m.opt.Appearance.TabCloseButton {
 		x := ansi.StringWidth(label)
 		btn := m.ascii("✕")

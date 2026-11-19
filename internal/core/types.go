@@ -222,6 +222,7 @@ const (
 	IconIdle         = config.IconIdle
 	IconSSH          = config.IconSSH
 	DefaultTabWidth  = config.DefaultTabWidth
+	MaxTabWidth      = config.MaxTabWidth
 	IconVNC          = config.IconVNC
 	IconSMB          = config.IconSMB
 	IconFTP          = config.IconFTP

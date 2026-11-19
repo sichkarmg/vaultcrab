@@ -150,8 +150,12 @@ type UI struct {
 	Prefix       string            `yaml:"prefix"` // prefix key for window commands, e.g. ctrl+b
 	Keys         map[string]string `yaml:"keys"`   // action -> key after prefix
 	ListWidth    int               `yaml:"list_width"`
-	TabWidth     int               `yaml:"tab_width"`  // longest tab title (columns), cut with … beyond
-	TabStatus    string            `yaml:"tab_status"` // session state in a tab: icon (before the number) | color (of the number)
+	TabWidth     int               `yaml:"tab_width"` // longest tab title (columns), cut with … beyond
+	// TabFit sizes the tabs to the window instead of TabWidth: the titles
+	// shorten evenly as tabs are added, down to the number (and the pane
+	// count, the group) of each tab.
+	TabFit    bool   `yaml:"tab_fit"`
+	TabStatus string `yaml:"tab_status"` // session state in a tab: icon (before the number) | color (of the number)
 	// TabCloseButton shows ✕ on the active tab (closes it, connected or not).
 	TabCloseButton bool `yaml:"tab_close_button"`
 	// TabStatusClose: a click on the state icon or number of a tab closes it

@@ -123,7 +123,7 @@ func (p *vaultsPage) act(m *Model, action string, v core.VaultEntry) tea.Cmd {
 		}
 		u := newUnlock(m)
 		u.vault = v
-		m.modal = u
+		m.openUnlock(u) // over the settings: they are back after it
 	case "sync":
 		m.svc.SyncVault(v.ID) // never restarts a running bw serve (it would lock)
 		p.status = "checking and syncing " + v.Label() + "…"

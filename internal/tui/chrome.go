@@ -148,6 +148,9 @@ func (m *Model) tabItem(n int, more string) barItem {
 	if t.zoomed() {
 		zoom = m.opt.Icons.Get(core.IconZoom)
 	}
+	if t.parked != nil {
+		zoom += " " + m.ascii("✎") // the paste dialog waits there
+	}
 	base := stTabInactive
 	if active {
 		base = stTabActive

@@ -14,6 +14,10 @@ import (
 // next/previous tab, a click in the tab bar). The dialog is parked then and
 // shown again on the return to the host list.
 
+// The paste dialog belongs to its session tab in the same way: switching
+// to another tab parks it on its tab (tab.parked), and it is shown again on
+// the return to that tab.
+
 // docked is a dialog that stays with the host list.
 type docked interface{ docked() }
 
@@ -22,26 +26,80 @@ func (*hostForm) docked()      {}
 func (*jumpPicker) docked()    {}
 func (*logModal) docked()      {}
 
-func isDocked(d modal) bool { _, ok := d.(docked); return ok }
+// tabDocked is a dialog that stays with the session tab it was opened in.
+type tabDocked interface{ tabDocked() }
 
-// switchTab activates tab i, parking a docked dialog of the host list.
-func (m *Model) switchTab(i int) {
-	if i != 0 && m.active == 0 && isDocked(m.modal) {
+func (*pasteModal) tabDocked() {}
+
+func isListDocked(d modal) bool { _, ok := d.(docked); return ok }
+func isTabDocked(d modal) bool  { _, ok := d.(tabDocked); return ok }
+
+// isDocked reports whether d lets the other tabs be switched to.
+func isDocked(d modal) bool { return isListDocked(d) || isTabDocked(d) }
+
+// park puts the open docked dialog aside: on the host list or on the
+// current session tab.
+func (m *Model) park() {
+	switch {
+	case m.active == 0 && isListDocked(m.modal):
 		m.parked, m.modal = m.modal, nil
+	case m.active > 0 && isTabDocked(m.modal):
+		if t := m.curTab(); t != nil {
+			t.parked, m.modal = m.modal, nil
+		}
+	}
+}
+
+// switchTab activates tab i, parking a docked dialog of the current tab.
+func (m *Model) switchTab(i int) {
+	if i != m.active {
+		m.park()
 	}
 	m.setActive(i)
 	m.unpark()
 }
 
-// unpark shows the parked dialog again once the host list is active and no
-// other dialog is open.
+// unpark shows the parked dialog of the active tab again when no other
+// dialog is open.
 func (m *Model) unpark() {
-	if m.parked != nil && m.active == 0 && m.modal == nil {
+	if m.modal != nil {
+		return
+	}
+	if m.parked != nil && m.active == 0 {
 		m.modal, m.parked = m.parked, nil
 		if r, ok := m.modal.(interface{ reshow(*Model) }); ok {
 			r.reshow(m)
 		}
+		return
 	}
+	if t := m.curTab(); t != nil && t.parked != nil {
+		m.modal, t.parked = t.parked, nil
+	}
+}
+
+// toPaste delivers a background result of the "To a file" page to its
+// paste dialog, open or parked on its tab.
+func (m *Model) toPaste(msg tea.Msg, f *pasteFile) tea.Cmd {
+	if p, ok := m.modal.(*pasteModal); ok && p.file == f {
+		return p.update(m, msg)
+	}
+	for _, t := range m.tabs {
+		p, ok := t.parked.(*pasteModal)
+		if !ok || p.file != f {
+			continue
+		}
+		cur := m.modal
+		m.modal = p
+		cmd := p.update(m, msg)
+		if m.modal == p {
+			t.parked = p
+		} else {
+			t.parked = nil // done (written)
+		}
+		m.modal = cur
+		return cmd
+	}
+	return nil
 }
 
 // toParked delivers a message for the parked dialog (a background result,

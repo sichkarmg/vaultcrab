@@ -262,7 +262,7 @@ func (m *Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if m.modal != nil {
 			if isDocked(m.modal) && msg.Y == m.tabBarY() {
 				// another tab, the quit button: the dialog waits
-				m.parked, m.modal = m.modal, nil
+				m.park()
 				cmd := m.mouse(msg)
 				m.unpark()
 				return m, cmd
@@ -279,6 +279,11 @@ func (m *Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, m.mouse(msg)
 	case tea.KeyMsg:
 		cmd := m.key(msg)
+		m.unpark()
+		return m, cmd
+	}
+	if f := pasteFileOf(msg); f != nil {
+		cmd := m.toPaste(msg, f)
 		m.unpark()
 		return m, cmd
 	}

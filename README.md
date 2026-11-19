@@ -87,7 +87,9 @@ the vault only at the moment of connecting and never written to disk.
   completes the path from a listing made in a separate SSH channel, which leaves the shell alone;
   relative paths are taken from the home directory. An existing file is replaced only after a second
   `Enter`; `Ctrl+O` appends instead (`>>`). Without bracketed paste in the shell (bash 5.0) tabs of the
-  text may be completed by it: the dialog warns.
+  text may be completed by it: the dialog warns. The dialog stays with its tab: other tabs can be
+  switched to while it is open (prefix + digit, `Ctrl+PgDn`/`PgUp`, a click on the tab bar); the tab
+  shows `✎` and the dialog is back when you return to it.
 - **Settings inside the program** (`,`), saved to `config.yaml`; a hand-edited config is re-read
   automatically. **Themes** (`ui.theme`) color the whole interface at once: `default` (the terminal
   colors), `ocean`, `forest`, `sunset`, `mono`, `nord`, `gruvbox`, `gruvbox-light`, `dracula`, `solarized`,

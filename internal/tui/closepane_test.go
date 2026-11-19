@@ -74,4 +74,3 @@ func TestCtrlDClosesBrokenPane(t *testing.T) {
 		t.Fatalf("tabs %d", len(m.tabs))
 	}
 }
-

@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+- The paste dialog no longer blocks the other tabs: while it is open, other tabs and the host list
+  can be switched to (prefix + digit, `Ctrl+PgDn`/`PgUp`, a click on the tab bar); the dialog waits on
+  its tab (marked `✎`) and is shown again there.
+
 ## [1.1.0] - 2026-11-18
 
 ### Added

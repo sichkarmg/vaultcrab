@@ -62,6 +62,7 @@ func (m *Model) switchTab(i int) {
 // unpark shows the parked dialog of the active tab again when no other
 // dialog is open.
 func (m *Model) unpark() {
+	m.restoreUnder()
 	if m.modal != nil {
 		return
 	}

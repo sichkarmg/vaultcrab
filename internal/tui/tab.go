@@ -39,14 +39,21 @@ func newTab(s *core.Session) *tab {
 func (t *tab) focused() *core.Session { return t.ws.FocusedSession() }
 
 func (t *tab) title(g glyphs) string {
+	name, panes := t.titleParts(g)
+	return name + panes
+}
+
+// titleParts returns the name of the tab and the count of its other panes
+// (" +2" for a tab split into three; "" for one pane or a renamed tab).
+// The tab bar shortens the name only: the count stays visible.
+func (t *tab) titleParts(g glyphs) (name, panes string) {
 	if t.name != "" {
-		return t.name
+		return t.name, ""
 	}
-	title := sessionTitle(t.focused(), g)
 	if n := t.ws.Len(); n > 1 {
-		title += fmt.Sprintf(" +%d", n-1)
+		panes = fmt.Sprintf(" +%d", n-1)
 	}
-	return title
+	return sessionTitle(t.focused(), g), panes
 }
 
 // sessionTitle names a session: its host, "↪ jump → target" through a

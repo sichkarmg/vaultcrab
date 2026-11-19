@@ -399,6 +399,8 @@ Settings → **Security** (`unlock:` in the config, applied at once):
   counts, so after a long sleep the first key opens the unlock dialog (and does nothing else). A
   sleep by itself does not lock. Locking asks bw to lock (`bw lock`), which also drops the session
   key; open sessions stay connected.
+- The unlock dialog opens **over any open dialog** (the item form, the settings): after unlocking
+  (or `Esc`) that dialog is back as it was, with what was typed, and the item can be saved.
 - **Longer than 8 hours or never** is a weaker setting, and the settings page says so: while the
   vault is unlocked, `bw serve` answers on `127.0.0.1` without authentication, so any program of
   your user account can read every password for that long.

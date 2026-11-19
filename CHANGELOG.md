@@ -14,6 +14,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   can be switched to (prefix + digit, `Ctrl+PgDn`/`PgUp`, a click on the tab bar); the dialog waits on
   its tab (marked `✎`) and is shown again there.
 
+### Fixed
+- A narrow tab width (`ui.tab_width`) no longer hides the pane count (`+N`) of a split tab: only the
+  name is shortened.
+
 ## [1.1.0] - 2026-11-18
 
 ### Added

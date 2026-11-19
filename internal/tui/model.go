@@ -71,6 +71,7 @@ type Model struct {
 	prefix bool
 	modal  modal
 	parked modal // a docked dialog of the host list while another tab is active
+	under  modal // the dialog the unlock dialog was opened over (shown again after it)
 
 	tunState map[int]tunnelMark // the tunnels as last seen (notices)
 
@@ -173,6 +174,7 @@ func (m *Model) Init() tea.Cmd {
 // Update implements tea.Model.
 func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	_, cmd := m.update(msg)
+	m.restoreUnder()
 	if c := m.maybeFetchNotes(); c != nil {
 		cmd = tea.Batch(cmd, c)
 	}
@@ -195,7 +197,7 @@ func (m *Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			if _, ok := msg.(tea.KeyMsg); ok {
 				if _, open := m.modal.(*unlockModal); !open {
 					m.unlockOffered = true
-					m.modal = newUnlock(m)
+					m.openUnlock(newUnlock(m))
 				}
 				return m, nil
 			}
@@ -284,6 +286,9 @@ func (m *Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	}
 	if m.modal != nil {
 		cmd := m.modal.update(m, msg)
+		if _, tick := msg.(spinTickMsg); m.under != nil && !tick {
+			cmd = tea.Batch(cmd, m.toUnder(msg)) // e.g. the item form saved
+		}
 		m.unpark()
 		return m, cmd
 	}
@@ -304,13 +309,13 @@ func (m *Model) onEvent() {
 	}
 	m.tunnelNotices()
 	st := m.svc.Status()
-	if st.State == core.Locked && !m.unlockOffered && m.modal == nil {
+	if _, open := m.modal.(*unlockModal); st.State == core.Locked && !m.unlockOffered && !open {
 		m.unlockOffered = true
 		u := newUnlock(m)
 		// opened by itself (a lock): Touch ID waits for Enter, whoever is
 		// at the computer
 		u.touchPending = false
-		m.modal = u
+		m.openUnlock(u) // over an open dialog (the item form keeps what was typed)
 	}
 	if st.State == core.Online {
 		m.unlockOffered = false

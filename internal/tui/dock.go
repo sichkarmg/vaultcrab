@@ -36,6 +36,7 @@ func (m *Model) switchTab(i int) {
 // unpark shows the parked dialog again once the host list is active and no
 // other dialog is open.
 func (m *Model) unpark() {
+	m.restoreUnder()
 	if m.parked != nil && m.active == 0 && m.modal == nil {
 		m.modal, m.parked = m.parked, nil
 		if r, ok := m.modal.(interface{ reshow(*Model) }); ok {

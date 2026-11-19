@@ -36,7 +36,7 @@ type hostList struct {
 	rows     []core.Row
 	cursor   int
 	offset   int
-	selected string // key of the selected row, kept across rebuilds
+	selected string          // key of the selected row, kept across rebuilds
 	marked   map[string]bool // IDs of the hosts marked to open together (Space)
 
 	listTop int // y of the first list row within the body (for mouse)

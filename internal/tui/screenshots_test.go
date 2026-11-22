@@ -21,11 +21,15 @@ import (
 	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/charmbracelet/lipgloss"
+	"github.com/muesli/termenv"
 
 	"github.com/sichkarmg/vaultcrab/internal/config"
 	"github.com/sichkarmg/vaultcrab/internal/connect"
 	"github.com/sichkarmg/vaultcrab/internal/core"
 	"github.com/sichkarmg/vaultcrab/internal/jump"
+	"github.com/sichkarmg/vaultcrab/internal/model"
+	"github.com/sichkarmg/vaultcrab/internal/secret"
 	"github.com/sichkarmg/vaultcrab/internal/widget"
 )
 
@@ -57,7 +61,7 @@ func (demoSrc) Snapshot(context.Context) (core.Snapshot, error) {
 			{ID: "web", Name: "Prod/Web", Path: []string{"Prod", "Web"}},
 		},
 		Hosts: []core.Host{
-			h("1", "build-server", core.SchemeSSH, "ci", "192.0.2.30", 22, "lin", "linux"),
+			colored(h("1", "build-server", core.SchemeSSH, "ci", "192.0.2.30", 22, "lin", "linux"), "teal"),
 			h("2", "dev-box", core.SchemeSSH, "user", "192.0.2.12", 22, "lin", "linux"),
 			h("3", "desk-vnc", core.SchemeVNC, "", "192.0.2.40", 5900, "lin"),
 			h("4", "fileserver", core.SchemeSMB, "user", "192.0.2.50", 445, "win", "windows"),
@@ -73,6 +77,40 @@ func (demoSrc) Snapshot(context.Context) (core.Snapshot, error) {
 		},
 		SyncedAt: time.Now(),
 	}, nil
+}
+
+// colored gives h the color label c (the item field "color").
+func colored(h core.Host, c string) core.Host {
+	h.Fields = map[string]string{core.FieldColor: c}
+	return h
+}
+
+// demoOutput is what the shell of a demo host shows after the login.
+var demoOutput = map[string][]string{
+	"web-01": {
+		"\x1b[1;32mdeploy@web-01\x1b[0m:\x1b[1;34m~\x1b[0m$ systemctl status nginx --no-pager | head -4",
+		"\x1b[1;32m●\x1b[0m nginx.service - A high performance web server and a reverse proxy server",
+		"     Loaded: loaded (/usr/lib/systemd/system/nginx.service; enabled)",
+		"     Active: \x1b[1;32mactive (running)\x1b[0m since Mon 2026-11-16 08:02:11 UTC; 6 days ago",
+		"   Main PID: 1123 (nginx)",
+	},
+	"web-02": {
+		"\x1b[1;32mdeploy@web-02\x1b[0m:\x1b[1;34m~\x1b[0m$ tail -n 5 /var/log/nginx/access.log | cut -c1-60",
+		"192.0.2.100 - - [22/Nov/2026:10:14:02] \"GET / HTTP/2.0\" 200",
+		"192.0.2.101 - - [22/Nov/2026:10:14:05] \"GET /api HTTP/2.0\" 200",
+		"192.0.2.100 - - [22/Nov/2026:10:14:09] \"GET /login HTTP/2.0\" 302",
+		"192.0.2.102 - - [22/Nov/2026:10:14:11] \"POST /api HTTP/2.0\" 201",
+	},
+	"db-primary": {
+		"\x1b[1;32mpostgres@db-primary\x1b[0m:\x1b[1;34m~\x1b[0m$ df -h /var/lib/postgresql",
+		"Filesystem      Size  Used Avail Use% Mounted on",
+		"/dev/sdb1       492G  187G  280G  41% /var/lib/postgresql",
+	},
+}
+
+// demoDial opens the shell of a demo host.
+func demoDial(_ context.Context, h model.Host, _ *secret.Secret, _, _ int) (core.Remote, error) {
+	return newDemoShell(h.User+"@"+h.Name, demoOutput[h.Name]...), nil
 }
 
 // demoShell is a shell on a demo host: a prompt and a few lines.
@@ -122,8 +160,17 @@ func TestScreenshots(t *testing.T) {
 	if dir == "" {
 		t.Skip("VAULTCRAB_SCREENSHOTS not set")
 	}
+	version := os.Getenv("VAULTCRAB_SCREENSHOT_VERSION")
+	if version == "" {
+		version = "dev"
+	}
+	prof := lipgloss.ColorProfile()
+	lipgloss.SetColorProfile(termenv.TrueColor) // the themes use #rrggbb colors
+	t.Cleanup(func() { lipgloss.SetColorProfile(prof) })
+	t.Cleanup(resetColors)
 	tmp := t.TempDir()
 	cfg := config.Default()
+	cfg.UI.FolderColors = map[string]string{"Prod": "red"}
 	cfg.Path = filepath.Join(tmp, "config.yaml")
 	cfg.Dir = tmp
 	cfg.JumpTemplates = []config.JumpTemplate{
@@ -156,6 +203,7 @@ func TestScreenshots(t *testing.T) {
 		ConfigPoll:  -1,
 		JumpHistory: hist,
 		SSH:         connect.SSHOptions{KnownHosts: filepath.Join(tmp, "known_hosts")},
+		SSHDial:     demoDial,
 		JumpConnect: func(_ context.Context, h connect.Hop, _ connect.SSHOptions) (core.JumpConn, error) {
 			if h.Addr == "203.0.113.7:22" {
 				return nil, &connect.JumpError{Jump: h.Name, Addr: h.Addr, Stage: connect.StageConnect, Err: errors.New("no route to host")}
@@ -203,7 +251,7 @@ func TestScreenshots(t *testing.T) {
 	}
 	a := cfg.Appearance()
 	m := New(ctx, svc, Options{Prefix: "ctrl+b", Keys: cfg.UI.Keys, Icons: cfg.IconSet(), ShowTree: true, ShowNotes: true,
-		Widgets: true, WidgetsWidth: 34, ConfigPath: cfg.Path, Appearance: a, Version: "0.6.1", CloseOnExit: true})
+		Widgets: true, WidgetsWidth: 34, ConfigPath: cfg.Path, Appearance: a, Version: version, CloseOnExit: true})
 	svc.SetWidgetsActive(true)
 	m.Update(tea.WindowSizeMsg{Width: shotW, Height: shotH})
 	settle := func() {
@@ -244,10 +292,43 @@ func TestScreenshots(t *testing.T) {
 	}
 	settle()
 
-	// 1. the host list, the two tabs of one target as a group
-	m.active = 0
-	keys(m, "down", "down")
+	// a tab split into three panes: web-01 | web-02 over db-primary
+	host := func(name string) core.Host {
+		for _, h := range svc.Snapshot().Hosts {
+			if h.Name == name {
+				return h
+			}
+		}
+		t.Fatalf("no host %s", name)
+		return core.Host{}
+	}
+	for _, name := range []string{"build-server", "router-core", "web-01"} {
+		s, err := svc.OpenSession(host(name), 100, 30)
+		if err != nil {
+			t.Fatal(err)
+		}
+		m.tabs = append(m.tabs, newTab(s))
+	}
+	pt := m.tabs[len(m.tabs)-1]
+	m.setActive(len(m.tabs))
+	m.splitWith(pt, host("web-02"), core.SplitRight)
+	m.splitWith(pt, host("db-primary"), core.SplitDown)
+	settle()
+
+	// 1. the host list: two hosts marked, the color labels
+	m.switchTab(0)
+	keys(m, "down", "down", "down", "down", "down", "down", "down", "down", "down", " ", " ")
 	shot("hosts")
+
+	// the themes, on the host list
+	for _, th := range core.Themes {
+		m.opt.Appearance.Theme = th.Name
+		setColors(core.Palette(th.Name, core.FromTheme, core.FromTheme))
+		shot("theme-" + th.Name)
+	}
+	m.opt.Appearance.Theme = core.Themes[0].Name
+	resetColors()
+	keys(m, "esc")
 
 	// 2. the jump picker, step 2
 	keys(m, "j", "enter")
@@ -260,7 +341,15 @@ func TestScreenshots(t *testing.T) {
 	shot("tunnels")
 	keys(m, "esc")
 
-	// 4. a failed connection through the jump host, with its debug steps
+	// 4. the split tab
+	for i, x := range m.tabs {
+		if x == pt {
+			m.switchTab(i + 1)
+		}
+	}
+	shot("panes")
+
+	// 5. a failed connection through the jump host, with its debug steps
 	s, err := svc.OpenJump(core.JumpSpec{Via: "t:Workstations", Target: "10.20.1.42"}, 100, 30)
 	if err != nil {
 		t.Fatal(err)
@@ -270,11 +359,13 @@ func TestScreenshots(t *testing.T) {
 	time.Sleep(200 * time.Millisecond)
 	shot("debug")
 
-	// 5. Settings → Appearance
+	// 6. Settings → Appearance and → External programs
 	m.switchTab(0)
 	m.openSettings()
 	st := m.modal.(*settingsModal)
 	st.page = pageAppearance
 	shot("settings")
+	st.page = pagePrograms
+	shot("programs")
 	keys(m, "esc")
 }

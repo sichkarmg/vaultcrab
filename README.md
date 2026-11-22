@@ -21,7 +21,7 @@ password vault, a built-in SSH client and terminal emulator, tabs and tmux-like 
 mouse support, a local shell, your own scripts and widgets. Passwords and keys are fetched from
 the vault only at the moment of connecting and never written to disk.
 
-![Host list: type filter tabs, folder tree, item card, widget column; ↪ the menu of the sessions through a jump host, ⇄ the running tunnels](docs/screenshot-hosts.png)
+![Host list: type filter tabs, folder tree with color labels (the Prod folder red, build-server teal), two hosts marked to open at once, item card, widget column; ↪ the menu of the sessions through a jump host, ⇄ the running tunnels](docs/screenshot-hosts.png)
 
 ![Tunnels: Proxmox web through a jump host, a stopped saved tunnel, a failed one, a SOCKS proxy](docs/screenshot-tunnels.png)
 
@@ -32,11 +32,28 @@ the vault only at the moment of connecting and never written to disk.
 
 ![A failed connection with its debug steps (ssh.debug)](docs/screenshot-debug.png)
 
-![A tab split into three panes](docs/screenshot-panes.png)
+![A tab split into three panes; the pane count +2 on its tab](docs/screenshot-panes.png)
 
 ![Settings → Appearance](docs/screenshot-settings.png)
 
 ![Settings → External programs: VNC client, password mode "proxy"](docs/screenshot-programs.png)
+
+</details>
+
+<details>
+<summary>Themes (Settings → Appearance → Theme, `ui.theme`)</summary>
+
+The light themes (`gruvbox-light`, `solarized-light`, `catppuccin-latte`) are shown on a light terminal background.
+
+| | |
+|---|---|
+| `default`<br>![default](docs/themes/default.png) | `ocean`<br>![ocean](docs/themes/ocean.png) |
+| `forest`<br>![forest](docs/themes/forest.png) | `sunset`<br>![sunset](docs/themes/sunset.png) |
+| `mono`<br>![mono](docs/themes/mono.png) | `nord`<br>![nord](docs/themes/nord.png) |
+| `gruvbox`<br>![gruvbox](docs/themes/gruvbox.png) | `gruvbox-light`<br>![gruvbox-light](docs/themes/gruvbox-light.png) |
+| `dracula`<br>![dracula](docs/themes/dracula.png) | `solarized`<br>![solarized](docs/themes/solarized.png) |
+| `solarized-light`<br>![solarized-light](docs/themes/solarized-light.png) | `catppuccin`<br>![catppuccin](docs/themes/catppuccin.png) |
+| `catppuccin-latte`<br>![catppuccin-latte](docs/themes/catppuccin-latte.png) |  |
 
 </details>
 

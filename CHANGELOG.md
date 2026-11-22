@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+- The README screenshots are made again, in color and with what is new up to 1.2.0 (color labels,
+  marked hosts, split panes, the External programs settings), and the README has a gallery of all
+  themes. `scripts/screenshots.sh` renders them with the version of the code; `tools/ansi2svg -light`
+  draws a light terminal for the light themes.
+
 ## [1.2.0] - 2026-11-19
 
 ### Added

@@ -21,19 +21,41 @@
 вкладки и деление окон на панели (как в tmux), поддержка мыши, локальный терминал, свои скрипты
 и виджеты.
 
-![Список хостов: вкладки фильтров по типам, дерево папок, карточка записи, колонка виджетов; ↪ — меню сессий через jump-хост, ⇄ — работающие тоннели](docs/screenshot-hosts.png)
+![Список хостов: вкладки фильтров по типам, дерево папок с цветными метками (папка Prod — красная, build-server — бирюзовый), два хоста отмечены для открытия разом, карточка записи, колонка виджетов; ↪ — меню сессий через jump-хост, ⇄ — работающие тоннели](docs/screenshot-hosts.png)
 
 ![Тоннели: веб-интерфейс Proxmox через jump-хост, остановленный сохранённый тоннель, тоннель с ошибкой, SOCKS-прокси](docs/screenshot-tunnels.png)
+
+<details>
+<summary>Ещё скриншоты</summary>
 
 ![Через jump-хост, шаг 2: использованные раньше цели, учётные данные](docs/screenshot-jump.png)
 
 ![Неудачное подключение с шагами отладки (ssh.debug)](docs/screenshot-debug.png)
 
-![Вкладка с тремя панелями](docs/screenshot-panes.png)
+![Вкладка с тремя панелями; число панелей +2 на её ярлыке](docs/screenshot-panes.png)
 
 ![Настройки → Appearance](docs/screenshot-settings.png)
 
 ![Настройки → External programs: клиент VNC, режим пароля proxy](docs/screenshot-programs.png)
+
+</details>
+
+<details>
+<summary>Темы (Настройки → Appearance → Theme, `ui.theme`)</summary>
+
+Светлые темы (`gruvbox-light`, `solarized-light`, `catppuccin-latte`) показаны на светлом фоне терминала.
+
+| | |
+|---|---|
+| `default`<br>![default](docs/themes/default.png) | `ocean`<br>![ocean](docs/themes/ocean.png) |
+| `forest`<br>![forest](docs/themes/forest.png) | `sunset`<br>![sunset](docs/themes/sunset.png) |
+| `mono`<br>![mono](docs/themes/mono.png) | `nord`<br>![nord](docs/themes/nord.png) |
+| `gruvbox`<br>![gruvbox](docs/themes/gruvbox.png) | `gruvbox-light`<br>![gruvbox-light](docs/themes/gruvbox-light.png) |
+| `dracula`<br>![dracula](docs/themes/dracula.png) | `solarized`<br>![solarized](docs/themes/solarized.png) |
+| `solarized-light`<br>![solarized-light](docs/themes/solarized-light.png) | `catppuccin`<br>![catppuccin](docs/themes/catppuccin.png) |
+| `catppuccin-latte`<br>![catppuccin-latte](docs/themes/catppuccin-latte.png) |  |
+
+</details>
 
 ## Возможности
 
